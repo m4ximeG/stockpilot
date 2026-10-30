@@ -30,9 +30,9 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=60 * 60 * 12,
     MAX_CONTENT_LENGTH=256 * 1024,
 )
-DEMO_SEED = os.environ.get('STOCKPILOT_DEMO_SEED', '1') == '1'
+DEMO_SEED = os.environ.get('STOCKPILOT_DEMO_SEED', '0') == '1'
 ALLOW_RESET = os.environ.get('STOCKPILOT_ALLOW_RESET', '0') == '1'
-ZONE_CODES = 'ABCDEF'
+ZONE_CODES = 'ABCDEFGHIJ'
 SLOTS = [f'{z}-{level}' for z in ZONE_CODES for level in (1, 2, 3, 4, 5)]
 
 PRODUCTS = [
@@ -95,11 +95,16 @@ def initialize():
           at INTEGER NOT NULL, actor TEXT NOT NULL, detail TEXT DEFAULT ''
         );
         CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS shelf_levels (
+          slot TEXT PRIMARY KEY, size TEXT NOT NULL DEFAULT 'unknown',
+          note TEXT NOT NULL DEFAULT ''
+        );
         ''')
         # Migration additive: la préférence d'emplacement n'affecte aucun ancien article.
         existing_columns = {row['name'] for row in con.execute('PRAGMA table_info(products)')}
         if 'preferred_slot' not in existing_columns:
             con.execute("ALTER TABLE products ADD COLUMN preferred_slot TEXT NOT NULL DEFAULT ''")
+        con.executemany("INSERT OR IGNORE INTO shelf_levels(slot,size,note) VALUES(?,'unknown','')", [(slot,) for slot in SLOTS])
         con.execute("INSERT OR IGNORE INTO meta(key,value) VALUES('location_mode','optional')")
         if not con.execute('SELECT 1 FROM users LIMIT 1').fetchone():
             password = os.environ.get('STOCKPILOT_ADMIN_PASSWORD', '')
@@ -257,9 +262,10 @@ def state():
     products = [row_dict(x) for x in db.execute('SELECT id,brand,model,cat,zone,kind,ref,active,preferred_slot FROM products ORDER BY brand,model')]
     items = [dict(id=x['id'],pid=x['pid'],slot=x['slot'],serial=x['serial'] or '',condition=x['condition'],inAt=x['in_at']) for x in db.execute('SELECT * FROM items WHERE out_at IS NULL ORDER BY in_at')]
     events = [dict(id='e'+str(x['id']),type=x['type'],itemId=x['item_id'],pid=x['pid'],slot=x['slot'],at=x['at'],actor=x['actor'],detail=x['detail']) for x in db.execute('SELECT * FROM events ORDER BY id DESC LIMIT 1500')]
+    shelves = [dict(slot=r['slot'],size=r['size'],note=r['note']) for r in db.execute('SELECT slot,size,note FROM shelf_levels ORDER BY slot')]
     counter = int(db.execute("SELECT value FROM meta WHERE key='next_item'").fetchone()[0])
     location_mode = db.execute("SELECT value FROM meta WHERE key='location_mode'").fetchone()
-    return jsonify(items=items,events=events,counter=counter,catalog=products,me=dict(id=g.user['id'],username=g.user['username'],role=g.user['role']),allowReset=ALLOW_RESET,locationMode=location_mode[0] if location_mode else 'optional')
+    return jsonify(items=items,events=events,counter=counter,catalog=products,shelves=shelves,me=dict(id=g.user['id'],username=g.user['username'],role=g.user['role']),allowReset=ALLOW_RESET,locationMode=location_mode[0] if location_mode else 'optional')
 
 
 @app.post('/api/items')
@@ -383,6 +389,57 @@ def update_location_mode():
         return bad('Mode de rangement inconnu.')
     g.db.execute("INSERT INTO meta(key,value) VALUES('location_mode',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (mode,))
     return jsonify(ok=True, locationMode=mode)
+
+
+@app.patch('/api/shelves/<slot>')
+@protected(admin=True)
+def update_shelf(slot):
+    if slot not in SLOTS:
+        return bad('Étagère ou niveau inconnu.', 404)
+    try:
+        data = json_body()
+        size = clean_text(data.get('size', 'unknown'), 'Taille', 16, True)
+        note = clean_text(data.get('note', ''), 'Note', 120)
+        if size not in ('unknown','small','medium','large'):
+            return bad('Taille inconnue.')
+        g.db.execute('UPDATE shelf_levels SET size=?, note=? WHERE slot=?', (size,note,slot))
+        return jsonify(ok=True, slot=slot, size=size, note=note)
+    except ValueError as e:
+        return bad(str(e))
+
+
+@app.post('/api/admin/clear-stock')
+@protected(admin=True)
+def clear_stock():
+    """Destructive demo-to-real transition with explicit confirmation and server-side SQL backup."""
+    import shutil
+    data = request.get_json(silent=True)
+    if not isinstance(data,dict) or data.get('confirmation') != 'VIDER LE STOCK':
+        return bad('Saisissez exactement VIDER LE STOCK pour confirmer.', 400)
+    db = g.db
+    backup_dir = DATA_DIR / 'backups'
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup_path = backup_dir / ('stockpilot-avant-vidage-' + datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S') + '-' + secrets.token_hex(4) + '.sqlite3')
+    # Backup SQLite cohérente, y compris quand le journal WAL est actif.
+    backup_connection = sqlite3.connect(str(backup_path))
+    try:
+        db.backup(backup_connection)
+    except Exception:
+        backup_connection.close()
+        backup_path.unlink(missing_ok=True)
+        raise
+    finally:
+        backup_connection.close()
+    try:
+        db.execute('BEGIN IMMEDIATE')
+        db.execute('DELETE FROM events')
+        db.execute('DELETE FROM items')
+        db.execute('DELETE FROM products')
+        db.commit()
+    except Exception:
+        db.rollback()
+        return bad('Le nettoyage a échoué ; une sauvegarde a été conservée.', 500)
+    return jsonify(ok=True, cleared=True, message='Stock, références et historique vidés. Comptes, règles de rangement et niveaux conservés.')
 
 
 @app.post('/api/products')
