@@ -79,7 +79,7 @@ function settingsHeader(c){
  return '<section class="card settingscard" style="margin:0 0 18px"><div class="eyebrow">ORGANISATION DE LA PETITE RÉSERVE</div><h2 style="margin:8px 0 5px">Comment souhaitez-vous suivre le stock ?</h2><p>L’attribution d’une étagère est utile, mais elle n’est pas indispensable pour commencer. Aucun article existant n’est supprimé lors du changement de mode.</p>'+
  '<div class="mode-picker">'+
  '<button class="mode-option'+(mode==='optional'?' active':'')+'" data-action="setlocationmode" data-mode="optional"'+(!owner?' disabled':'')+'><strong>📋 Suivi uniquement</strong><span>Entrées, sorties, QR codes et inventaire. Emplacement facultatif.</span></button>'+
- '<button class="mode-option'+(mode==='guided'?' active':'')+'" data-action="setlocationmode" data-mode="guided"'+(!owner?' disabled':'')+'><strong>📍 Rangement guidé</strong><span>Étagère A–F et niveau 1–4 requis pour les nouvelles entrées.</span></button></div>'+
+ '<button class="mode-option'+(mode==='guided'?' active':'')+'" data-action="setlocationmode" data-mode="guided"'+(!owner?' disabled':'')+'><strong>📍 Rangement guidé</strong><span>Étagère A–F et niveau 1–5 requis pour les nouvelles entrées.</span></button></div>'+
  '<p style="font-size:11px;color:#8491a4;margin:12px 0 0">'+(owner?'Modification réservée aux administrateurs.':'Demandez à un administrateur pour changer le mode.')+'</p></section>';
 }
 
