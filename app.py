@@ -33,7 +33,7 @@ app.config.update(
 DEMO_SEED = os.environ.get('STOCKPILOT_DEMO_SEED', '1') == '1'
 ALLOW_RESET = os.environ.get('STOCKPILOT_ALLOW_RESET', '0') == '1'
 ZONE_CODES = 'ABCDEF'
-SLOTS = [f'{z}-{s}-{c}' for z in ZONE_CODES for s in (1, 2) for c in (1, 2, 3, 4)]
+SLOTS = [f'{z}-{level}' for z in ZONE_CODES for level in (1, 2, 3, 4)]
 
 PRODUCTS = [
 ('hp450','HP','ProBook 450 G10','PC portable','A','laptop','HP-PB450-G10'),
@@ -69,6 +69,7 @@ def initialize():
     with connect() as con:
         con.executescript('''
         PRAGMA journal_mode=WAL;
+        DROP INDEX IF EXISTS unique_occupied_slot;
         CREATE TABLE IF NOT EXISTS users (
           id INTEGER PRIMARY KEY, username TEXT NOT NULL UNIQUE COLLATE NOCASE,
           password_hash TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('admin','employee')),
@@ -84,7 +85,7 @@ def initialize():
           slot TEXT NOT NULL, serial TEXT, condition TEXT NOT NULL,
           in_at INTEGER NOT NULL, out_at INTEGER, in_by TEXT NOT NULL, out_by TEXT
         );
-        CREATE UNIQUE INDEX IF NOT EXISTS unique_occupied_slot ON items(slot) WHERE out_at IS NULL;
+        CREATE INDEX IF NOT EXISTS items_location_idx ON items(slot) WHERE out_at IS NULL;
         CREATE UNIQUE INDEX IF NOT EXISTS unique_active_serial ON items(serial COLLATE NOCASE)
           WHERE out_at IS NULL AND serial IS NOT NULL AND serial <> '';
         CREATE INDEX IF NOT EXISTS item_status ON items(out_at, pid);
@@ -95,6 +96,7 @@ def initialize():
         );
         CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         ''')
+        con.execute("INSERT OR IGNORE INTO meta(key,value) VALUES('location_mode','optional')")
         if not con.execute('SELECT 1 FROM users LIMIT 1').fetchone():
             password = os.environ.get('STOCKPILOT_ADMIN_PASSWORD', '')
             if len(password) < 12:
@@ -120,9 +122,9 @@ def seed_stock(con):
             moment = now - (index + ord(zone) - 64) * 7_000_000
             serial = 'SN' + str(33000 + n * 37)
             con.execute('INSERT INTO items(id,pid,slot,serial,condition,in_at,in_by) VALUES (?,?,?,?,?,?,?)',
-                        (item_id,pid,slots[index],serial,'Neuf',moment,'Équipe magasin'))
+                        (item_id,pid,slots[index % len(slots)],serial,'Neuf',moment,'Équipe magasin'))
             con.execute('INSERT INTO events(type,item_id,pid,slot,at,actor) VALUES (?,?,?,?,?,?)',
-                        ('in',item_id,pid,slots[index],moment,'Équipe magasin'))
+                        ('in',item_id,pid,slots[index % len(slots)],moment,'Équipe magasin'))
             n += 1
     con.execute("UPDATE meta SET value=? WHERE key='next_item'", (str(n),))
 
@@ -252,7 +254,8 @@ def state():
     items = [dict(id=x['id'],pid=x['pid'],slot=x['slot'],serial=x['serial'] or '',condition=x['condition'],inAt=x['in_at']) for x in db.execute('SELECT * FROM items WHERE out_at IS NULL ORDER BY in_at')]
     events = [dict(id='e'+str(x['id']),type=x['type'],itemId=x['item_id'],pid=x['pid'],slot=x['slot'],at=x['at'],actor=x['actor'],detail=x['detail']) for x in db.execute('SELECT * FROM events ORDER BY id DESC LIMIT 1500')]
     counter = int(db.execute("SELECT value FROM meta WHERE key='next_item'").fetchone()[0])
-    return jsonify(items=items,events=events,counter=counter,catalog=products,me=dict(id=g.user['id'],username=g.user['username'],role=g.user['role']),allowReset=ALLOW_RESET)
+    location_mode = db.execute("SELECT value FROM meta WHERE key='location_mode'").fetchone()
+    return jsonify(items=items,events=events,counter=counter,catalog=products,me=dict(id=g.user['id'],username=g.user['username'],role=g.user['role']),allowReset=ALLOW_RESET,locationMode=location_mode[0] if location_mode else 'optional')
 
 
 @app.post('/api/items')
@@ -261,11 +264,14 @@ def entry_item():
     try:
         data = json_body()
         pid = clean_text(data.get('pid'), 'Produit', 64, True)
-        slot = clean_text(data.get('slot'), 'Emplacement', 15, True)
+        slot = clean_text(data.get('slot', ''), 'Emplacement', 15)
         serial = clean_text(data.get('serial', ''), 'N° de série', 100)
         condition = clean_text(data.get('condition', 'Neuf'), 'État', 30, True)
-        if slot not in SLOTS:
+        if slot and slot not in SLOTS:
             return bad('Emplacement inexistant.')
+        location_mode = g.db.execute("SELECT value FROM meta WHERE key='location_mode'").fetchone()
+        if not slot and location_mode and location_mode[0] == 'guided':
+            return bad('Choisissez une étagère pour cette entrée.')
         if condition not in ('Neuf','Reconditionné','Occasion','Retour SAV'):
             return bad('État invalide.')
         db = g.db
@@ -286,7 +292,7 @@ def entry_item():
         return jsonify(item=dict(id=item_id,pid=pid,slot=slot,serial=serial,condition=condition,inAt=when)), 201
     except sqlite3.IntegrityError:
         g.db.rollback()
-        return bad('Emplacement déjà occupé ou numéro de série déjà enregistré.', 409)
+        return bad('Ce numéro de série est déjà enregistré dans le stock.', 409)
     except ValueError as e:
         return bad(str(e))
 
@@ -312,9 +318,12 @@ def exit_item(item_id):
 @protected()
 def move_item(item_id):
     try:
-        slot = clean_text(json_body().get('slot'), 'Emplacement', 15, True)
-        if slot not in SLOTS:
+        slot = clean_text(json_body().get('slot', ''), 'Emplacement', 15)
+        if slot and slot not in SLOTS:
             return bad('Emplacement inexistant.')
+        location_mode = g.db.execute("SELECT value FROM meta WHERE key='location_mode'").fetchone()
+        if not slot and location_mode and location_mode[0] == 'guided':
+            return bad('Le rangement est obligatoire en mode guidé.')
         db = g.db
         db.execute('BEGIN IMMEDIATE')
         item = db.execute('SELECT * FROM items WHERE id=? AND out_at IS NULL', (item_id,)).fetchone()
@@ -331,7 +340,7 @@ def move_item(item_id):
         return jsonify(ok=True)
     except sqlite3.IntegrityError:
         g.db.rollback()
-        return bad('Cet emplacement est déjà occupé.', 409)
+        return bad('Impossible de déplacer cet article.', 409)
     except ValueError as e:
         return bad(str(e))
 
@@ -344,7 +353,7 @@ def label_page(item_id):
                           FROM items JOIN products ON items.pid=products.id WHERE items.id=?""", (item_id,)).fetchone()
     if not row:
         abort(404)
-    html = """<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Étiquette {{i.id}}</title><style>@page{size:70mm 50mm;margin:2mm}*{box-sizing:border-box}body{font:11px Arial,sans-serif;margin:0;padding:2mm;color:#111}.paper{width:66mm;min-height:45mm;padding:3mm 3mm 1mm;border:1px solid #eee}.name{font-size:13px;font-weight:800;margin:7px 0 3px}.top{font-size:10px;font-weight:900;letter-spacing:.8px}.slot{font-size:12px;font-weight:900;margin:6px 0}.line{color:#555;font-size:9px}.below{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-top:4px}.qr{width:24mm;height:24mm;image-rendering:pixelated}.code{font:700 11px monospace}.buttons{padding:20px}.buttons button{background:#2768e8;color:#fff;border:0;border-radius:8px;padding:11px;cursor:pointer}@media print{.buttons{display:none}.paper{border:0}body{padding:0}}</style></head><body><div class="paper"><div class="top">▣ STOCKPILOT</div><div class="name">{{i.brand}} {{i.model}}</div><div class="line">{{i.ref}} · SN: {{i.serial or 'Non renseigné'}}</div><div class="slot">Zone {{i.slot[0]}} · Étagère {{i.slot[2]}} · Case {{i.slot[4]}}</div><div class="below"><img class="qr" src="/api/items/{{i.id}}/qr.png" onload="window.labelReady=true" alt="QR du produit"><div><div class="code">{{i.id}}</div><div class="line">Scanner à la sortie</div></div></div></div><div class="buttons"><button onclick="print()">Imprimer l'étiquette</button></div><script>window.addEventListener('load',()=>setTimeout(()=>{if(window.labelReady)window.print()},500));</script></body></html>"""
+    html = """<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Étiquette {{i.id}}</title><style>@page{size:70mm 50mm;margin:2mm}*{box-sizing:border-box}body{font:11px Arial,sans-serif;margin:0;padding:2mm;color:#111}.paper{width:66mm;min-height:45mm;padding:3mm 3mm 1mm;border:1px solid #eee}.name{font-size:13px;font-weight:800;margin:7px 0 3px}.top{font-size:10px;font-weight:900;letter-spacing:.8px}.slot{font-size:12px;font-weight:900;margin:6px 0}.line{color:#555;font-size:9px}.below{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-top:4px}.qr{width:24mm;height:24mm;image-rendering:pixelated}.code{font:700 11px monospace}.buttons{padding:20px}.buttons button{background:#2768e8;color:#fff;border:0;border-radius:8px;padding:11px;cursor:pointer}@media print{.buttons{display:none}.paper{border:0}body{padding:0}}</style></head><body><div class="paper"><div class="top">▣ STOCKPILOT</div><div class="name">{{i.brand}} {{i.model}}</div><div class="line">{{i.ref}} · SN: {{i.serial or 'Non renseigné'}}</div><div class="slot">Zone {{i.slot[0] if i.slot else '—'}} · Niveau {{i.slot.split('-')[1] if i.slot else 'non renseigné'}}</div><div class="below"><img class="qr" src="/api/items/{{i.id}}/qr.png" onload="window.labelReady=true" alt="QR du produit"><div><div class="code">{{i.id}}</div><div class="line">Scanner à la sortie</div></div></div></div><div class="buttons"><button onclick="print()">Imprimer l'étiquette</button></div><script>window.addEventListener('load',()=>setTimeout(()=>{if(window.labelReady)window.print()},500));</script></body></html>"""
     return render_template_string(html, i=dict(row))
 
 @app.get('/api/items/<item_id>/qr.png')
@@ -357,6 +366,19 @@ def item_qr(item_id):
     qrcode.make(item_id, border=2, box_size=8).save(buf, format='PNG')
     buf.seek(0)
     return send_file(buf, mimetype='image/png', max_age=0)
+
+
+@app.post('/api/settings/location-mode')
+@protected(admin=True)
+def update_location_mode():
+    try:
+        mode = clean_text(json_body().get('mode'), 'Mode de rangement', 24, True)
+    except ValueError as exc:
+        return bad(str(exc))
+    if mode not in ('optional', 'guided'):
+        return bad('Mode de rangement inconnu.')
+    g.db.execute("INSERT INTO meta(key,value) VALUES('location_mode',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (mode,))
+    return jsonify(ok=True, locationMode=mode)
 
 
 @app.post('/api/products')
