@@ -64,6 +64,10 @@ La page **Entrée en stock**, le **Plan du dépôt** et l'aperçu sur le tableau
 
 Il s'agit d'un repérage indicatif sur la photo, pas d'une reconstruction tridimensionnelle exacte ni d'un calcul de volumes physiques. La photo peut être changée ultérieurement. Le numéro de série reste facultatif, la création de référence est automatique depuis le champ de réception, et les états proposés à l'entrée sont **Neuf**, **Retour SAV** et **Réparation**.
 
+## Réception — interface de référence
+
+La page **Réceptionner un produit** reprend désormais la disposition, les couleurs et la photographie recadrée de la maquette validée : recherche/création à gauche, vue des rayonnages A–J à droite, badges d'emplacements interactifs et fiche récapitulative en dessous. L'image de la maquette est intégrée en version compressée à `static/mockup-photo.b64`. Les quantités affichées par-dessus sont calculées depuis SQLite ; aucun appareil de démonstration n'est ajouté. Pour une meilleure netteté, un administrateur peut importer la version HD dans **Configuration → Photo de la réserve** ; cette image est stockée dans le volume NAS, sans modifier les données.
+
 ## Première connexion
 
 Variables indispensables au premier lancement :
