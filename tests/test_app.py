@@ -125,6 +125,39 @@ class StockPilotTests(unittest.TestCase):
         self.assertEqual(item.status_code,201,item.text)
         self.assertEqual(len(self.client.get('/api/state').json['items']),1)
 
+    def test_reception_libre_creation_reutilisation_et_etats(self):
+        initial=self.client.get('/api/state').json
+        count=len(initial['catalog'])
+        data={'name':'TERRA Mobile 1610','serial':'','slot':'H-3','condition':'Réparation'}
+        first=self.client.post('/api/receive',json=data,headers=self.headers)
+        self.assertEqual(first.status_code,201,first.text)
+        self.assertTrue(first.json['createdProduct'])
+        self.assertEqual(first.json['item']['condition'],'Réparation')
+        other=self.client.post('/api/receive',json={**data,'condition':'Retour SAV'},headers=self.headers)
+        self.assertEqual(other.status_code,201,other.text)
+        self.assertFalse(other.json['createdProduct'])
+        state=self.client.get('/api/state').json
+        self.assertEqual(len(state['catalog']),count+1)
+        self.assertEqual(state['items'][-1]['condition'],'Retour SAV')
+        self.assertEqual(self.client.post('/api/receive',json={**data,'serial':'A-UNIQUE'},headers=self.headers).status_code,201)
+        self.assertEqual(self.client.post('/api/receive',json={**data,'serial':'A-UNIQUE'},headers=self.headers).status_code,409)
+        self.assertEqual(self.client.post('/api/receive',json={**data,'condition':'Occasion'},headers=self.headers).status_code,400)
+
+    def test_purge_cible_donnees_demonstration(self):
+        # Le nettoyage doit conserver une vraie entrée ajoutée dans le stock.
+        inserted=self.client.post('/api/receive',json={'name':'Station AMS vraie','slot':'I-2','serial':'REEL-008','condition':'Neuf'},headers=self.headers)
+        self.assertEqual(inserted.status_code,201,inserted.text)
+        real_id=inserted.json['item']['id']
+        with stock.connect() as con:
+            stock.purge_original_demo_stock(con)
+        state=self.client.get('/api/state').json
+        self.assertIn(real_id,[i['id'] for i in state['items']])
+        self.assertNotIn('STK-000236',[i['id'] for i in state['items']])
+        self.assertTrue(all(i['serial']!='SN41732' for i in state['items']))
+        # Les modèles fictifs inutilisés sont également retirés.
+        self.assertFalse(any(p['id']=='hp450' for p in state['catalog']))
+        self.assertTrue(list((Path(stock.DATA_DIR) / 'backups').glob('avant-retrait-demo-*.sqlite3')))
+
     def test_security_and_backup(self):
         self.assertEqual(self.client.post('/api/items',json={},headers={}).status_code,403)
         b=self.client.get('/api/backup')
