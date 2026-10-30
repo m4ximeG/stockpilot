@@ -160,7 +160,7 @@ class StockPilotTests(unittest.TestCase):
 
     def test_visuel_de_reserve_optimise(self):
         result=self.client.get('/api/mockup-upscaled')
-        self.assertEqual(result.status_code,200,result.text[:300])
+        self.assertEqual(result.status_code,200,result.status)
         self.assertIn('image/webp',result.content_type)
         self.assertEqual(result.data[:4],b'RIFF')
         from PIL import Image
