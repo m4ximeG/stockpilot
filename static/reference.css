@@ -388,3 +388,12 @@ body{background:#f6f8ff!important;font-family:Inter,"DM Sans",ui-sans-serif,syst
   .sp-photo .sp-real-slot strong{font-size:8px!important}
   .sp-photo .sp-rack-hit{border-radius:4px!important}
 }
+
+/* Image native servie sans recompression : conserver ses proportions et éviter un flou CSS superflu. */
+.sp-photo img.sp-reference-photo,
+.sp-dashboard-photo img.sp-reference-photo {
+  filter:none!important;
+  image-rendering:auto!important;
+  transform:none!important;
+  object-position:center!important;
+}
