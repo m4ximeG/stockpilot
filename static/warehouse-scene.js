@@ -2,6 +2,22 @@
 (function(){
 'use strict';
 const esc = s => String(s??'').replace(/[&<>"']/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
+let defaultPhotoData = '';
+let defaultPhotoRequest = null;
+function ensureDefaultPhoto(){
+ if(defaultPhotoData || defaultPhotoRequest)return;
+ defaultPhotoRequest=fetch('/static/reserve-photo.b64',{credentials:'same-origin'}).then(r=>{if(!r.ok)throw new Error('Photo non disponible');return r.text()}).then(raw=>{
+   const payload=raw.trim();
+   if(!/^[A-Za-z0-9+/]+=*$/.test(payload))throw new Error('Image invalide');
+   defaultPhotoData='data:image/avif;base64,'+payload;
+   document.querySelectorAll('.wv-default-photo').forEach(el=>{el.src=defaultPhotoData});
+ }).catch(()=>{defaultPhotoRequest=null});
+}
+function photoMarkup(hasPrivatePhoto){
+ if(hasPrivatePhoto)return '<img class="wv-real-photo" src="/api/warehouse-photo" alt="Photo de la réserve" />';
+ ensureDefaultPhoto();
+ return '<img class="wv-real-photo wv-default-photo" '+(defaultPhotoData?'src="'+defaultPhotoData+'"':'')+' alt="Photographie de la réserve" />';
+}
 const racks=[
  {id:'A',side:'G',x:7,y:17,w:23,h:71,cx:10,cy:12},
  {id:'B',side:'G',x:27,y:25,w:12,h:52,cx:29,cy:22},
@@ -90,6 +106,10 @@ function render(db,slot,photo,admin){
  const info=db.shelves?.find(x=>x.slot===slot)||null;
  const quantity=slot?countSlot(db,slot):0;
  const sizeLabel={small:'Petit',medium:'Moyen',large:'Grand',unknown:'À définir'};
+ const shelfImageLevels=[5,4,3,2,1].map(n=>{
+   const code=rack+'-'+n,qty=countSlot(db,code);
+   return '<button type="button" data-rx="slot" data-slot="'+code+'" class="wv-image-level'+(slot===code?' selected':'')+'" title="'+code+' · '+qty+' article(s)"><span>N'+n+'</span><strong>'+qty+'</strong></button>';
+ }).join('');
  const controls=racks.map(r=>{
   const active=rack===r.id;
   const total=[1,2,3,4,5].reduce((n,k)=>n+countSlot(db,r.id+'-'+k),0);
@@ -102,12 +122,12 @@ function render(db,slot,photo,admin){
  }).join('');
  return '<div class="wv-shell">'+
  '<div class="wv-topline"><div><strong>Votre réserve</strong><span>10 rayonnages · 50 niveaux</span></div><div class="wv-photo-control">'+(admin?'<button type="button" data-rx="upload-photo" class="wv-camera">'+(photo?'Changer la photo':'Ajouter une photo')+'</button>':'')+'</div></div>'+
- '<div class="wv-scene">'+sceneSVG()+(photo?'<img class="wv-real-photo" src="/api/warehouse-photo?v=1" alt="Photographie réelle de la réserve" loading="lazy" />':'')+
- '<div class="wv-fade"></div><div class="wv-pin-layer">'+controls+'</div>'+
+ '<div class="wv-scene">'+photoMarkup(photo)+
+ '<div class="wv-fade"></div><div class="wv-pin-layer">'+controls+'</div><div class="wv-photo-levels" style="--wlevel-x:'+chosen.cx+'%;--wlevel-y:'+Math.min(60,chosen.cy+29)+'%">'+shelfImageLevels+'</div>'+
  '<div class="wv-aisle-mark">ALLÉE CENTRALE</div><div class="wv-scene-footer"><span>ENTRÉE MAGASIN</span><span>Vue indicative · sélection interactive</span></div></div>'+
  '<div class="wv-shelf-pick"><div class="wv-pick-title"><span>RAYONNAGE '+rack+'</span><strong>Choisir le niveau</strong></div><div class="wv-level-list">'+levels+'</div></div>'+
  '<div class="wv-detail"><div class="wv-location-mark"><span>Emplacement sélectionné</span><strong>'+esc(slot||'Aucun')+'</strong></div><div class="wv-location-data"><span>Taille du niveau</span><strong>'+esc(info?sizeLabel[info.size]||'À définir':'—')+'</strong></div><div class="wv-location-data"><span>Articles présents</span><strong>'+quantity+'</strong></div><div class="wv-location-data"><span>Note</span><strong>'+esc(info?.note||'Aucune')+'</strong></div></div>'+
  '<p class="wv-foot">Sélectionnez la lettre du rayonnage puis le niveau. Les quantités proviennent du stock enregistré, pas de la photo.</p></div>';
 }
-window.StockPilotWarehouse={render,sceneSVG};
+window.StockPilotWarehouse={render,sceneSVG,preview:photoMarkup};
 })();
