@@ -25,7 +25,6 @@ function entry(ctx) {
  '<section class="rx-panel rx-result"><span class="rx-check">✓</span><h2>'+e(p?cleanName(p):state.name)+'</h2><p>Identifiant de suivi : <strong>'+e(item.id)+'</strong></p><p>Emplacement : <strong>'+e(item.slot||'Non renseigné')+'</strong></p><div class="rx-result-actions"><button type="button" class="rx-action" data-rx="print" data-id="'+e(item.id)+'">Imprimer l’étiquette</button><button type="button" class="rx-alt" data-rx="again">Nouvelle réception</button></div></section></div>';
  }
  const picked=db.catalog.find(p=>p.id===state.pid);
- const config=db.shelves?.find(x=>x.slot===state.slot);
  const n=state.slot?db.items.filter(i=>String(i.slot||'').split('-').slice(0,2).join('-')===state.slot).length:0;
  return '<div class="rx-root"><div class="rx-heading"><div class="rx-heading-content"><span class="rx-overline">MOUVEMENTS / RÉCEPTION</span><h1>Entrée en stock</h1><p>Renseignez le produit, choisissez son emplacement et validez la réception.</p></div><span class="rx-instruction">01 — Article &nbsp; / &nbsp; 02 — Rangement</span></div>'+
  '<div class="rx-columns"><section class="rx-panel rx-form"><div class="rx-section-head"><span class="rx-step">01</span><div><h2>Informations de l’article</h2><p>Recherchez un modèle déjà connu ou créez-en un nouveau directement.</p></div></div>'+
@@ -34,11 +33,8 @@ function entry(ctx) {
  '<div class="rx-info-strip"><span class="rx-info-icon">i</span>La création d’une nouvelle référence se fait automatiquement lors de la première entrée. Aucun numéro de série n’est obligatoire.</div>'+
  '<div class="rx-selected-box"><div><span class="rx-muted">Emplacement choisi</span><strong>'+e(state.slot||'Aucun emplacement')+'</strong></div><div><span class="rx-muted">Produits déjà sur ce niveau</span><strong>'+n+'</strong></div></div>'+
  '<button type="button" class="rx-action rx-submit" data-rx="save" '+(!state.name.trim()||state.saving?'disabled':'')+'>'+(state.saving?'Enregistrement…':'Enregistrer l’entrée et préparer l’étiquette')+'<span>→</span></button><p class="rx-form-footnote">Le stock sera actualisé immédiatement. L’impression peut être lancée juste après.</p></section>'+
- '<section class="rx-panel rx-location"><div class="rx-section-head"><span class="rx-step">02</span><div><h2>Choisir un emplacement</h2><p>Vue des rayonnages : 4 à gauche et 6 à droite. Cliquez sur un niveau.</p></div></div>'+
- '<div class="rx-plan-legend"><span><i class="rx-swatch"></i> Libre</span><span><i class="rx-swatch occupied"></i> Avec articles</span><span><i class="rx-swatch chosen"></i> Sélectionné</span></div>'+
+ '<section class="rx-panel rx-location"><div class="rx-section-head"><span class="rx-step">02</span><div><h2>Choisir un emplacement</h2><p>Retrouvez vos rayonnages et sélectionnez directement le niveau de rangement.</p></div></div>'+
  shelfPlan(db,db.warehousePhoto,ctx.me?.role==='admin')+'<input type="file" id="rx-photo-input" accept="image/jpeg,image/png,image/webp" hidden />'+
- '<div class="rx-location-info"><div><span class="rx-muted">Niveau</span><strong>'+e(state.slot||'Non sélectionné')+'</strong></div><div><span class="rx-muted">Taille configurée</span><strong>'+e(config?sizes[config.size]||'À préciser':'—')+'</strong></div><div><span class="rx-muted">Articles présents</span><strong>'+n+'</strong></div></div>'+
- (config?.note?'<p class="rx-level-note">'+e(config.note)+'</p>':'')+
  '<button type="button" class="rx-omit-location" data-rx="clear-slot">Enregistrer sans emplacement pour le moment</button></section></div></div>';
 }
 function onInput(ev,db){
