@@ -21,9 +21,8 @@ function loadImage(){
  return pending;
 }
 function photoMarkup(uploaded=false){
- if(uploaded)return '<img class="sp-reference-photo" src="/api/warehouse-photo" alt="Photographie de la réserve" />';
- loadImage();
- return '<img class="sp-reference-photo" '+(imageData?'src="'+imageData+'"':'')+' alt="Vue photographique de la réserve avec rayonnages métalliques et cartons" />';
+ const src=uploaded?'/api/warehouse-photo':'/api/mockup-upscaled';
+ return '<img class="sp-reference-photo" src="'+src+'" alt="Photographie de la réserve avec rayonnages métalliques et cartons" decoding="async" />';
 }
 function quantity(db,slot){
  return db.items.filter(item=>String(item.slot||'').split('-').slice(0,2).join('-')===slot).length;
