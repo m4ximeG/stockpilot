@@ -256,3 +256,135 @@ body{background:#f6f8ff!important;font-family:Inter,"DM Sans",ui-sans-serif,syst
  .sp-photo .sp-cube-count strong{font-size:9px!important;right:2%!important}
  .sp-photo .sp-cube-count.active .sp-count-icon{font-size:9px!important}
 }
+
+
+/* V7 — Source PNG de la maquette : UNE seule série de cartes interactives.
+   Les positions sont mesurées dans l'image d'origine (680×497), pas estimées au CSS.
+   Pas de transform translate, qui décalait systématiquement les éléments. */
+.sp-photo{
+  position:relative!important;
+  width:100%!important;
+  aspect-ratio:680/497!important;
+  height:auto!important;
+  overflow:hidden!important;
+  border-radius:10px!important;
+  background:#26364b!important;
+}
+.sp-photo img.sp-reference-photo{
+  position:absolute!important;
+  inset:0!important;
+  width:100%!important;
+  height:100%!important;
+  object-fit:fill!important;
+  display:block!important;
+  z-index:1!important;
+}
+.sp-photo .sp-rack-hit{
+  position:absolute!important;
+  display:block!important;
+  z-index:8!important;
+  transform:none!important;
+  border:0!important;
+  border-radius:7px!important;
+  padding:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  cursor:pointer;
+}
+.sp-photo .sp-rack-hit:hover,
+.sp-photo .sp-rack-hit:focus-visible,
+.sp-photo .sp-rack-hit.active{
+  outline:2px solid #668bff!important;
+  outline-offset:1px!important;
+  background:#315cf31c!important;
+  box-shadow:0 0 0 3px #315cf339!important;
+}
+.sp-photo .sp-real-slot{
+  position:absolute!important;
+  z-index:7!important;
+  transform:none!important;
+  display:flex!important;
+  justify-content:center!important;
+  align-items:center!important;
+  flex-direction:row!important;
+  gap:3px!important;
+  padding:0!important;
+  min-width:0!important;
+  min-height:0!important;
+  margin:0!important;
+  border:1px solid #dde5f3!important;
+  border-radius:6px!important;
+  background:linear-gradient(160deg,#fafcff,#f1f5fd)!important;
+  box-shadow:0 1px 5px #12294b25!important;
+  color:#284067!important;
+  cursor:pointer;
+}
+.sp-photo .sp-real-slot .sp-box-symbol{
+  display:inline!important;
+  color:#7990b2!important;
+  font-size:clamp(8px,.88vw,14px)!important;
+  line-height:1!important;
+}
+.sp-photo .sp-real-slot strong{
+  display:inline!important;
+  color:#294266!important;
+  font-size:clamp(8px,.88vw,14px)!important;
+  font-weight:800!important;
+  line-height:1!important;
+  background:none!important;
+}
+.sp-photo .sp-real-slot:hover,
+.sp-photo .sp-real-slot:focus-visible{
+  z-index:10!important;
+  outline:2px solid #315cf3!important;
+  outline-offset:1px!important;
+  box-shadow:0 0 0 3px #315cf333!important;
+}
+.sp-photo .sp-real-slot.active{
+  z-index:9!important;
+  background:#315cf3!important;
+  border:2px solid white!important;
+  box-shadow:0 0 0 3px #315cf36a,0 3px 12px #1a3c8b80!important;
+}
+.sp-photo .sp-real-slot.active .sp-box-symbol,
+.sp-photo .sp-real-slot.active strong{color:white!important}
+.ref-warehouse-pane .sp-level-five{display:flex!important;flex-wrap:wrap!important;justify-content:flex-end!important;gap:5px!important}
+.ref-warehouse-pane .sp-level-five>span{font-size:10px!important;color:#8190a8!important}
+/* Tableau de bord : image de la réserve entière, sans recadrage ni espace vide. */
+.two-col{align-items:start!important}
+.mapcard{display:flex!important;flex-direction:column!important;align-self:start!important;min-height:0!important;padding-bottom:0!important;overflow:hidden!important}
+.mapcard .wv-dashboard-scene{
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  aspect-ratio:680/497!important;
+  position:relative!important;
+  overflow:hidden!important;
+  flex:none!important;
+  background:#25344b!important;
+}
+.mapcard .wv-dashboard-scene .sp-dashboard-photo{
+  position:absolute!important;
+  inset:0!important;
+  width:100%!important;
+  height:100%!important;
+  aspect-ratio:auto!important;
+  min-height:0!important;
+  margin:0!important;
+}
+.mapcard .wv-dashboard-scene .sp-dashboard-photo img{
+  width:100%!important;
+  height:100%!important;
+  object-fit:fill!important;
+  object-position:center!important;
+}
+.mapcard .room-legend{display:none!important}
+#content>.pagehead{margin-top:0!important;padding-top:12px!important}
+#content{padding-top:32px!important}
+@media(max-width:760px){
+  #content{padding-top:24px!important}
+  .sp-photo .sp-real-slot{border-radius:3px!important;gap:0!important;border-width:.5px!important}
+  .sp-photo .sp-real-slot .sp-box-symbol{font-size:7px!important}
+  .sp-photo .sp-real-slot strong{font-size:8px!important}
+  .sp-photo .sp-rack-hit{border-radius:4px!important}
+}
