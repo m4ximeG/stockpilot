@@ -6,7 +6,7 @@ const positions=[{"id":"A","label":[13.35,16.5],"cells":[[12.35,33.2],[12.35,48.
 let imageData='',pending=null;
 function loadImage(){
  if(imageData||pending)return pending;
- pending=fetch('/static/mockup-photo.b64',{credentials:'same-origin'}).then(r=>{
+ pending=fetch('/static/mockup-photo.b64?v=hd-20261030',{credentials:'same-origin'}).then(r=>{
   if(!r.ok)throw new Error('Photo de référence indisponible');
   return r.text();
  }).then(base64=>{
