@@ -33,7 +33,7 @@ app.config.update(
 DEMO_SEED = os.environ.get('STOCKPILOT_DEMO_SEED', '1') == '1'
 ALLOW_RESET = os.environ.get('STOCKPILOT_ALLOW_RESET', '0') == '1'
 ZONE_CODES = 'ABCDEF'
-SLOTS = [f'{z}-{level}' for z in ZONE_CODES for level in (1, 2, 3, 4)]
+SLOTS = [f'{z}-{level}' for z in ZONE_CODES for level in (1, 2, 3, 4, 5)]
 
 PRODUCTS = [
 ('hp450','HP','ProBook 450 G10','PC portable','A','laptop','HP-PB450-G10'),
@@ -96,6 +96,10 @@ def initialize():
         );
         CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         ''')
+        # Migration additive: la préférence d'emplacement n'affecte aucun ancien article.
+        existing_columns = {row['name'] for row in con.execute('PRAGMA table_info(products)')}
+        if 'preferred_slot' not in existing_columns:
+            con.execute("ALTER TABLE products ADD COLUMN preferred_slot TEXT NOT NULL DEFAULT ''")
         con.execute("INSERT OR IGNORE INTO meta(key,value) VALUES('location_mode','optional')")
         if not con.execute('SELECT 1 FROM users LIMIT 1').fetchone():
             password = os.environ.get('STOCKPILOT_ADMIN_PASSWORD', '')
@@ -250,7 +254,7 @@ def healthz():
 @protected()
 def state():
     db = g.db
-    products = [row_dict(x) for x in db.execute('SELECT id,brand,model,cat,zone,kind,ref,active FROM products ORDER BY brand,model')]
+    products = [row_dict(x) for x in db.execute('SELECT id,brand,model,cat,zone,kind,ref,active,preferred_slot FROM products ORDER BY brand,model')]
     items = [dict(id=x['id'],pid=x['pid'],slot=x['slot'],serial=x['serial'] or '',condition=x['condition'],inAt=x['in_at']) for x in db.execute('SELECT * FROM items WHERE out_at IS NULL ORDER BY in_at')]
     events = [dict(id='e'+str(x['id']),type=x['type'],itemId=x['item_id'],pid=x['pid'],slot=x['slot'],at=x['at'],actor=x['actor'],detail=x['detail']) for x in db.execute('SELECT * FROM events ORDER BY id DESC LIMIT 1500')]
     counter = int(db.execute("SELECT value FROM meta WHERE key='next_item'").fetchone()[0])
@@ -391,12 +395,15 @@ def add_product():
         cat = clean_text(data.get('cat'), 'Catégorie', 60, True)
         ref = clean_text(data.get('ref'), 'Référence', 80, True)
         zone = clean_text(data.get('zone'), 'Zone', 1, True).upper()
+        preferred_slot = clean_text(data.get('preferred_slot', ''), 'Emplacement conseillé', 15)
+        if preferred_slot and preferred_slot not in SLOTS:
+            return bad('Emplacement conseillé inconnu.')
         if zone not in ZONE_CODES:
             return bad('Zone inconnue.')
         kind = {'PC portable':'laptop','PC fixe':'harddrive','Écran':'monitor'}.get(cat,'package')
         product_id = 'p_' + secrets.token_hex(6)
-        g.db.execute('INSERT INTO products(id,brand,model,cat,zone,kind,ref) VALUES(?,?,?,?,?,?,?)',
-                     (product_id,brand,model,cat,zone,kind,ref))
+        g.db.execute('INSERT INTO products(id,brand,model,cat,zone,kind,ref,preferred_slot) VALUES(?,?,?,?,?,?,?,?)',
+                     (product_id,brand,model,cat,zone,kind,ref,preferred_slot))
         return jsonify(id=product_id), 201
     except sqlite3.IntegrityError:
         return bad('Cette référence existe déjà.', 409)
@@ -418,6 +425,11 @@ def edit_product(product_id):
                 fields[field] = clean_text(data[field],field,limit,True)
         if 'zone' in fields and fields['zone'] not in ZONE_CODES:
             return bad('Zone invalide.')
+        if 'preferred_slot' in data:
+            preferred_slot = clean_text(data['preferred_slot'], 'Emplacement conseillé', 15)
+            if preferred_slot and preferred_slot not in SLOTS:
+                return bad('Emplacement conseillé inconnu.')
+            fields['preferred_slot'] = preferred_slot
         if 'active' in data:
             fields['active'] = 1 if data['active'] is True else 0
         if not fields:
