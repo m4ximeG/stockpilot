@@ -306,7 +306,7 @@ def state():
     shelves = [dict(slot=r['slot'],size=r['size'],note=r['note']) for r in db.execute('SELECT slot,size,note FROM shelf_levels ORDER BY slot')]
     counter = int(db.execute("SELECT value FROM meta WHERE key='next_item'").fetchone()[0])
     location_mode = db.execute("SELECT value FROM meta WHERE key='location_mode'").fetchone()
-    return jsonify(items=items,events=events,counter=counter,catalog=products,shelves=shelves,me=dict(id=g.user['id'],username=g.user['username'],role=g.user['role']),allowReset=ALLOW_RESET,locationMode=location_mode[0] if location_mode else 'optional')
+    return jsonify(items=items,events=events,counter=counter,catalog=products,shelves=shelves,me=dict(id=g.user['id'],username=g.user['username'],role=g.user['role']),allowReset=ALLOW_RESET and DEMO_SEED,locationMode=location_mode[0] if location_mode else 'optional')
 
 
 @app.post('/api/receive')
@@ -518,7 +518,6 @@ def update_shelf(slot):
 @protected(admin=True)
 def clear_stock():
     """Destructive demo-to-real transition with explicit confirmation and server-side SQL backup."""
-    import shutil
     data = request.get_json(silent=True)
     if not isinstance(data,dict) or data.get('confirmation') != 'VIDER LE STOCK':
         return bad('Saisissez exactement VIDER LE STOCK pour confirmer.', 400)
@@ -701,7 +700,7 @@ def download_backup():
 @app.post('/api/admin/reset')
 @protected(admin=True)
 def reset_demo():
-    if not ALLOW_RESET:
+    if not (ALLOW_RESET and DEMO_SEED):
         return bad('Réinitialisation désactivée sur ce serveur.', 403)
     db = g.db
     db.execute('BEGIN IMMEDIATE')
