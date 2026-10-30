@@ -56,6 +56,14 @@ Une **migration ciblée de suppression des données fictives** s'exécute au pre
 
 **Pour le NAS existant**, pensez à remplacer la variable Portainer `STOCKPILOT_DEMO_SEED=1` par `0`. Cela n'efface pas les anciens enregistrements : utilisez le nettoyage volontaire après sauvegarde pour repartir de zéro.
 
+## Nouvelle présentation immersive de la réserve
+
+La page **Entrée en stock**, le **Plan du dépôt** et l'aperçu sur le tableau de bord utilisent la même scène immersive. Les dix rayonnages A à J sont repérés par lettres ; sélectionner un rayonnage affiche les cinq niveaux, et chaque niveau présente la quantité réelle enregistrée dans SQLite. Une fiche indique l'emplacement, la taille configurée et la note. **Aucune quantité fictive n'est affichée**.
+
+**Photo réelle (optionnelle)** : depuis **Entrée en stock** ou **Plan du dépôt**, cliquez sur **Ajouter une photo** en étant administrateur. Importez une photo JPG, PNG ou WEBP de la réserve (8 Mo maximum). Elle sera conservée dans le volume Docker à `/data/warehouse-photo.webp`, sans être publiée dans le dépôt GitHub. Les repères restent interactifs par-dessus. Sans photo, le site présente une illustration en perspective intégrée.
+
+Il s'agit d'un repérage indicatif sur la photo, pas d'une reconstruction tridimensionnelle exacte ni d'un calcul de volumes physiques. La photo peut être changée ultérieurement. Le numéro de série reste facultatif, la création de référence est automatique depuis le champ de réception, et les états proposés à l'entrée sont **Neuf**, **Retour SAV** et **Réparation**.
+
 ## Première connexion
 
 Variables indispensables au premier lancement :
