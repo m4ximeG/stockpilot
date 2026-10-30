@@ -158,6 +158,17 @@ class StockPilotTests(unittest.TestCase):
         self.assertFalse(any(p['id']=='hp450' for p in state['catalog']))
         self.assertTrue(list((Path(stock.DATA_DIR) / 'backups').glob('avant-retrait-demo-*.sqlite3')))
 
+    def test_visuel_de_reserve_optimise(self):
+        result=self.client.get('/api/mockup-upscaled')
+        self.assertEqual(result.status_code,200,result.text[:300])
+        self.assertIn('image/webp',result.content_type)
+        self.assertEqual(result.data[:4],b'RIFF')
+        from PIL import Image
+        from io import BytesIO
+        with Image.open(BytesIO(result.data)) as source:
+            self.assertGreaterEqual(source.width,1200)
+            self.assertGreaterEqual(source.height,900)
+
     def test_photo_de_reserve_stockee_sur_nas(self):
         from PIL import Image
         from io import BytesIO
