@@ -28,16 +28,17 @@ class StockPilotTests(unittest.TestCase):
         self.assertEqual(len(state['catalog']), 13)
         self.assertEqual(len(state['items']), 27)
         self.assertEqual(state['me']['role'], 'admin')
-        self.assertEqual(len({x['slot'] for x in state['items']}), 27)
+        self.assertLessEqual(len({x['slot'] for x in state['items']}), 24)
+        self.assertEqual(state['locationMode'], 'optional')
 
     def test_complete_movement_and_uniqueness(self):
-        data={'pid':'hp450','slot':'A-2-3','serial':'UNIQUE-SERIAL-111','condition':'Neuf'}
+        data={'pid':'hp450','slot':'A-3','serial':'UNIQUE-SERIAL-111','condition':'Neuf'}
         created=self.client.post('/api/items',json=data,headers=self.headers)
         self.assertEqual(created.status_code, 201, created.text)
         item_id=created.json['item']['id']
-        collision=self.client.post('/api/items',json={**data,'slot':'A-2-2'},headers=self.headers)
-        self.assertEqual(collision.status_code, 409)
-        moved=self.client.post(f'/api/items/{item_id}/move',json={'slot':'A-2-4'},headers=self.headers)
+        collision=self.client.post('/api/items',json={**data,'slot':'A-3'},headers=self.headers)
+        self.assertEqual(collision.status_code, 409)  # même numéro de série, pas même étagère
+        moved=self.client.post(f'/api/items/{item_id}/move',json={'slot':'A-4'},headers=self.headers)
         self.assertEqual(moved.status_code, 200, moved.text)
         qr=self.client.get(f'/api/items/{item_id}/qr.png')
         self.assertEqual(qr.status_code, 200)
@@ -51,6 +52,23 @@ class StockPilotTests(unittest.TestCase):
         types=[e['type'] for e in self.client.get('/api/state').json['events'] if e['itemId']==item_id]
         self.assertEqual(set(types), {'in','out','move'})
 
+    def test_shared_shelf_and_optional_location(self):
+        headers=self.headers
+        first=self.client.post('/api/items', json={'pid':'hp450','slot':'B-4','serial':'SHARED-1','condition':'Neuf'},headers=headers)
+        second=self.client.post('/api/items', json={'pid':'hp450','slot':'B-4','serial':'SHARED-2','condition':'Neuf'},headers=headers)
+        self.assertEqual(first.status_code, 201, first.text)
+        self.assertEqual(second.status_code, 201, second.text)
+        loose=self.client.post('/api/items', json={'pid':'hp450','slot':'','serial':'UNPLACED-1','condition':'Neuf'},headers=headers)
+        self.assertEqual(loose.status_code, 201, loose.text)
+        label=self.client.get(f"/label/{loose.json['item']['id']}")
+        self.assertEqual(label.status_code, 200, label.text)
+        self.assertIn(b'non renseign', label.data)
+        self.assertEqual(self.client.post(f"/api/items/{loose.json['item']['id']}/move",json={'slot':'B-4'},headers=headers).status_code,200)
+        self.assertEqual(self.client.post('/api/settings/location-mode',json={'mode':'guided'},headers=headers).status_code,200)
+        self.assertEqual(self.client.post('/api/items',json={'pid':'hp450','slot':'','serial':'UNPLACED-2','condition':'Neuf'},headers=headers).status_code,400)
+        self.assertEqual(self.client.get('/api/state').json['locationMode'],'guided')
+        self.assertEqual(self.client.post('/api/settings/location-mode',json={'mode':'optional'},headers=headers).status_code,200)
+
     def test_admin_can_create_product_and_user(self):
         product=self.client.post('/api/products',json={'brand':'TERRA','model':'Mobile 1517','cat':'PC portable','zone':'A','ref':'TE-1517-NEW'},headers=self.headers)
         self.assertEqual(product.status_code,201,product.text)
@@ -60,6 +78,7 @@ class StockPilotTests(unittest.TestCase):
         self.client.post('/login', data={'username':'reception','password':'NouveauMotDePasseFort#1'})
         forbidden=self.client.post('/api/products',json={'brand':'X','model':'Y','cat':'Autre','zone':'F','ref':'NEVER'},headers=self.headers)
         self.assertEqual(forbidden.status_code,403)
+        self.assertEqual(self.client.post('/api/settings/location-mode',json={'mode':'guided'},headers=self.headers).status_code,403)
 
     def test_security_and_backup(self):
         self.assertEqual(self.client.post('/api/items',json={},headers={}).status_code,403)
