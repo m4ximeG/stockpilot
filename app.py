@@ -30,7 +30,7 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=60 * 60 * 12,
     MAX_CONTENT_LENGTH=256 * 1024,
 )
-DEMO_SEED = os.environ.get('STOCKPILOT_DEMO_SEED', '0') == '1'
+DEMO_SEED = os.environ.get('STOCKPILOT_DEV_FIXTURES', '0') == '1'
 ALLOW_RESET = os.environ.get('STOCKPILOT_ALLOW_RESET', '0') == '1'
 ZONE_CODES = 'ABCDEFGHIJ'
 SLOTS = [f'{z}-{level}' for z in ZONE_CODES for level in (1, 2, 3, 4, 5)]
@@ -116,9 +116,50 @@ def initialize():
         if not con.execute('SELECT 1 FROM products LIMIT 1').fetchone() and DEMO_SEED:
             con.executemany('INSERT INTO products(id,brand,model,cat,zone,kind,ref) VALUES (?,?,?,?,?,?,?)', PRODUCTS)
         if not con.execute("SELECT value FROM meta WHERE key='next_item'").fetchone():
-            con.execute("INSERT INTO meta(key,value) VALUES('next_item','236')")
+            con.execute("INSERT INTO meta(key,value) VALUES('next_item','1')")
             if DEMO_SEED:
+                con.execute("UPDATE meta SET value='236' WHERE key='next_item'")
                 seed_stock(con)
+        if not DEMO_SEED:
+            purge_original_demo_stock(con)
+
+
+def purge_original_demo_stock(con):
+    """Retirer uniquement les 27 unités de la démo originale, jamais les vraies saisies."""
+    if con.execute("SELECT 1 FROM meta WHERE key='original_demo_purged_v1'").fetchone():
+        return
+    originals = []
+    for num in range(236, 263):
+        item_id = f'STK-{num:06d}'
+        expected_serial = 'SN' + str(33000 + num * 37)
+        row = con.execute("SELECT id,pid FROM items WHERE id=? AND serial=? AND in_by='Équipe magasin'",
+                          (item_id,expected_serial)).fetchone()
+        if row:
+            originals.append(row)
+    if originals:
+        con.commit()
+        backup_dir = DATA_DIR / 'backups'
+        backup_dir.mkdir(parents=True,exist_ok=True)
+        backup_file = backup_dir / ('avant-retrait-demo-' + datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S') + '-' + secrets.token_hex(4) + '.sqlite3')
+        snapshot = sqlite3.connect(str(backup_file))
+        try:
+            con.backup(snapshot)
+        finally:
+            snapshot.close()
+        # Nettoie les mouvements rattachés aux appareils fictifs, sans toucher aux autres.
+        con.execute('BEGIN IMMEDIATE')
+        for row in originals:
+            con.execute('DELETE FROM events WHERE item_id=?', (row['id'],))
+            con.execute('DELETE FROM items WHERE id=?', (row['id'],))
+        # Ne retire que les références originales qui ne sont plus utilisées
+        # et dont le code interne est inchangé.
+        for pid,brand,model,cat,zone,kind,ref in PRODUCTS:
+            used = con.execute('SELECT 1 FROM items WHERE pid=? LIMIT 1',(pid,)).fetchone()
+            current = con.execute('SELECT ref FROM products WHERE id=?',(pid,)).fetchone()
+            if not used and current and current['ref']==ref:
+                con.execute('DELETE FROM products WHERE id=?',(pid,))
+    con.execute("INSERT OR IGNORE INTO meta(key,value) VALUES('original_demo_purged_v1','1')")
+
 
 
 def seed_stock(con):
@@ -268,6 +309,71 @@ def state():
     return jsonify(items=items,events=events,counter=counter,catalog=products,shelves=shelves,me=dict(id=g.user['id'],username=g.user['username'],role=g.user['role']),allowReset=ALLOW_RESET,locationMode=location_mode[0] if location_mode else 'optional')
 
 
+@app.post('/api/receive')
+@protected()
+def receive_free_text():
+    """Une seule transaction : référence existante OU nouvelle référence puis entrée."""
+    db = g.db
+    try:
+        data=json_body()
+        name=clean_text(data.get('name',''), 'Nom du produit', 120, True)
+        serial=clean_text(data.get('serial',''), 'Numéro de série', 100)
+        slot=clean_text(data.get('slot',''), 'Emplacement',15)
+        condition=clean_text(data.get('condition','Neuf'), 'État',30,True)
+        product_id=clean_text(data.get('product_id',''), 'Référence sélectionnée',64)
+        if condition not in ('Neuf','Retour SAV','Réparation'):
+            return bad('État invalide.')
+        if slot and slot not in SLOTS:
+            return bad('Emplacement inconnu.')
+        location_mode=db.execute("SELECT value FROM meta WHERE key='location_mode'").fetchone()
+        if not slot and location_mode and location_mode[0]=='guided':
+            return bad('Un emplacement est requis dans ce mode.')
+        db.execute('BEGIN IMMEDIATE')
+        created=False
+        if product_id:
+            product=db.execute('SELECT id FROM products WHERE id=? AND active=1',(product_id,)).fetchone()
+            if not product:
+                db.rollback()
+                return bad('Référence sélectionnée indisponible.')
+            pid=product['id']
+        else:
+            # Reconnait automatiquement une référence portant exactement ce nom.
+            product=db.execute("""SELECT id FROM products WHERE active=1
+                AND (lower(trim(brand || ' ' || model))=lower(?) OR lower(trim(model))=lower(?))
+                ORDER BY id LIMIT 1""",(name,name)).fetchone()
+            if product:
+                pid=product['id']
+            else:
+                pid='p_'+secrets.token_hex(6)
+                ref='REF-'+secrets.token_hex(5).upper()
+                # Aucun renseignement de marque obligatoire au comptoir.
+                db.execute("""INSERT INTO products(id,brand,model,cat,zone,kind,ref,preferred_slot)
+                    VALUES(?, '', ?, 'Matériel', ?, 'package', ?, ?)""",
+                    (pid,name,slot[0] if slot else 'A',ref,slot))
+                created=True
+        next_row=db.execute("SELECT value FROM meta WHERE key='next_item'").fetchone()
+        num=int(next_row['value']) if next_row else 1
+        # Compteur monotone : ne réutilise jamais un identifiant historique.
+        while db.execute('SELECT 1 FROM items WHERE id=?',(f'STK-{num:06d}',)).fetchone():
+            num+=1
+        item_id=f'STK-{num:06d}'
+        when=int(time.time()*1000)
+        db.execute("""INSERT INTO items(id,pid,slot,serial,condition,in_at,in_by)
+                    VALUES(?,?,?,?,?,?,?)""",(item_id,pid,slot,serial or None,condition,when,g.user['username']))
+        db.execute("""INSERT INTO events(type,item_id,pid,slot,at,actor)
+                    VALUES('in',?,?,?,?,?)""",(item_id,pid,slot,when,g.user['username']))
+        db.execute("INSERT INTO meta(key,value) VALUES('next_item',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(str(num+1),))
+        db.commit()
+        return jsonify(item=dict(id=item_id,pid=pid,slot=slot,serial=serial,
+                   condition=condition,inAt=when),createdProduct=created),201
+    except sqlite3.IntegrityError:
+        db.rollback()
+        return bad('Numéro de série déjà présent ou référence en conflit.',409)
+    except ValueError as e:
+        db.rollback()
+        return bad(str(e))
+
+
 @app.post('/api/items')
 @protected()
 def entry_item():
@@ -282,7 +388,7 @@ def entry_item():
         location_mode = g.db.execute("SELECT value FROM meta WHERE key='location_mode'").fetchone()
         if not slot and location_mode and location_mode[0] == 'guided':
             return bad('Choisissez une étagère pour cette entrée.')
-        if condition not in ('Neuf','Reconditionné','Occasion','Retour SAV'):
+        if condition not in ('Neuf','Retour SAV','Réparation','Reconditionné','Occasion'):
             return bad('État invalide.')
         db = g.db
         db.execute('BEGIN IMMEDIATE')
