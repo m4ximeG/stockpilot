@@ -9,7 +9,7 @@ _tmp = tempfile.TemporaryDirectory(prefix='stockpilot-ci-')
 os.environ['STOCKPILOT_DATA_DIR'] = _tmp.name
 os.environ['STOCKPILOT_ADMIN_PASSWORD'] = 'UnMotDePasseTestTresLong#42'
 os.environ['STOCKPILOT_SECRET_KEY'] = 'cle-test-test-test-test-test-test-test-test'
-os.environ['STOCKPILOT_DEMO_SEED'] = '1'
+os.environ['STOCKPILOT_DEV_FIXTURES'] = '1'
 os.environ['STOCKPILOT_ALLOW_RESET'] = '1'
 os.environ['STOCKPILOT_SECURE_COOKIES'] = '0'
 import app as stock  # noqa: E402
