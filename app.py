@@ -313,30 +313,20 @@ def state():
 @app.get('/api/mockup-upscaled')
 @protected()
 def upscaled_mockup_photo():
-    """Optimise le fond de maquette existant pour l'affichage grand format.
-    Il s'agit d'un agrandissement : seule une nouvelle photo native peut
-    restaurer davantage de détails réellement absents du fichier compressé.
+    """Renvoie l'image d'origine sans agrandissement artificiel et sans
+    deuxième compression destructrice. Le navigateur gère l'affichage 1:1.
+    La source fait 680×497 px ; ajouter des pixels ne restaure pas des détails.
     """
     import base64
-    from PIL import Image, ImageFilter, UnidentifiedImageError
     source = ROOT / 'static' / 'mockup-photo.b64'
     if not source.is_file():
         abort(404)
-    cache = DATA_DIR / 'mockup-default-enhanced.webp'
-    if not cache.is_file() or cache.stat().st_mtime < source.stat().st_mtime:
-        try:
-            raw = base64.b64decode(source.read_text(encoding='ascii').strip(),validate=True)
-            with Image.open(io.BytesIO(raw)) as photo:
-                photo = photo.convert('RGB')
-                photo = photo.resize((photo.width*2,photo.height*2),Image.Resampling.LANCZOS)
-                photo = photo.filter(ImageFilter.UnsharpMask(radius=1.1,percent=90,threshold=3))
-                tmp = DATA_DIR / ('enhanced-' + secrets.token_hex(4) + '.webp')
-                photo.save(tmp,'WEBP',quality=88,method=5)
-                tmp.replace(cache)
-        except (UnidentifiedImageError, OSError, ValueError):
-            abort(500,'Impossible de préparer le visuel de réserve.')
-    response=send_file(cache,mimetype='image/webp',max_age=0)
-    response.headers['Cache-Control']='private, no-cache, no-store, must-revalidate'
+    try:
+        raw = base64.b64decode(source.read_text(encoding='ascii').strip(), validate=True)
+    except (ValueError, OSError):
+        abort(500, 'Image de référence corrompue.')
+    response = send_file(io.BytesIO(raw), mimetype='image/avif', max_age=0, download_name='reserve-originale.avif')
+    response.headers['Cache-Control'] = 'private, no-cache, no-store, must-revalidate'
     return response
 
 
