@@ -20,23 +20,28 @@ function shelfPlan(db,photo,admin){return window.StockPilotWarehouse.render(db,s
 function entry(ctx) {
  const db=ctx.db;
  if(state.received){
- const item=state.received,p=db.catalog.find(p=>p.id===item.pid);
- return '<div class="rx-root"><div class="rx-heading"><span class="rx-overline">RÉCEPTION VALIDÉE</span><h1>Produit enregistré</h1><p>L’entrée est dans le stock partagé du magasin.</p></div>'+
- '<section class="rx-panel rx-result"><span class="rx-check">✓</span><h2>'+e(p?cleanName(p):state.name)+'</h2><p>Identifiant de suivi : <strong>'+e(item.id)+'</strong></p><p>Emplacement : <strong>'+e(item.slot||'Non renseigné')+'</strong></p><div class="rx-result-actions"><button type="button" class="rx-action" data-rx="print" data-id="'+e(item.id)+'">Imprimer l’étiquette</button><button type="button" class="rx-alt" data-rx="again">Nouvelle réception</button></div></section></div>';
+  const item=state.received,p=db.catalog.find(p=>p.id===item.pid);
+  return '<div class="ref-entry-wrap"><div class="ref-page-heading"><div class="ref-heading-icon">▣</div><div><h1>Réception enregistrée</h1><p>Votre produit est désormais disponible dans le stock.</p></div></div>'+
+  '<section class="ref-success"><div class="ref-success-check">✓</div><h2>'+e(p?cleanName(p):state.name)+'</h2><p>Identifiant : <strong>'+e(item.id)+'</strong> · Emplacement : <strong>'+e(item.slot||'Non renseigné')+'</strong></p><div class="rx-result-actions"><button type="button" class="ref-primary-btn" data-rx="print" data-id="'+e(item.id)+'">▤ &nbsp; Imprimer l’étiquette</button><button type="button" class="rx-alt" data-rx="again">Nouvelle réception</button></div></section></div>';
  }
  const picked=db.catalog.find(p=>p.id===state.pid);
- const n=state.slot?db.items.filter(i=>String(i.slot||'').split('-').slice(0,2).join('-')===state.slot).length:0;
- return '<div class="rx-root"><div class="rx-heading"><div class="rx-heading-content"><span class="rx-overline">RÉCEPTION DE MATÉRIEL</span><h1>Réceptionner un produit</h1><p>Ajoutez un article existant ou créez-en un nouveau, puis sélectionnez son rangement dans la réserve.</p></div><span class="rx-instruction">01 — Article &nbsp; / &nbsp; 02 — Emplacement</span></div>'+
- '<div class="rx-columns"><section class="rx-panel rx-form"><div class="rx-section-head"><span class="rx-step">01</span><div><h2>Informations de l’article</h2><p>Recherchez un modèle déjà connu ou créez-en un nouveau directement.</p></div></div>'+
- '<div class="rx-field"><label for="rx-name">Nom du produit <b>*</b></label><div class="rx-search-wrap"><input id="rx-name" value="'+e(state.name)+'" autocomplete="off" maxlength="120" placeholder="Ex. TERRA Mobile 1517, souris Logitech, écran 24”..." spellcheck="false" /><span class="rx-search-glyph">⌕</span></div><div id="rx-suggestions" class="rx-suggestions">'+hint(db)+'</div>'+(picked?'<p class="rx-identified">✓ Référence existante · '+e(picked.ref)+'</p>':'')+'</div>'+
- '<div class="rx-fields-line"><div class="rx-field"><label for="rx-serial">Numéro de série <span>facultatif</span></label><input id="rx-serial" value="'+e(state.serial)+'" maxlength="100" autocomplete="off" placeholder="À laisser vide si inutile" /></div><div class="rx-field"><label>État de l’article</label><div class="rx-conditions">'+[['Neuf','Neuf'],['Retour SAV','Retour SAV'],['Réparation','Réparation']].map(([key,val])=>'<button type="button" class="'+(state.condition===key?'active':'')+'" data-rx="condition" data-value="'+key+'">'+e(val)+'</button>').join('')+'</div></div></div>'+
- '<div class="rx-info-strip"><span class="rx-info-icon">i</span>La création d’une nouvelle référence se fait automatiquement lors de la première entrée. Aucun numéro de série n’est obligatoire.</div>'+
- '<div class="rx-selected-box"><div><span class="rx-muted">Emplacement choisi</span><strong>'+e(state.slot||'Aucun emplacement')+'</strong></div><div><span class="rx-muted">Produits déjà sur ce niveau</span><strong>'+n+'</strong></div></div>'+
- '<button type="button" class="rx-action rx-submit" data-rx="save" '+(!state.name.trim()||state.saving?'disabled':'')+'>'+(state.saving?'Enregistrement…':'Enregistrer l’entrée et préparer l’étiquette')+'<span>→</span></button><p class="rx-form-footnote">Le stock sera actualisé immédiatement. L’impression peut être lancée juste après.</p></section>'+
- '<section class="rx-panel rx-location"><div class="rx-section-head"><span class="rx-step">02</span><div><h2>Choisir un emplacement</h2><p>Retrouvez vos rayonnages et sélectionnez directement le niveau de rangement.</p></div></div>'+
- shelfPlan(db,db.warehousePhoto,ctx.me?.role==='admin')+'<input type="file" id="rx-photo-input" accept="image/jpeg,image/png,image/webp" hidden />'+
- '<button type="button" class="rx-omit-location" data-rx="clear-slot">Enregistrer sans emplacement pour le moment</button></section></div></div>';
+ const num=state.slot?window.StockPilotWarehouse.quantity(db,state.slot):0;
+ const names=['Neuf','Retour SAV','Réparation'];
+ return '<div class="ref-entry-wrap">'+
+ '<div class="ref-page-heading"><div class="ref-heading-icon">⬡</div><div class="ref-heading-copy"><h1>Réceptionner un produit</h1><p>Ajoutez un produit existant ou créez-en un nouveau directement depuis ce formulaire.</p></div><div class="ref-help"><div class="ref-help-icon">☼</div><div><strong>Besoin d’aide ?</strong><small>Sélectionnez un produit, choisissez un emplacement et enregistrez pour imprimer l’étiquette.</small></div><span class="ref-help-link">Guide d’utilisation</span></div></div>'+
+ '<div class="ref-dual-layout">'+
+ '<section class="ref-form-pane"><div class="ref-section-heading"><span class="ref-section-number">1</span><div><h2>Informations du produit</h2><p>Recherchez un produit existant ou créez-en un nouveau. S’il n’existe pas, son nom sera automatiquement enregistré.</p></div></div>'+
+ '<div class="ref-field"><label for="rx-name">Produit <em>*</em></label><div class="ref-name-input"><span>⌕</span><input id="rx-name" value="'+e(state.name)+'" maxlength="120" autocomplete="off" placeholder="Ex. TERRA Mobile 1517, souris Logitech, écran 24″…" /><span class="ref-input-clear" data-rx="clear-product" role="button" aria-label="Effacer le nom">×</span></div><div class="rx-suggestions ref-suggestions" id="rx-suggestions">'+hint(db)+'</div></div>'+
+ (picked?'<div class="ref-existing-reference">● &nbsp; Référence existante · '+e(picked.ref)+'</div>':'')+
+ '<div class="ref-field-row"><div class="ref-field"><label for="rx-serial">Numéro de série <small>(facultatif)</small></label><div class="ref-serial-field"><span>▥</span><input id="rx-serial" value="'+e(state.serial)+'" maxlength="100" autocomplete="off" placeholder="Ex. CND3412ABC" /></div></div><div class="ref-field"><label>État <em>*</em></label><div class="ref-condition-group">'+names.map((name,i)=>'<button type="button" data-rx="condition" data-value="'+e(name)+'" class="'+(state.condition===name?'active':'')+'"><span>'+(i===0?'✧':i===1?'↺':'⚒')+'</span>'+e(name)+'</button>').join('')+'</div></div></div>'+
+ '<div class="ref-selected-location"><div class="ref-location-icon">♧</div><div class="ref-location-name"><span>Emplacement sélectionné</span><strong>'+e(state.slot||'Aucun')+'</strong></div><div class="ref-location-count">⬡ &nbsp; '+num+' article'+(num>1?'s':'')+' déjà présent'+(num>1?'s':'')+'</div></div>'+
+ '<button type="button" class="ref-primary-btn ref-save-btn" data-rx="save" '+(!state.name.trim()||state.saving?'disabled':'')+'><span>▤</span> '+(state.saving?'Enregistrement en cours…':'Enregistrer et imprimer l’étiquette')+' <b>→</b></button>'+
+ '<button type="button" class="ref-no-location" data-rx="clear-slot">Continuer sans emplacement</button></section>'+
+ '<section class="ref-warehouse-pane"><div class="ref-section-heading"><span class="ref-section-number">2</span><div><h2>Choisir un emplacement sur le schéma</h2><p>Cliquez sur un niveau pour sélectionner l’emplacement de stockage.</p></div><div class="ref-size-legend"><span>Tailles des niveaux :</span><i>⬡ &nbsp; Petit</i><i>⬢ &nbsp; Moyen</i><i>⬟ &nbsp; Grand</i></div></div>'+
+ window.StockPilotWarehouse.render(db,state.slot,db.warehousePhoto,ctx.me?.role==='admin')+
+ '</section></div></div>';
 }
+
 function onInput(ev,db){
  if(ev.target.id==='rx-name'){state.name=ev.target.value;state.pid='';state.suggestions=true;const dropdown=document.getElementById('rx-suggestions');if(dropdown)dropdown.innerHTML=hint(db);const save=document.querySelector('[data-rx="save"]');if(save)save.disabled=!state.name.trim();const selected=document.querySelector('.rx-identified');if(selected)selected.remove();return true;}
  if(ev.target.id==='rx-serial'){state.serial=ev.target.value;return true}
@@ -46,6 +51,7 @@ function onClick(ev,ctx){
  const a=ev.target.closest('[data-rx]');if(!a)return false;
  const action=a.dataset.rx,db=ctx.db;
  if(action==='rack'){if(ctx.page==='map'){ctx.setSlot(a.dataset.rack+'-3')}else{state.slot=a.dataset.rack+'-3';ctx.renderContent()}return true}
+ if(action==='clear-product'){state.name='';state.pid='';state.suggestions=false;ctx.renderContent();return true}
  if(action==='upload-photo'){document.querySelector('#rx-photo-input')?.click();return true}
  if(action==='choose'){const p=db.catalog.find(p=>p.id===a.dataset.id);if(p){state.pid=p.id;state.name=cleanName(p);state.suggestions=false;if(p.preferred_slot&&!state.slot)state.slot=p.preferred_slot;ctx.renderContent()}}
  else if(action==='newproduct'){state.pid='';state.suggestions=false;ctx.renderContent()}
