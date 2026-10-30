@@ -158,6 +158,27 @@ class StockPilotTests(unittest.TestCase):
         self.assertFalse(any(p['id']=='hp450' for p in state['catalog']))
         self.assertTrue(list((Path(stock.DATA_DIR) / 'backups').glob('avant-retrait-demo-*.sqlite3')))
 
+    def test_photo_de_reserve_stockee_sur_nas(self):
+        from PIL import Image
+        from io import BytesIO
+        stock.WAREHOUSE_PHOTO.unlink(missing_ok=True)
+        self.assertEqual(self.client.get('/api/warehouse-photo').status_code,404)
+        photo=BytesIO()
+        Image.new('RGB',(320,240),(180,166,145)).save(photo,'PNG')
+        photo.seek(0)
+        result=self.client.post('/api/warehouse-photo',
+            data={'photo':(photo,'reserve.png')},
+            content_type='multipart/form-data',headers=self.headers)
+        self.assertEqual(result.status_code,200,result.text)
+        self.assertTrue(self.client.get('/api/state').json['warehousePhoto'])
+        loaded=self.client.get('/api/warehouse-photo')
+        self.assertEqual(loaded.status_code,200)
+        self.assertIn('image/webp',loaded.content_type)
+        self.assertEqual(loaded.data[:4],b'RIFF')
+        self.assertEqual(self.client.delete('/api/warehouse-photo',headers=self.headers).status_code,200)
+        self.assertFalse(self.client.get('/api/state').json['warehousePhoto'])
+        self.assertEqual(self.client.get('/api/warehouse-photo').status_code,404)
+
     def test_security_and_backup(self):
         self.assertEqual(self.client.post('/api/items',json={},headers={}).status_code,403)
         b=self.client.get('/api/backup')
