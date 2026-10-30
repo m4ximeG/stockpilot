@@ -69,6 +69,25 @@ class StockPilotTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/state').json['locationMode'],'guided')
         self.assertEqual(self.client.post('/api/settings/location-mode',json={'mode':'optional'},headers=headers).status_code,200)
 
+    def test_five_levels_and_preferred_location_rules(self):
+        product=self.client.post('/api/products',json={
+            'brand':'TERRA','model':'Mobile 1517','cat':'PC portable','zone':'B',
+            'preferred_slot':'B-5','ref':'TE-MOB-1517'
+        },headers=self.headers)
+        self.assertEqual(product.status_code,201,product.text)
+        pid=product.json['id']
+        info=next(p for p in self.client.get('/api/state').json['catalog'] if p['id']==pid)
+        self.assertEqual(info['preferred_slot'],'B-5')
+        created=self.client.post('/api/items',json={'pid':pid,'slot':'B-5','serial':'FIVE-LEVEL-TEST','condition':'Neuf'},headers=self.headers)
+        self.assertEqual(created.status_code,201,created.text)
+        # Changer la règle ne déplace jamais les produits déjà en rayon.
+        edit=self.client.patch('/api/products/'+pid,json={'preferred_slot':'C-2'},headers=self.headers)
+        self.assertEqual(edit.status_code,200,edit.text)
+        item=next(i for i in self.client.get('/api/state').json['items'] if i['pid']==pid)
+        self.assertEqual(item['slot'],'B-5')
+        self.assertEqual(self.client.patch('/api/products/'+pid,json={'preferred_slot':'F-9'},headers=self.headers).status_code,400)
+        self.assertEqual(self.client.patch('/api/products/'+pid,json={'preferred_slot':''},headers=self.headers).status_code,200)
+
     def test_admin_can_create_product_and_user(self):
         product=self.client.post('/api/products',json={'brand':'TERRA','model':'Mobile 1517','cat':'PC portable','zone':'A','ref':'TE-1517-NEW'},headers=self.headers)
         self.assertEqual(product.status_code,201,product.text)
