@@ -16,29 +16,7 @@ function hint(db){
  return '<button type="button" data-rx="choose" data-id="'+e(p.id)+'" class="rx-suggest-row"><span class="rx-product-icon">▣</span><span><strong>'+e(cleanName(p))+'</strong><small>'+e(p.ref)+' · '+count+' en stock</small></span><span class="rx-match">Utiliser</span></button>';
  }).join('')+(!exact?'<button type="button" data-rx="newproduct" class="rx-suggest-new"><span class="rx-new-plus">+</span><span><strong>Créer « '+e(state.name.trim())+' »</strong><small>La référence sera créée à la validation de l’entrée</small></span></button>':'');
 }
-function shelfPlan(db){
- const z=['A','B','C','D','E','F','G','H','I','J'].map((id,i)=>({id,label: i<4?'Gauche '+(i+1):'Droite '+(i-3)}));
- const shelf=(zone)=>{
-  const levels=[5,4,3,2,1].map(n=>{
-   const slot=zone.id+'-'+n;
-   const cfg=db.shelves?.find(x=>x.slot===slot)||{size:'unknown',note:''};
-   const qty=db.items.filter(i=>String(i.slot||'').split('-').slice(0,2).join('-')===slot).length;
-   const selected=state.slot===slot;
-   const size=cfg.size||'unknown';
-   return '<button type="button" class="rx-level'+(selected?' selected':'')+(qty?' occupied':'')+' rx-size-'+e(size)+'" data-rx="slot" data-slot="'+slot+'" title="'+slot+' · '+sizes[size]+' · '+qty+' produits" aria-label="Étagère '+zone.id+', niveau '+n+', '+qty+' produits"><span class="rx-level-code">'+n+'</span><span class="rx-level-amount">'+qty+'</span></button>';
-  }).join('');
-  return '<div class="rx-rack"><div class="rx-rack-title"><span class="rx-rack-id">'+zone.id+'</span><span>'+zone.label+'</span></div><div class="rx-rack-body">'+levels+'</div></div>';
- };
- const activeRack=state.slot?.split('-')[0]||'A';
- const focusLevels=[5,4,3,2,1].map(n=>{
-   const slot=activeRack+'-'+n;
-   const cfg=db.shelves?.find(x=>x.slot===slot)||{size:'unknown',note:''};
-   const count=db.items.filter(i=>String(i.slot||'').split('-').slice(0,2).join('-')===slot).length;
-   return '<button type="button" data-rx="slot" data-slot="'+slot+'" class="rx-elevation-level'+(state.slot===slot?' selected':'')+'"><span class="rx-level-index">'+n+'</span><span class="rx-tier-surface">'+(count?'<span class="rx-tier-box">▣</span>':'')+'</span><span class="rx-tier-info">'+count+' article'+(count>1?'s':'')+'<small>'+sizes[cfg.size||'unknown']+'</small></span></button>';
- }).join('');
- return '<div class="rx-room"><div class="rx-room-top">FOND DE LA RÉSERVE</div><div class="rx-room-main"><div class="rx-room-side">'+z.slice(0,4).reverse().map(shelf).join('')+'</div><div class="rx-corridor"><span>ALLÉE</span></div><div class="rx-room-side">'+z.slice(4).reverse().map(shelf).join('')+'</div></div><div class="rx-room-entry">ENTRÉE MAGASIN</div></div>'+
- '<div class="rx-elevation"><div class="rx-elevation-copy"><span class="rx-overline">VUE DE FACE · RAYONNAGE '+activeRack+'</span><h3>Choisir un niveau</h3><p>Les cinq plateaux sont cliquables, du bas (1) vers le haut (5).</p></div><div class="rx-elevation-rack">'+focusLevels+'</div></div>';
-}
+function shelfPlan(db,photo,admin){return window.StockPilotWarehouse.render(db,state.slot,photo,admin);}
 function entry(ctx) {
  const db=ctx.db;
  if(state.received){
@@ -58,7 +36,7 @@ function entry(ctx) {
  '<button type="button" class="rx-action rx-submit" data-rx="save" '+(!state.name.trim()||state.saving?'disabled':'')+'>'+(state.saving?'Enregistrement…':'Enregistrer l’entrée et préparer l’étiquette')+'<span>→</span></button><p class="rx-form-footnote">Le stock sera actualisé immédiatement. L’impression peut être lancée juste après.</p></section>'+
  '<section class="rx-panel rx-location"><div class="rx-section-head"><span class="rx-step">02</span><div><h2>Choisir un emplacement</h2><p>Vue des rayonnages : 4 à gauche et 6 à droite. Cliquez sur un niveau.</p></div></div>'+
  '<div class="rx-plan-legend"><span><i class="rx-swatch"></i> Libre</span><span><i class="rx-swatch occupied"></i> Avec articles</span><span><i class="rx-swatch chosen"></i> Sélectionné</span></div>'+
- shelfPlan(db)+
+ shelfPlan(db,db.warehousePhoto,ctx.me?.role==='admin')+'<input type="file" id="rx-photo-input" accept="image/jpeg,image/png,image/webp" hidden />'+
  '<div class="rx-location-info"><div><span class="rx-muted">Niveau</span><strong>'+e(state.slot||'Non sélectionné')+'</strong></div><div><span class="rx-muted">Taille configurée</span><strong>'+e(config?sizes[config.size]||'À préciser':'—')+'</strong></div><div><span class="rx-muted">Articles présents</span><strong>'+n+'</strong></div></div>'+
  (config?.note?'<p class="rx-level-note">'+e(config.note)+'</p>':'')+
  '<button type="button" class="rx-omit-location" data-rx="clear-slot">Enregistrer sans emplacement pour le moment</button></section></div></div>';
@@ -71,9 +49,11 @@ function onInput(ev,db){
 function onClick(ev,ctx){
  const a=ev.target.closest('[data-rx]');if(!a)return false;
  const action=a.dataset.rx,db=ctx.db;
+ if(action==='rack'){if(ctx.page==='map'){ctx.setSlot(a.dataset.rack+'-3')}else{state.slot=a.dataset.rack+'-3';ctx.renderContent()}return true}
+ if(action==='upload-photo'){document.querySelector('#rx-photo-input')?.click();return true}
  if(action==='choose'){const p=db.catalog.find(p=>p.id===a.dataset.id);if(p){state.pid=p.id;state.name=cleanName(p);state.suggestions=false;if(p.preferred_slot&&!state.slot)state.slot=p.preferred_slot;ctx.renderContent()}}
  else if(action==='newproduct'){state.pid='';state.suggestions=false;ctx.renderContent()}
- else if(action==='slot'){state.slot=a.dataset.slot;ctx.renderContent()}
+ else if(action==='slot'){if(ctx.page==='map')ctx.setSlot(a.dataset.slot);else{state.slot=a.dataset.slot;ctx.renderContent()}}
  else if(action==='clear-slot'){state.slot='';ctx.renderContent()}
  else if(action==='condition'){state.condition=a.dataset.value;ctx.renderContent()}
  else if(action==='again'){state=initial();ctx.renderContent()}
@@ -87,5 +67,14 @@ function onClick(ev,ctx){
  return true;
 }
 function reset(slot=''){state=initial();if(slot)state.slot=slot;}
-window.SPV3={entry,onInput,onClick,reset,selectSlot(slot){state.slot=slot}};
+function onChange(ev,ctx){
+ if(ev.target.id!=='rx-photo-input')return false;
+ const file=ev.target.files?.[0];if(!file)return true;
+ if(!['image/jpeg','image/png','image/webp'].includes(file.type)){ctx.toast('Choisissez une image JPG, PNG ou WEBP',true);return true}
+ if(file.size>8*1024*1024){ctx.toast('La photo ne doit pas dépasser 8 Mo',true);return true}
+ const form=new FormData();form.append('photo',file);
+ (async()=>{try{const res=await fetch('/api/warehouse-photo',{method:'POST',credentials:'same-origin',headers:{'X-Requested-With':'StockPilot'},body:form});const data=await res.json();if(!res.ok)throw new Error(data.error||'Échec du transfert');await ctx.refreshState(true);ctx.renderContent();ctx.toast('Photo de la réserve enregistrée sur le NAS')}catch(error){ctx.toast(error.message,true)}})();
+ return true;
+}
+window.SPV3={entry,onInput,onClick,onChange,reset,selectSlot(slot){state.slot=slot}};
 })();
