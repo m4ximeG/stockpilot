@@ -8,7 +8,7 @@ Application web complète, accessible sur PC et téléphone, avec **stock centra
 
 - Tableau de bord : pièces présentes, modèles, places libres, mouvements du jour
 - Catalogue : créer et modifier des références (marque, modèle, catégorie, référence, étagère indicative et emplacement conseillé)
-- Réception : sélection du modèle, numéro de série, état et localisation facultative ou guidée
+- Réception : saisie libre avec suggestions automatiques, création de référence si elle n'existe pas, numéro de série facultatif, états Neuf / Retour SAV / Réparation et localisation sur un rayonnage cliquable
 - Stock individuel : un identifiant `STK-000263` par appareil, **plusieurs produits sur un même niveau d'étagère**
 - Impression : étiquette 70 × 50 mm avec QR code réel, modèle et emplacement
 - Sortie : douchette, saisie d'identifiant ou scan de QR caméra (selon navigateur HTTPS)
@@ -16,7 +16,7 @@ Application web complète, accessible sur PC et téléphone, avec **stock centra
 - Déplacement d'un produit vers un niveau d'étagère ou suppression facultative de sa localisation, avec historique
 - Configuration admin : **Suivi uniquement** (localisation facultative) ou **Rangement guidé** (localisation requise pour les entrées et déplacements)
 - Règle par modèle configurable par un administrateur : emplacement conseillé (`B-3` par exemple), affiché automatiquement à la réception et librement modifiable, **sans déplacer les articles déjà enregistrés**
-- Interface entreprise repensée avec micro-animations et navigation responsive
+- Interface métier au style sobre et cohérent sur tout le site, et sélection visuelle des 50 niveaux depuis la réception
 - Accès : administrateur / employé, connexion par mot de passe et journal des opérateurs
 - Sauvegarde administrateur : export SQL téléchargeable, volume Docker persistant
 - Inventaire et historique : recherche, filtres et exports CSV
@@ -28,7 +28,7 @@ Le plan représente la disposition décrite : 4 étagères à gauche, 6 à droit
 
 ## Version 3 — proposition adaptée à la réserve photographiée
 
-La pièce est modélisée en **couloir central étroit**, avec les sections A/B/C à gauche (de l'entrée vers le fond) et D/E/F à droite, et cinq niveaux par section numérotés du bas vers le haut. **Ces six sections sont un repérage provisoire à confirmer sur place**, pas un relevé exact de la réserve.
+La pièce est modélisée en **couloir central étroit**, avec 4 étagères A–D à gauche et 6 E–J à droite, cinq niveaux par étagère du bas vers le haut. Les tailles de niveaux restent configurables et les volumes ne sont pas automatiquement contrôlés.
 
 Sous **Configuration → Où ranger chaque modèle ?**, affectez chaque référence à un emplacement conseillé. Exemple : `TERRA Mobile 1517 → B-3`. Le site propose ce repère à chaque réception de ce modèle, sans l'imposer en mode facultatif. Chaque nouvelle règle est conservée en base SQLite. Une migration additive ajoute la colonne `preferred_slot` aux références existantes ; aucun mouvement de stock n'est effectué automatiquement.
 
@@ -38,12 +38,20 @@ Le code migre automatiquement l'index SQLite qui limitait à une unité par empl
 
 **Avant la première mise à jour**, exportez la sauvegarde SQL depuis l'application et/ou faites une sauvegarde du volume Docker `stockpilot_data`. Ensuite, attendez la réussite du build GitHub Actions et demandez à Portainer de **récupérer la nouvelle image**, puis redéployez sans supprimer le volume. Si le déploiement utilise la stack Git, vérifiez que le bouton de mise à jour récupère bien le tag `latest` (un tag SHA est plus sûr pour figer une version).
 
+## Version 5 — interface et réception simplifiées
+
+La page **Entrée en stock** permet de rechercher un modèle existant et de l'enregistrer directement dans le cas contraire. L'opération référence + article est **atomique** côté SQLite ; le même nom exact réutilise sa référence et le numéro de série peut être vide. Les seuls nouveaux états affichés sont **Neuf**, **Retour SAV**, **Réparation**.
+
+Le plan de réception présente 4 étagères à gauche, 6 à droite et une vue de face semi-3D du rayonnage sélectionné. Chaque niveau cliquable indique son nombre d'articles. L'ensemble de l'interface a été uniformisé en style magasin sobre (CSS éditorial).
+
+Une **migration ciblée de suppression des données fictives** s'exécute au premier démarrage en production. La migration vérifie l'ID, le numéro de série original et l'auteur des entrées. Elle ne vide pas le stock réel. Le point de restauration est conservé dans le volume `stockpilot_data` sous `/data/backups/`. Le mécanisme de génération des anciens exemples est réservé au développement (`STOCKPILOT_DEV_FIXTURES=1`) et n'est pas activé sur le NAS.
+
 ## Version 4 — réserve réelle, essais sur base vide
 
-- **Nouvelle installation :** `STOCKPILOT_DEMO_SEED=0` et aucun produit fictif créé. Structure de rayonnages A–J, niveaux 1–5, uniquement.
-- **Installation existante :** les données ne sont **jamais effacées automatiquement**. En tant qu'administrateur, ouvrez **Configuration → Vider définitivement le stock actuel**, puis saisissez exactement `VIDER LE STOCK`. Attention : cela supprime **toutes** les références, tous les articles et tout l'historique, même ceux ajoutés manuellement. Une sauvegarde SQLite automatique est créée dans `/data/backups/` (volume Docker persistant). Les utilisateurs, le mode de rangement et les paramètres des niveaux restent.
+- **Nouvelle installation :** aucun appareil fictif créé en production, même si l'ancienne variable `STOCKPILOT_DEMO_SEED=1` subsiste dans Portainer (elle est désormais ignorée). Structure de rayonnages A–J, niveaux 1–5, uniquement.
+- **Installation existante :** au redémarrage sur cette version, une migration retire **uniquement les 27 appareils fictifs identifiés** par leur ID, numéro de série et auteur `Équipe magasin`. Elle nettoie leurs mouvements et les références fictives inutilisées ; les autres articles manuels sont préservés. Une copie SQLite automatique est créée dans `/data/backups/` avant ce nettoyage. Le bouton distinct **Vider définitivement le stock actuel** reste disponible si vous souhaitez effacer également vos propres essais ; il nécessite confirmation explicite et une sauvegarde.
 - **Tailles différentes :** dans **Plan de la réserve**, sélectionnez une étagère/niveau et renseignez une taille (« Non précisée », « Petite », « Moyenne », « Grande ») et une note. Les tailles sont indicatives : le logiciel ne valide pas encore la capacité physique d'un carton.
-- **Entrées/sorties :** le catalogue commence vide ; créez les modèles dans Configuration, faites une entrée, imprimez l'étiquette, recherchez/scannez et sortez l'appareil. Les mouvements sont enregistrés réellement dans la base du NAS.
+- **Entrées/sorties :** saisissez simplement un nom de produit. Si une référence existe, sélectionnez-la parmi les suggestions ; sinon une nouvelle référence est créée lors de l'entrée. Choisissez le niveau de rangement sur la vue du couloir (ou laissez-le vide en mode facultatif), puis imprimez l'étiquette et testez la sortie par scan.
 - **Étiquettes** : modèle actuel 70 × 50 mm, conçu pour une imprimante thermique prenant en charge ce format, installée sur le PC depuis lequel on déclenche l'impression via le navigateur. La connexion USB sur le PC de l'accueil est le plus simple ; le NAS héberge les données mais n'imprime pas directement.
 
 **Pour le NAS existant**, pensez à remplacer la variable Portainer `STOCKPILOT_DEMO_SEED=1` par `0`. Cela n'efface pas les anciens enregistrements : utilisez le nettoyage volontaire après sauvegarde pour repartir de zéro.
