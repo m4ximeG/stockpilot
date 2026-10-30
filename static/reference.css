@@ -116,3 +116,8 @@ body{background:#f6f8ff!important;font-family:Inter,"DM Sans",ui-sans-serif,syst
 .sp-bottom-level{position:absolute;bottom:2.6%;z-index:6;transform:translateX(-50%);width:22px;height:23px;display:grid;place-items:center;border:1px solid #ffffff83;border-radius:5px;background:#1b3159be;color:white;font-weight:850;font-size:11px;opacity:.67;cursor:pointer}
 .sp-bottom-level:hover,.sp-bottom-level.active{opacity:1;background:#315cf3;border-color:white;box-shadow:0 0 0 3px #315cf348}
 .ref-warehouse-pane .sp-level-five{display:none!important}
+
+/* Recouvre les nombres dessinés dans l'image de référence : le compteur affiché reste celui de SQLite */
+.sp-cube-count{width:6.65%;height:9.25%;background:#f8faff;border-color:#dfe7f5}
+.sp-cube-count[data-slot="H-3"]{width:8.3%;height:12.5%}
+@media(max-width:760px){.sp-cube-count{min-width:17px;width:6.65%;height:9.25%}.sp-cube-count[data-slot="H-3"]{width:8.3%;height:12.5%}}
