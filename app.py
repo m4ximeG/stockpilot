@@ -18,6 +18,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get('STOCKPILOT_DATA_DIR', '/data'))
 DB_FILE = DATA_DIR / 'stockpilot.sqlite3'
+WAREHOUSE_PHOTO = DATA_DIR / 'warehouse-photo.webp'
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
@@ -306,7 +307,52 @@ def state():
     shelves = [dict(slot=r['slot'],size=r['size'],note=r['note']) for r in db.execute('SELECT slot,size,note FROM shelf_levels ORDER BY slot')]
     counter = int(db.execute("SELECT value FROM meta WHERE key='next_item'").fetchone()[0])
     location_mode = db.execute("SELECT value FROM meta WHERE key='location_mode'").fetchone()
-    return jsonify(items=items,events=events,counter=counter,catalog=products,shelves=shelves,me=dict(id=g.user['id'],username=g.user['username'],role=g.user['role']),allowReset=ALLOW_RESET and DEMO_SEED,locationMode=location_mode[0] if location_mode else 'optional')
+    return jsonify(items=items,events=events,counter=counter,catalog=products,shelves=shelves,me=dict(id=g.user['id'],username=g.user['username'],role=g.user['role']),allowReset=ALLOW_RESET and DEMO_SEED,warehousePhoto=WAREHOUSE_PHOTO.is_file(),locationMode=location_mode[0] if location_mode else 'optional')
+
+
+@app.get('/api/warehouse-photo')
+@protected()
+def warehouse_photo():
+    if not WAREHOUSE_PHOTO.is_file():
+        abort(404)
+    response = send_file(WAREHOUSE_PHOTO, mimetype='image/webp', max_age=0)
+    response.headers['Cache-Control'] = 'private, no-cache, no-store, must-revalidate'
+    return response
+
+
+@app.post('/api/warehouse-photo')
+@protected(admin=True)
+def upload_warehouse_photo():
+    """Photo de réserve facultative, stockée sur le volume Docker et non sur GitHub."""
+    from PIL import Image, ImageOps, UnidentifiedImageError
+    from io import BytesIO
+    file = request.files.get('photo')
+    if file is None or not file.filename:
+        return bad('Sélectionnez une photo.')
+    raw = file.stream.read(8 * 1024 * 1024 + 1)
+    if len(raw) > 8 * 1024 * 1024:
+        return bad('La photo doit faire moins de 8 Mo.')
+    try:
+        with Image.open(BytesIO(raw)) as src:
+            if src.format not in ('JPEG', 'PNG', 'WEBP'):
+                return bad('Formats acceptés : JPG, PNG ou WEBP.')
+            if src.width * src.height > 35_000_000:
+                return bad('La photo est trop grande.')
+            img = ImageOps.exif_transpose(src).convert('RGB')
+            img.thumbnail((1600, 1700), Image.Resampling.LANCZOS)
+            temporary = DATA_DIR / ('warehouse-photo-' + secrets.token_hex(5) + '.webp')
+            img.save(temporary, 'WEBP', quality=83, method=4)
+        temporary.replace(WAREHOUSE_PHOTO)
+    except (UnidentifiedImageError, OSError, ValueError):
+        return bad('Photo invalide ou endommagée.')
+    return jsonify(ok=True, warehousePhoto=True)
+
+
+@app.delete('/api/warehouse-photo')
+@protected(admin=True)
+def delete_warehouse_photo():
+    WAREHOUSE_PHOTO.unlink(missing_ok=True)
+    return jsonify(ok=True, warehousePhoto=False)
 
 
 @app.post('/api/receive')
