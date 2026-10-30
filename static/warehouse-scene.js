@@ -50,6 +50,7 @@ function render(db,slot){
   const level=5-i,code=r.id+'-'+level,count=quantity(db,code),picked=selected===code;
   return '<button type="button" data-rx="slot" data-slot="'+code+'" title="'+code+' · '+count+' article(s)" class="sp-cube-count'+(picked?' active':'')+'" style="left:'+xy[0]+'%;top:'+xy[1]+'%" aria-label="Rayonnage '+r.id+', niveau '+level+', '+count+' articles"><span class="sp-count-icon">⬡</span><strong>'+count+'</strong></button>';
  }).join('')).join('');
+ const level1Buttons=positions.map(r=>{const code=r.id+'-1',qty=quantity(db,code);return '<button type="button" data-rx="slot" data-slot="'+code+'" class="sp-bottom-level'+(selected===code?' active':'')+'" style="left:'+r.label[0]+'%" title="'+code+' · '+qty+' article(s)">1</button>'}).join('');
  const details=selected?'<strong>'+escape(selected)+'</strong>':'<strong>—</strong>';
  const total=selected?quantity(db,selected):0;
  const suggestedLevel=selected?selected.split('-')[1]:'—';
@@ -57,7 +58,7 @@ function render(db,slot){
  const notes=config?.note||'Aucune note';
  return '<div class="sp-warehouse">'+
   '<div class="sp-photo"><div class="sp-photo-error"></div>'+photoMarkup()+pins+overlay+
-  '<div class="sp-level-side"><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span></div></div>'+
+  '<div class="sp-level-side"><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span></div>'+level1Buttons+'</div>'+
   '<div class="sp-place-card"><div class="sp-place-visual"><span class="sp-mini-shelf">▤</span></div>'+
   '<div class="sp-place-location"><span>Emplacement sélectionné</span>'+details+'</div>'+
   '<div class="sp-place-data"><div><span>◈ &nbsp; Taille du niveau</span><b class="sp-size-badge">'+escape(size)+'</b></div>'+
