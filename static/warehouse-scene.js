@@ -31,14 +31,15 @@ function loadImage(){
  });
  return pending;
 }
-function photoMarkup(){
+function photoMarkup(uploaded=false){
+ if(uploaded)return '<img class="sp-reference-photo" src="/api/warehouse-photo" alt="Photographie de la réserve" />';
  loadImage();
  return '<img class="sp-reference-photo" '+(imageData?'src="'+imageData+'"':'')+' alt="Vue photographique de la réserve avec rayonnages métalliques et cartons" />';
 }
 function quantity(db,slot){
  return db.items.filter(item=>String(item.slot||'').split('-').slice(0,2).join('-')===slot).length;
 }
-function render(db,slot){
+function render(db,slot,uploaded=false){
  const selected=String(slot||'');
  const rack=selected[0]||'A';
  const config=db.shelves?.find(x=>x.slot===selected);
@@ -57,7 +58,7 @@ function render(db,slot){
  const size=config?(sizes[config.size]||'À définir'):'À définir';
  const notes=config?.note||'Aucune note';
  return '<div class="sp-warehouse">'+
-  '<div class="sp-photo"><div class="sp-photo-error"></div>'+photoMarkup()+pins+overlay+
+  '<div class="sp-photo"><div class="sp-photo-error"></div>'+photoMarkup(uploaded)+pins+overlay+
   '<div class="sp-level-side"><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span></div>'+level1Buttons+'</div>'+
   '<div class="sp-place-card"><div class="sp-place-visual"><span class="sp-mini-shelf">▤</span></div>'+
   '<div class="sp-place-location"><span>Emplacement sélectionné</span>'+details+'</div>'+
@@ -68,6 +69,6 @@ function render(db,slot){
  '</div>';
 }
 function sceneSVG(){return '';}
-function preview(){return '<div class="sp-dashboard-photo">'+photoMarkup()+'<span>Réserve · 10 rayonnages</span></div>';}
+function preview(uploaded=false){return '<div class="sp-dashboard-photo">'+photoMarkup(uploaded)+'<span>Réserve · 10 rayonnages</span></div>';}
 window.StockPilotWarehouse={render,sceneSVG,preview,quantity};
 })();
