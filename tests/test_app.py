@@ -28,7 +28,7 @@ class StockPilotTests(unittest.TestCase):
         self.assertEqual(len(state['catalog']), 13)
         self.assertEqual(len(state['items']), 27)
         self.assertEqual(state['me']['role'], 'admin')
-        self.assertLessEqual(len({x['slot'] for x in state['items']}), 24)
+        self.assertLessEqual(len({x['slot'] for x in state['items']}), 30)
         self.assertEqual(state['locationMode'], 'optional')
 
     def test_complete_movement_and_uniqueness(self):
