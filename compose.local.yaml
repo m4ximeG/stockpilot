@@ -1,0 +1,13 @@
+services:
+  stockpilot:
+    build: .
+    image: stockpilot:local
+    container_name: stockpilot
+    restart: unless-stopped
+    ports:
+      - "8787:8080"
+    env_file: .env
+    volumes:
+      - stockpilot_data:/data
+volumes:
+  stockpilot_data:

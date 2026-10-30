@@ -1,0 +1,26 @@
+services:
+  stockpilot:
+    image: ghcr.io/m4ximeg/stockpilot:latest
+    container_name: stockpilot
+    restart: unless-stopped
+    ports:
+      - "8787:8080"
+    environment:
+      STOCKPILOT_DATA_DIR: /data
+      STOCKPILOT_ADMIN_USERNAME: ${STOCKPILOT_ADMIN_USERNAME:-admin}
+      STOCKPILOT_ADMIN_PASSWORD: ${STOCKPILOT_ADMIN_PASSWORD:?Définir un mot de passe administrateur de 12 caractères minimum}
+      STOCKPILOT_SECRET_KEY: ${STOCKPILOT_SECRET_KEY:?Définir une clé de session aléatoire}
+      STOCKPILOT_DEMO_SEED: ${STOCKPILOT_DEMO_SEED:-1}
+      STOCKPILOT_ALLOW_RESET: ${STOCKPILOT_ALLOW_RESET:-0}
+      STOCKPILOT_SECURE_COOKIES: ${STOCKPILOT_SECURE_COOKIES:-1}
+    volumes:
+      - stockpilot_data:/data
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8080/healthz',timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+volumes:
+  stockpilot_data:
