@@ -2,17 +2,17 @@
 
 Application web complète, accessible sur PC et téléphone, avec **stock centralisé**, **comptes employés**, **entrées/sorties**, **étiquettes QR imprimables** et **plan interactif d'une petite réserve**.
 
-> **Projet pilote** : réserve fictive préconfigurée (six sections provisoires A–F et cinq niveaux par section, 13 références). Les opérations enregistrées sont réelles dans une base SQLite persistante. Le plan, les références et les règles sont destinés à être adaptés au vrai magasin avant exploitation.
+> **Version test réaliste** : 10 étagères de réserve (A–D à gauche, E–J à droite), 5 niveaux chacune, **aucune référence ni aucun article fictif inséré par défaut**. Les tailles des niveaux se configurent séparément ; initialement, elles sont « Non précisée ».
 
 ## Fonctionnalités
 
 - Tableau de bord : pièces présentes, modèles, places libres, mouvements du jour
-- Catalogue : créer et modifier des références (marque, modèle, catégorie, référence, section indicative et emplacement conseillé)
+- Catalogue : créer et modifier des références (marque, modèle, catégorie, référence, étagère indicative et emplacement conseillé)
 - Réception : sélection du modèle, numéro de série, état et localisation facultative ou guidée
 - Stock individuel : un identifiant `STK-000263` par appareil, **plusieurs produits sur un même niveau d'étagère**
 - Impression : étiquette 70 × 50 mm avec QR code réel, modèle et emplacement
 - Sortie : douchette, saisie d'identifiant ou scan de QR caméra (selon navigateur HTTPS)
-- Plan de la petite réserve : couloir central, étagères A, B, C à gauche et D, E, F à droite, 5 niveaux repérés par étagère (`A-1`, `A-2`…), avec nombre de produits par niveau
+- Plan de la petite réserve : couloir central, 4 étagères A–D à gauche et 6 E–J à droite, 5 niveaux chacune, avec tailles et notes configurables par niveau (`A-1`, `A-2`…), avec nombre de produits par niveau
 - Déplacement d'un produit vers un niveau d'étagère ou suppression facultative de sa localisation, avec historique
 - Configuration admin : **Suivi uniquement** (localisation facultative) ou **Rangement guidé** (localisation requise pour les entrées et déplacements)
 - Règle par modèle configurable par un administrateur : emplacement conseillé (`B-3` par exemple), affiché automatiquement à la réception et librement modifiable, **sans déplacer les articles déjà enregistrés**
@@ -24,7 +24,7 @@ Application web complète, accessible sur PC et téléphone, avec **stock centra
 
 ### Limites à connaître
 
-Le dessin de la réserve (six sections de cinq niveaux) est **fictif** et devra être adapté à la pièce réelle. Plusieurs articles peuvent partager un niveau, mais il n'y a pas de calcul de capacité physique. Les anciens emplacements au format `A-1-1` restent enregistrés pour ne pas perdre les données ; ils sont regroupés visuellement au niveau `A-1`, et pourront être réattribués via « Déplacer ». La personnalisation du nombre de sections, de leurs noms et du nombre de niveaux, les retours avancés et l'intégration avec un modèle précis d'imprimante restent des évolutions. Les scans caméra utilisent `BarcodeDetector` s'il est pris en charge ; sinon une douchette ou la saisie manuelle fonctionne. Les changements sont centralisés, actualisation automatique des vues toutes les 20 secondes (hors formulaires actifs).
+Le plan représente la disposition décrite : 4 étagères à gauche, 6 à droite et 5 niveaux chacune. Les largeurs et hauteurs restent schématiques et devront être affinées sur place. Plusieurs articles peuvent partager un niveau, mais il n'y a pas de calcul de capacité physique. Les anciens emplacements au format `A-1-1` restent enregistrés pour ne pas perdre les données ; ils sont regroupés visuellement au niveau `A-1`, et pourront être réattribués via « Déplacer ». La personnalisation du nombre de sections et de leurs noms, les retours avancés et l'intégration avec un modèle précis d'imprimante restent des évolutions. Les scans caméra utilisent `BarcodeDetector` s'il est pris en charge ; sinon une douchette ou la saisie manuelle fonctionne. Les changements sont centralisés, actualisation automatique des vues toutes les 20 secondes (hors formulaires actifs).
 
 ## Version 3 — proposition adaptée à la réserve photographiée
 
@@ -37,6 +37,16 @@ Sous **Configuration → Où ranger chaque modèle ?**, affectez chaque référe
 Le code migre automatiquement l'index SQLite qui limitait à une unité par emplacement ; **aucun appareil ni mouvement historique n'est effacé**. Les anciens emplacements sont préservés tels quels. Le nouveau mode par défaut est **Suivi uniquement** ; il peut être changé à tout moment dans **Configuration** par un administrateur.
 
 **Avant la première mise à jour**, exportez la sauvegarde SQL depuis l'application et/ou faites une sauvegarde du volume Docker `stockpilot_data`. Ensuite, attendez la réussite du build GitHub Actions et demandez à Portainer de **récupérer la nouvelle image**, puis redéployez sans supprimer le volume. Si le déploiement utilise la stack Git, vérifiez que le bouton de mise à jour récupère bien le tag `latest` (un tag SHA est plus sûr pour figer une version).
+
+## Version 4 — réserve réelle, essais sur base vide
+
+- **Nouvelle installation :** `STOCKPILOT_DEMO_SEED=0` et aucun produit fictif créé. Structure de rayonnages A–J, niveaux 1–5, uniquement.
+- **Installation existante :** les données ne sont **jamais effacées automatiquement**. En tant qu'administrateur, ouvrez **Configuration → Vider définitivement le stock actuel**, puis saisissez exactement `VIDER LE STOCK`. Attention : cela supprime **toutes** les références, tous les articles et tout l'historique, même ceux ajoutés manuellement. Une sauvegarde SQLite automatique est créée dans `/data/backups/` (volume Docker persistant). Les utilisateurs, le mode de rangement et les paramètres des niveaux restent.
+- **Tailles différentes :** dans **Plan de la réserve**, sélectionnez une étagère/niveau et renseignez une taille (« Non précisée », « Petite », « Moyenne », « Grande ») et une note. Les tailles sont indicatives : le logiciel ne valide pas encore la capacité physique d'un carton.
+- **Entrées/sorties :** le catalogue commence vide ; créez les modèles dans Configuration, faites une entrée, imprimez l'étiquette, recherchez/scannez et sortez l'appareil. Les mouvements sont enregistrés réellement dans la base du NAS.
+- **Étiquettes** : modèle actuel 70 × 50 mm, conçu pour une imprimante thermique prenant en charge ce format, installée sur le PC depuis lequel on déclenche l'impression via le navigateur. La connexion USB sur le PC de l'accueil est le plus simple ; le NAS héberge les données mais n'imprime pas directement.
+
+**Pour le NAS existant**, pensez à remplacer la variable Portainer `STOCKPILOT_DEMO_SEED=1` par `0`. Cela n'efface pas les anciens enregistrements : utilisez le nettoyage volontaire après sauvegarde pour repartir de zéro.
 
 ## Première connexion
 
