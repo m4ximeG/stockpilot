@@ -1,19 +1,21 @@
 # StockPilot — Gestion de stock sur NAS / Portainer
 
-Application web complète, accessible sur PC et téléphone, avec **stock centralisé**, **comptes employés**, **entrées/sorties**, **étiquettes QR imprimables** et **plan isométrique interactif du dépôt**.
+Application web complète, accessible sur PC et téléphone, avec **stock centralisé**, **comptes employés**, **entrées/sorties**, **étiquettes QR imprimables** et **plan interactif d'une petite réserve**.
 
-> **Projet pilote** : entrepôt fictif préconfiguré (6 zones, 48 cases, 13 références). Les opérations enregistrées sont réelles dans une base SQLite persistante. Le plan, les références et les règles sont destinés à être adaptés au vrai magasin avant exploitation.
+> **Projet pilote** : réserve fictive préconfigurée (6 étagères A–F, 4 niveaux par étagère, 13 références). Les opérations enregistrées sont réelles dans une base SQLite persistante. Le plan, les références et les règles sont destinés à être adaptés au vrai magasin avant exploitation.
 
 ## Fonctionnalités
 
 - Tableau de bord : pièces présentes, modèles, places libres, mouvements du jour
 - Catalogue : créer et modifier des références (marque, modèle, catégorie, référence et zone conseillée)
-- Réception : sélection du modèle, numéro de série, état et attribution guidée de l'emplacement
-- Stock individuel : un identifiant `STK-000263` par produit, une case par appareil
+- Réception : sélection du modèle, numéro de série, état et localisation facultative ou guidée
+- Stock individuel : un identifiant `STK-000263` par appareil, **plusieurs produits sur un même niveau d'étagère**
 - Impression : étiquette 70 × 50 mm avec QR code réel, modèle et case
 - Sortie : douchette, saisie d'identifiant ou scan de QR caméra (selon navigateur HTTPS)
-- Plan 3D isométrique : 6 zones A–F, 48 emplacements sélectionnables (démo)
-- Déplacement d'un produit entre cases avec historique
+- Plan de la petite réserve : couloir central, étagères A, B, C à gauche et D, E, F à droite, 4 niveaux repérés par étagère (`A-1`, `A-2`…), avec nombre de produits par niveau
+- Déplacement d'un produit vers un niveau d'étagère ou suppression facultative de sa localisation, avec historique
+- Configuration admin : **Suivi uniquement** (localisation facultative) ou **Rangement guidé** (localisation requise pour les entrées et déplacements)
+- Interface entreprise repensée avec micro-animations et navigation responsive
 - Accès : administrateur / employé, connexion par mot de passe et journal des opérateurs
 - Sauvegarde administrateur : export SQL téléchargeable, volume Docker persistant
 - Inventaire et historique : recherche, filtres et exports CSV
@@ -21,7 +23,13 @@ Application web complète, accessible sur PC et téléphone, avec **stock centra
 
 ### Limites à connaître
 
-Le dessin de l'entrepôt et les 48 cases sont **encore fictifs et définis dans le code**. Les affectations par modèle sont modifiables, mais un éditeur visuel du plan réel, plusieurs pièces dans un même bac, les retours avancés et l'intégration directe avec une imprimante précise seront des évolutions. Les scans caméra utilisent `BarcodeDetector` s'il est pris en charge ; sinon une douchette ou la saisie manuelle fonctionne. Les changements sont centralisés, actualisation automatique des vues toutes les 20 secondes (hors formulaires actifs).
+Le dessin de la réserve (6 étagères de 4 niveaux) est **fictif** et devra être adapté à la pièce réelle. Plusieurs articles peuvent partager un niveau, mais il n'y a pas de calcul de capacité physique. Les anciens emplacements au format `A-1-1` restent enregistrés pour ne pas perdre les données ; ils sont regroupés visuellement au niveau `A-1`, et pourront être réattribués via « Déplacer ». La personnalisation du nombre de niveaux et des noms d'étagères, les retours avancés et l'intégration avec un modèle précis d'imprimante restent des évolutions. Les scans caméra utilisent `BarcodeDetector` s'il est pris en charge ; sinon une douchette ou la saisie manuelle fonctionne. Les changements sont centralisés, actualisation automatique des vues toutes les 20 secondes (hors formulaires actifs).
+
+## Version 2 — déploiement sans perte de données
+
+Le code migre automatiquement l'index SQLite qui limitait à une unité par emplacement ; **aucun appareil ni mouvement historique n'est effacé**. Les anciens emplacements sont préservés tels quels. Le nouveau mode par défaut est **Suivi uniquement** ; il peut être changé à tout moment dans **Configuration** par un administrateur.
+
+**Avant la première mise à jour**, exportez la sauvegarde SQL depuis l'application et/ou faites une sauvegarde du volume Docker `stockpilot_data`. Ensuite, attendez la réussite du build GitHub Actions et demandez à Portainer de **récupérer la nouvelle image**, puis redéployez sans supprimer le volume. Si le déploiement utilise la stack Git, vérifiez que le bouton de mise à jour récupère bien le tag `latest` (un tag SHA est plus sûr pour figer une version).
 
 ## Première connexion
 
