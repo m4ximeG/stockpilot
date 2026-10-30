@@ -2,19 +2,20 @@
 
 Application web complète, accessible sur PC et téléphone, avec **stock centralisé**, **comptes employés**, **entrées/sorties**, **étiquettes QR imprimables** et **plan interactif d'une petite réserve**.
 
-> **Projet pilote** : réserve fictive préconfigurée (6 étagères A–F, 4 niveaux par étagère, 13 références). Les opérations enregistrées sont réelles dans une base SQLite persistante. Le plan, les références et les règles sont destinés à être adaptés au vrai magasin avant exploitation.
+> **Projet pilote** : réserve fictive préconfigurée (six sections provisoires A–F et cinq niveaux par section, 13 références). Les opérations enregistrées sont réelles dans une base SQLite persistante. Le plan, les références et les règles sont destinés à être adaptés au vrai magasin avant exploitation.
 
 ## Fonctionnalités
 
 - Tableau de bord : pièces présentes, modèles, places libres, mouvements du jour
-- Catalogue : créer et modifier des références (marque, modèle, catégorie, référence et zone conseillée)
+- Catalogue : créer et modifier des références (marque, modèle, catégorie, référence, section indicative et emplacement conseillé)
 - Réception : sélection du modèle, numéro de série, état et localisation facultative ou guidée
 - Stock individuel : un identifiant `STK-000263` par appareil, **plusieurs produits sur un même niveau d'étagère**
-- Impression : étiquette 70 × 50 mm avec QR code réel, modèle et case
+- Impression : étiquette 70 × 50 mm avec QR code réel, modèle et emplacement
 - Sortie : douchette, saisie d'identifiant ou scan de QR caméra (selon navigateur HTTPS)
-- Plan de la petite réserve : couloir central, étagères A, B, C à gauche et D, E, F à droite, 4 niveaux repérés par étagère (`A-1`, `A-2`…), avec nombre de produits par niveau
+- Plan de la petite réserve : couloir central, étagères A, B, C à gauche et D, E, F à droite, 5 niveaux repérés par étagère (`A-1`, `A-2`…), avec nombre de produits par niveau
 - Déplacement d'un produit vers un niveau d'étagère ou suppression facultative de sa localisation, avec historique
 - Configuration admin : **Suivi uniquement** (localisation facultative) ou **Rangement guidé** (localisation requise pour les entrées et déplacements)
+- Règle par modèle configurable par un administrateur : emplacement conseillé (`B-3` par exemple), affiché automatiquement à la réception et librement modifiable, **sans déplacer les articles déjà enregistrés**
 - Interface entreprise repensée avec micro-animations et navigation responsive
 - Accès : administrateur / employé, connexion par mot de passe et journal des opérateurs
 - Sauvegarde administrateur : export SQL téléchargeable, volume Docker persistant
@@ -23,7 +24,13 @@ Application web complète, accessible sur PC et téléphone, avec **stock centra
 
 ### Limites à connaître
 
-Le dessin de la réserve (6 étagères de 4 niveaux) est **fictif** et devra être adapté à la pièce réelle. Plusieurs articles peuvent partager un niveau, mais il n'y a pas de calcul de capacité physique. Les anciens emplacements au format `A-1-1` restent enregistrés pour ne pas perdre les données ; ils sont regroupés visuellement au niveau `A-1`, et pourront être réattribués via « Déplacer ». La personnalisation du nombre de niveaux et des noms d'étagères, les retours avancés et l'intégration avec un modèle précis d'imprimante restent des évolutions. Les scans caméra utilisent `BarcodeDetector` s'il est pris en charge ; sinon une douchette ou la saisie manuelle fonctionne. Les changements sont centralisés, actualisation automatique des vues toutes les 20 secondes (hors formulaires actifs).
+Le dessin de la réserve (six sections de cinq niveaux) est **fictif** et devra être adapté à la pièce réelle. Plusieurs articles peuvent partager un niveau, mais il n'y a pas de calcul de capacité physique. Les anciens emplacements au format `A-1-1` restent enregistrés pour ne pas perdre les données ; ils sont regroupés visuellement au niveau `A-1`, et pourront être réattribués via « Déplacer ». La personnalisation du nombre de sections, de leurs noms et du nombre de niveaux, les retours avancés et l'intégration avec un modèle précis d'imprimante restent des évolutions. Les scans caméra utilisent `BarcodeDetector` s'il est pris en charge ; sinon une douchette ou la saisie manuelle fonctionne. Les changements sont centralisés, actualisation automatique des vues toutes les 20 secondes (hors formulaires actifs).
+
+## Version 3 — proposition adaptée à la réserve photographiée
+
+La pièce est modélisée en **couloir central étroit**, avec les sections A/B/C à gauche (de l'entrée vers le fond) et D/E/F à droite, et cinq niveaux par section numérotés du bas vers le haut. **Ces six sections sont un repérage provisoire à confirmer sur place**, pas un relevé exact de la réserve.
+
+Sous **Configuration → Où ranger chaque modèle ?**, affectez chaque référence à un emplacement conseillé. Exemple : `TERRA Mobile 1517 → B-3`. Le site propose ce repère à chaque réception de ce modèle, sans l'imposer en mode facultatif. Chaque nouvelle règle est conservée en base SQLite. Une migration additive ajoute la colonne `preferred_slot` aux références existantes ; aucun mouvement de stock n'est effectué automatiquement.
 
 ## Version 2 — déploiement sans perte de données
 
