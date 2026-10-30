@@ -99,6 +99,32 @@ class StockPilotTests(unittest.TestCase):
         self.assertEqual(forbidden.status_code,403)
         self.assertEqual(self.client.post('/api/settings/location-mode',json={'mode':'guided'},headers=self.headers).status_code,403)
 
+    def test_real_reserve_shelves_and_explicit_cleanup(self):
+        state=self.client.get('/api/state').json
+        self.assertEqual(len(state['shelves']),50)
+        self.assertEqual(len(set(x['slot'][0] for x in state['shelves'])),10)
+        self.assertEqual(self.client.patch('/api/shelves/J-5',json={'size':'large','note':'Cartons très hauts'},headers=self.headers).status_code,200)
+        self.assertEqual(self.client.patch('/api/shelves/J-9',json={'size':'small','note':''},headers=self.headers).status_code,404)
+        self.assertEqual(self.client.patch('/api/shelves/J-5',json={'size':'huge','note':''},headers=self.headers).status_code,400)
+        self.assertEqual(self.client.post('/api/admin/clear-stock',json={'confirmation':'oui'},headers=self.headers).status_code,400)
+        self.assertEqual(len(self.client.get('/api/state').json['items']),27)
+        done=self.client.post('/api/admin/clear-stock',json={'confirmation':'VIDER LE STOCK'},headers=self.headers)
+        self.assertEqual(done.status_code,200,done.text)
+        state=self.client.get('/api/state').json
+        self.assertEqual(state['items'],[])
+        self.assertEqual(state['events'],[])
+        self.assertEqual(state['catalog'],[])
+        level=next(x for x in state['shelves'] if x['slot']=='J-5')
+        self.assertEqual(level['size'],'large')
+        self.assertEqual(level['note'],'Cartons très hauts')
+        self.assertEqual(state['me']['role'],'admin')
+        self.assertEqual(len(list((Path(stock.DATA_DIR) / 'backups').glob('stockpilot-avant-vidage-*.sqlite3'))),1)
+        add=self.client.post('/api/products',json={'brand':'TERRA','model':'1517','cat':'PC portable','zone':'J','preferred_slot':'J-5','ref':'TERRA-NEW'},headers=self.headers)
+        self.assertEqual(add.status_code,201,add.text)
+        item=self.client.post('/api/items',json={'pid':add.json['id'],'slot':'J-5','serial':'REAL-DEMO-1','condition':'Neuf'},headers=self.headers)
+        self.assertEqual(item.status_code,201,item.text)
+        self.assertEqual(len(self.client.get('/api/state').json['items']),1)
+
     def test_security_and_backup(self):
         self.assertEqual(self.client.post('/api/items',json={},headers={}).status_code,403)
         b=self.client.get('/api/backup')
