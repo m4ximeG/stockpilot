@@ -29,7 +29,15 @@ function shelfPlan(db){
   }).join('');
   return '<div class="rx-rack"><div class="rx-rack-title"><span class="rx-rack-id">'+zone.id+'</span><span>'+zone.label+'</span></div><div class="rx-rack-body">'+levels+'</div></div>';
  };
- return '<div class="rx-room"><div class="rx-room-top">FOND DE LA RÉSERVE</div><div class="rx-room-main"><div class="rx-room-side">'+z.slice(0,4).reverse().map(shelf).join('')+'</div><div class="rx-corridor"><span>ALLÉE</span></div><div class="rx-room-side">'+z.slice(4).reverse().map(shelf).join('')+'</div></div><div class="rx-room-entry">ENTRÉE MAGASIN</div></div>';
+ const activeRack=state.slot?.split('-')[0]||'A';
+ const focusLevels=[5,4,3,2,1].map(n=>{
+   const slot=activeRack+'-'+n;
+   const cfg=db.shelves?.find(x=>x.slot===slot)||{size:'unknown',note:''};
+   const count=db.items.filter(i=>String(i.slot||'').split('-').slice(0,2).join('-')===slot).length;
+   return '<button type="button" data-rx="slot" data-slot="'+slot+'" class="rx-elevation-level'+(state.slot===slot?' selected':'')+'"><span class="rx-level-index">'+n+'</span><span class="rx-tier-surface">'+(count?'<span class="rx-tier-box">▣</span>':'')+'</span><span class="rx-tier-info">'+count+' article'+(count>1?'s':'')+'<small>'+sizes[cfg.size||'unknown']+'</small></span></button>';
+ }).join('');
+ return '<div class="rx-room"><div class="rx-room-top">FOND DE LA RÉSERVE</div><div class="rx-room-main"><div class="rx-room-side">'+z.slice(0,4).reverse().map(shelf).join('')+'</div><div class="rx-corridor"><span>ALLÉE</span></div><div class="rx-room-side">'+z.slice(4).reverse().map(shelf).join('')+'</div></div><div class="rx-room-entry">ENTRÉE MAGASIN</div></div>'+
+ '<div class="rx-elevation"><div class="rx-elevation-copy"><span class="rx-overline">VUE DE FACE · RAYONNAGE '+activeRack+'</span><h3>Choisir un niveau</h3><p>Les cinq plateaux sont cliquables, du bas (1) vers le haut (5).</p></div><div class="rx-elevation-rack">'+focusLevels+'</div></div>';
 }
 function entry(ctx) {
  const db=ctx.db;
