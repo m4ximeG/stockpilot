@@ -150,3 +150,109 @@ body{background:#f6f8ff!important;font-family:Inter,"DM Sans",ui-sans-serif,syst
  .sp-cube-count .sp-count-icon{font-size:8px!important}
  .sp-cube-count strong{font-size:9px!important}
 }
+
+/* V6 — Fidélité à la maquette : utiliser les boutons DÉJÀ visibles dans la photo.
+   Les zones cliquables sont transparentes ; seul le chiffre réel est redessiné. */
+.sp-photo{overflow:hidden!important;border-radius:10px!important;isolation:isolate}
+.sp-photo .sp-rack-marker{background:transparent!important;border:0!important;box-shadow:none!important;outline:0!important}
+.sp-photo .sp-rack-marker:hover,.sp-photo .sp-rack-marker:focus-visible,.sp-photo .sp-rack-marker.active{
+  background:transparent!important;outline:2px solid #597cff!important;outline-offset:2px!important;box-shadow:0 0 0 3px #315cf340!important
+}
+.sp-photo .sp-cube-count,
+.sp-photo .sp-cube-count[data-slot="H-3"]{
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+  border-radius:6px!important;
+  width:6.15%!important;
+  height:9.35%!important;
+  min-width:0!important;
+  min-height:0!important;
+  padding:0!important;
+  transform:translate(-50%,-50%)!important;
+  display:block!important;
+}
+.sp-photo .sp-cube-count .sp-count-icon{display:none!important}
+.sp-photo .sp-cube-count strong{
+  position:absolute!important;
+  right:4%!important;
+  top:50%!important;
+  transform:translateY(-50%)!important;
+  min-width:45%!important;
+  height:76%!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  padding:0 1px!important;
+  border-radius:3px!important;
+  background:#f9fbff!important;
+  color:#263e65!important;
+  font-size:12px!important;
+  font-weight:800!important;
+  line-height:1!important;
+}
+.sp-photo .sp-cube-count:hover,.sp-photo .sp-cube-count:focus-visible{
+  background:#315cf31c!important;
+  outline:2px solid #6d8dff!important;
+  outline-offset:0!important;
+  box-shadow:0 0 0 3px #315cf325!important
+}
+.sp-photo .sp-cube-count.active{
+  background:#315cf3!important;
+  outline:2px solid white!important;
+  box-shadow:0 0 0 4px #315cf345!important;
+  z-index:9!important;
+}
+.sp-photo .sp-cube-count.active .sp-count-icon{
+  display:flex!important;
+  position:absolute!important;
+  left:7%!important;
+  top:50%!important;
+  transform:translateY(-50%);
+  font-size:15px!important;
+  color:#fff!important
+}
+.sp-photo .sp-cube-count.active strong{
+  background:transparent!important;
+  color:#fff!important;
+}
+.sp-photo .sp-level-side,.sp-photo .sp-bottom-level{display:none!important}
+/* Tableau de bord : supprimer le recadrage incomplet et tout l'espace blanc. */
+.mapcard{min-height:0!important}
+.mapcard .room-legend{display:none!important}
+.mapcard .wv-dashboard-scene{
+  height:360px!important;
+  min-height:0!important;
+  width:100%!important;
+  overflow:hidden!important;
+  position:relative!important;
+}
+.mapcard .wv-dashboard-scene .sp-dashboard-photo{
+  position:absolute!important;
+  inset:0!important;
+  width:100%!important;
+  height:100%!important;
+  aspect-ratio:auto!important;
+  min-height:0!important;
+  margin:0!important;
+  overflow:hidden!important;
+}
+.mapcard .wv-dashboard-scene .sp-dashboard-photo img{
+  width:100%!important;
+  height:100%!important;
+  object-fit:cover!important;
+  object-position:center center!important;
+}
+.mapcard .wv-dashboard-scene .sp-dashboard-photo span{
+  z-index:1;
+  bottom:13px!important;
+  left:14px!important;
+}
+.mapcard .wv-dashboard-scene>span{display:none!important}
+#content>.pagehead{position:relative!important;margin-top:12px!important}
+.topbar{isolation:isolate;z-index:100!important}
+@media(max-width:760px){
+ .mapcard .wv-dashboard-scene{height:260px!important}
+ .sp-photo .sp-cube-count strong{font-size:9px!important;right:2%!important}
+ .sp-photo .sp-cube-count.active .sp-count-icon{font-size:9px!important}
+}
