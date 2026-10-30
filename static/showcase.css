@@ -105,3 +105,29 @@ body{background:linear-gradient(180deg,#f4f7ff 0,#f9fbfd 380px,#f7f9fc 100%)!imp
  .wv-map-page{padding:8px}.wv-map-page .wv-scene{height:440px}
 }
 @media(prefers-reduced-motion:reduce){.wv-rack-pin,.wv-level{transition:none!important}}
+
+/* Image photographique, fidèle à la référence validée */
+.wv-scene{background:#182336}
+.wv-real-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 43%;z-index:1;display:block;filter:saturate(.96) contrast(1.03);transform:scale(1.008)}
+.wv-scene .wv-warehouse-art{display:none!important}
+.wv-fade{background:linear-gradient(180deg,rgba(8,19,35,.57) 0%,rgba(8,19,35,.09) 30%,rgba(8,19,35,.08) 69%,rgba(8,19,35,.68) 100%);z-index:2}
+.wv-pin-layer{z-index:4}
+.wv-rack-pin{background:rgba(17,34,57,.93);border:1px solid #fff9;border-radius:9px;min-width:36px;min-height:38px}
+.wv-rack-pin.active{background:#315cf3;box-shadow:0 0 0 4px #416aff4d,0 7px 22px #101b44d5}
+.wv-photo-levels{position:absolute;z-index:5;top:var(--wlevel-y);left:var(--wlevel-x);transform:translate(-50%,-10%);display:flex;flex-direction:column;align-items:center;gap:7px;padding:9px;background:#111d32a8;border:1px solid #ffffff69;backdrop-filter:blur(6px);border-radius:13px;box-shadow:0 8px 27px #07132980;max-height:73%;overflow:auto;scrollbar-width:thin}
+.wv-image-level{width:60px;min-height:39px;display:flex;align-items:center;justify-content:space-between;gap:5px;padding:6px 8px;background:#fffffff0;color:#344a68;border:1px solid #dfe6f4;border-radius:7px;box-shadow:0 3px 5px #06132539;transition:background .15s,transform .15s}
+.wv-image-level:hover{background:#ecf2ff;transform:translateX(2px)}
+.wv-image-level.selected{background:#315cf3;border-color:#f3f6ff;color:white;box-shadow:0 0 0 3px #315cf366}
+.wv-image-level span{font-size:11px;font-weight:820}
+.wv-image-level strong{font-size:13px;font-weight:850}
+.wv-level-list{max-width:520px}
+.wv-detail{grid-template-columns:1.05fr .9fr .85fr 1.5fr;background:#fff}
+.wv-detail>div:first-child{background:#f4f7ff;border-radius:9px;padding:10px}
+.wv-location-mark strong{color:#315cf3;font-size:26px}
+@media(max-width:760px){
+ .wv-photo-levels{gap:5px;padding:5px;max-height:66%;border-radius:8px}
+ .wv-image-level{width:43px;min-height:30px;gap:2px;padding:3px 5px}
+ .wv-image-level span{font-size:9px}
+ .wv-image-level strong{font-size:10px}
+ .wv-detail{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
