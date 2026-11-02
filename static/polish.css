@@ -264,3 +264,18 @@ body:not(.aurora-on) .mobilebottom{display:none!important}
  .sidebar{left:7px!important;right:7px!important}
  body:not(.aurora-on) .settings-card .twofields{grid-template-columns:1fr!important}
 }
+
+/* Aperçu d'étiquette : lignes de code-barres illustratives, pas d'emoji. */
+body:not(.aurora-on) .basic-entry-help-head .basic-help-symbol{
+  width:43px;height:43px;display:grid;place-items:center;border-radius:11px;
+  background:rgba(255,255,255,.24)!important;border:1px solid rgba(255,255,255,.25);
+  color:#fff!important;flex:none;
+}
+body:not(.aurora-on) .basic-entry-help-head .basic-help-symbol svg{width:24px;height:24px}
+body:not(.aurora-on) .basic-example-label{box-shadow:0 6px 23px rgba(0,0,0,.12)!important}
+body:not(.aurora-on) .basic-example-bars{
+  width:72px;height:47px;display:block;flex:none;
+  background:repeating-linear-gradient(90deg,#1a3136 0px,#1a3136 2px,#fff 2px,#fff 4px,#1a3136 4px,#1a3136 5px,#fff 5px,#fff 9px);
+  border-left:7px solid white;border-right:7px solid white;
+}
+body:not(.aurora-on) .basic-entry-help-head h2{margin-bottom:0!important}
