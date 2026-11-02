@@ -73,11 +73,28 @@ body.aurora-on .aurora-dashboard.sp-page-enter{
 body:not(.aurora-on) .content.sp-page-enter .card{
   transition:border-color .24s ease,box-shadow .24s ease,background .24s ease;
 }
+
+/* Safari/Chrome : transition native entre l'ancienne et la nouvelle page. */
+@keyframes sp-leave-view{
+ from{opacity:1;filter:blur(0)}
+ to{opacity:0;filter:blur(6px)}
+}
+@keyframes sp-enter-view{
+ from{opacity:0;filter:blur(8px)}
+ to{opacity:1;filter:blur(0)}
+}
+::view-transition-old(root){
+ animation: .19s cubic-bezier(.35,0,.7,1) both sp-leave-view;
+}
+::view-transition-new(root){
+ animation: .48s cubic-bezier(.16,1,.3,1) both sp-enter-view;
+}
 @media(max-width:860px){
  .sidebar .brand{display:none!important}
  body{background-attachment:scroll!important}
 }
 @media(prefers-reduced-motion:reduce){
  .sp-page-enter{animation:none!important;transition:none!important}
+ ::view-transition-old(root),::view-transition-new(root){animation-duration:.01ms!important}
  .sidebar .brand:hover .sp-logo,.sidebar .navbtn:hover .ic{transform:none!important}
 }
