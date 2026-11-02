@@ -27,7 +27,7 @@
 
 <link rel="stylesheet" href="/static/aurora.css?v=aurora-20261102-2" />
 <link rel="stylesheet" href="/static/polish.css?v=2" />
-<link rel="stylesheet" href="/static/harmony.css?v=2" />
+<link rel="stylesheet" href="/static/harmony.css?v=3" />
 <link rel="stylesheet" href="/static/liquid-route.css?v=6" />
 
 
@@ -40,7 +40,16 @@
 (()=>{'use strict';
 const APPKEY='stockpilot-demo-v2';
 const ICONS={wrench:'<path d="M14.7 6.3a6 6 0 0 1-7.8 7.8l-4 4a2.05 2.05 0 0 0 2.9 2.9l4-4a6 6 0 0 0 7.8-7.8L14 12l-2-2 2.7-3.7Z"/>',alert:'<path d="M10.3 4.5 2.2 18.4a2 2 0 0 0 1.7 3h16.2a2 2 0 0 0 1.7-3L13.7 4.5a2 2 0 0 0-3.4 0Z"/><path d="M12 9v5M12 18h.01"/>',grid:'<rect x="3" y="3" width="7" height="8" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="3" y="15" width="7" height="6" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/>',plus:'<path d="M12 5v14M5 12h14"/>',minus:'<path d="M5 12h14"/>',package:'<path d="m12 2 8.5 4.7v10.6L12 22l-8.5-4.7V6.7L12 2Z"/><path d="m3.5 6.7 8.5 4.8 8.5-4.8M12 11.5V22"/>',in:'<path d="M12 3v12m-4-4 4 4 4-4"/><path d="M4 17v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>',out:'<path d="M12 15V3M8 7l4-4 4 4"/><path d="M4 17v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>',layers:'<path d="m12 2 9 5-9 5-9-5 9-5ZM3 12l9 5 9-5M3 17l9 5 9-5"/>',search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',history:'<path d="M3.5 11a8.5 8.5 0 1 1 2.2 6"/><path d="M3 4v6h6"/><path d="M12 7v5l3.5 2"/>',settings:'<path d="M4 7h9m4 0h3M4 17h3m4 0h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>',barcode:'<path d="M4 9V6a2 2 0 0 1 2-2h3M15 4h3a2 2 0 0 1 2 2v3M20 15v3a2 2 0 0 1-2 2h-3M9 20H6a2 2 0 0 1-2-2v-3"/><path d="M8 9v6M11 8v8M14 9v6M16.5 8v8"/>',arrow:'<path d="M5 12h14m-6-6 6 6-6 6"/>',chev:'<path d="m9 18 6-6-6-6"/>',check:'<path d="m4 12 5 5L20 6"/>',close:'<path d="M5 5l14 14M19 5 5 19"/>',printer:'<path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/>',camera:'<path d="M3 7h4l2-3h6l2 3h4v13H3z"/><circle cx="12" cy="13" r="4"/>',monitor:'<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',laptop:'<rect x="5" y="3" width="14" height="13" rx="1"/><path d="m2 20 3-4h14l3 4H2Z"/>',clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',pin:'<path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/>',reload:'<path d="M20 7V3h-4M20 3l-3 3a8 8 0 1 0 3 9"/>',info:'<circle cx="12" cy="12" r="10"/><path d="M12 11v5M12 7h.01"/>',menu:'<path d="M4 6h16M4 12h16M4 18h16"/>',trash:'<path d="M4 7h16M9 4h6M6 7l1 14h10l1-14M10 11v7m4-7v7"/>',filter:'<path d="M3 5h18l-7 8v6l-4 2v-8Z"/>',eye:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',harddrive:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 14h18M8 17h.01M12 17h.01"/>',shield:'<path d="m12 2 9 4v5c0 6-4 9-9 11-5-2-9-5-9-11V6z"/><path d="m8 12 3 3 5-5"/>'};
-function ico(name,size=18){return `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]||ICONS.package}</svg>`}
+const NAV_ICONS={
+ 'dashboard-tiles':'<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="15" y="3" width="6" height="5" rx="1.5"/><rect x="15" y="12" width="6" height="9" rx="1.5"/><rect x="3" y="15" width="8" height="6" rx="1.5"/>',
+ 'package-plus':'<path d="m12 2 8 4.5v8L12 19l-8-4.5v-8L12 2Z"/><path d="m4 6.5 8 4.5 8-4.5M12 11v8M16 17v6M13 20h6"/>',
+ 'scan-out':'<path d="M4 9V6a2 2 0 0 1 2-2h3M15 4h3a2 2 0 0 1 2 2v3M20 15v3a2 2 0 0 1-2 2h-3M9 20H6a2 2 0 0 1-2-2v-3"/><path d="M8 9v6M11 8v8M14 9v6M17 9v6"/>',
+ 'stock-boxes':'<path d="m8 3 5 3v6l-5 3-5-3V6l5-3Z"/><path d="m3 6 5 3 5-3M8 9v6M16 10l5 3v6l-5 3-5-3v-6l5-3Z"/><path d="m11 13 5 3 5-3M16 16v6"/>',
+ 'history-clock':'<path d="M3 11a9 9 0 1 1 2.9 6.6"/><path d="M3 4v7h7M12 7v5l3.5 2"/>',
+ 'settings-gear':'<path d="M12 2a2 2 0 0 1 2 2v.5l1.7.7.4-.4a2 2 0 0 1 2.8 2.8l-.4.4.7 1.7h.5a2 2 0 0 1 0 4h-.5l-.7 1.7.4.4a2 2 0 0 1-2.8 2.8l-.4-.4-1.7.7v.5a2 2 0 0 1-4 0v-.5l-1.7-.7-.4.4a2 2 0 0 1-2.8-2.8l.4-.4-.7-1.7H4a2 2 0 0 1 0-4h.5l.7-1.7-.4-.4a2 2 0 0 1 2.8-2.8l.4.4 1.7-.7V4a2 2 0 0 1 2-2z"/><circle cx="12" cy="12" r="3"/>',
+ 'log-out':'<path d="M10 17l5-5-5-5M15 12H3"/><path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7"/>'
+};
+function ico(name,size=18){return `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${NAV_ICONS[name]||ICONS[name]||ICONS.package}</svg>`}
 const CATALOG=[]
 const ZONES=[{"id":"A","label":"Entrée gauche","tint":"#4b66a3","light":"#e6ecf8","brands":"Côté gauche"},{"id":"B","label":"Gauche 2","tint":"#4b66a3","light":"#e6ecf8","brands":"Côté gauche"},{"id":"C","label":"Gauche 3","tint":"#4b66a3","light":"#e6ecf8","brands":"Côté gauche"},{"id":"D","label":"Fond gauche","tint":"#4b66a3","light":"#e6ecf8","brands":"Côté gauche"},{"id":"E","label":"Entrée droite","tint":"#4b66a3","light":"#e6ecf8","brands":"Côté droit"},{"id":"F","label":"Droite 2","tint":"#4b66a3","light":"#e6ecf8","brands":"Côté droit"},{"id":"G","label":"Droite 3","tint":"#4b66a3","light":"#e6ecf8","brands":"Côté droit"},{"id":"H","label":"Droite 4","tint":"#4b66a3","light":"#e6ecf8","brands":"Côté droit"},{"id":"I","label":"Droite 5","tint":"#4b66a3","light":"#e6ecf8","brands":"Côté droit"},{"id":"J","label":"Fond droit","tint":"#4b66a3","light":"#e6ecf8","brands":"Côté droit"}];
 const ALLSLOTS=ZONES.flatMap(z=>[1,2,3,4,5].map(n=>`${z.id}-${n}`));
@@ -54,7 +63,7 @@ let db=load(),page='dashboard',selectedSlot='A-1',selectedProduct=null,chosenSlo
 function save(){} // Les données sont toujours écrites par le serveur et jamais dans localStorage.
 async function api(path,method='GET',data=null){const opts={method,credentials:'same-origin',headers:{'X-Requested-With':'StockPilot'}};if(data!==null){opts.headers['Content-Type']='application/json';opts.body=JSON.stringify(data)}let r;try{r=await fetch(path,opts)}catch(e){throw new Error('Serveur inaccessible. Vérifiez le réseau.')}if(r.status===401){window.location='/login';throw new Error('Session expirée')}const contentType=r.headers.get('content-type')||'';const result=contentType.includes('json')?await r.json():{};if(!r.ok)throw new Error(result.error||'Erreur du serveur');return result}
 let me={username:'...',role:'employee'},allowReset=false,users=[],locationMode='optional';
-async function refreshState(silent=false){try{const data=await api('/api/state');db={items:data.items,events:data.events,catalog:data.catalog,shelves:data.shelves||[],warehousePhoto:!!data.warehousePhoto,counter:data.counter};me=data.me;allowReset=data.allowReset;locationMode=data.locationMode||'optional';if(!db.catalog.some(p=>p.id===selectedProduct&&p.active))selectedProduct=db.catalog.find(p=>p.active)?.id||null;if(!silent||['dashboard','products','map','history','settings'].includes(page)){renderApp()}return true}catch(e){if(!silent){document.querySelector('#app').innerHTML='<main style="font:16px Arial;padding:40px;max-width:550px;margin:12vh auto"><h1>Connexion au serveur impossible</h1><p>'+esc(e.message)+'</p><button onclick="location.reload()">Réessayer</button></main>'}else toast(e.message,true);return false}}
+async function refreshState(silent=false){try{const data=await api('/api/state');db={items:data.items,events:data.events,catalog:data.catalog,shelves:data.shelves||[],warehousePhoto:!!data.warehousePhoto,counter:data.counter};me=data.me;allowReset=data.allowReset;locationMode=data.locationMode||'optional';if(!db.catalog.some(p=>p.id===selectedProduct&&p.active))selectedProduct=db.catalog.find(p=>p.active)?.id||null;if(!silent)renderApp();else if(page==='dashboard')syncDashboardData();else if(['products','map','history','settings'].includes(page))renderApp();return true}catch(e){if(!silent){document.querySelector('#app').innerHTML='<main style="font:16px Arial;padding:40px;max-width:550px;margin:12vh auto"><h1>Connexion au serveur impossible</h1><p>'+esc(e.message)+'</p><button onclick="location.reload()">Réessayer</button></main>'}else toast(e.message,true);return false}}
 function product(pid){return db.catalog.find(p=>p.id===pid)}function itemAt(slot){return db.items.find(i=>i.slot===slot)}function itemById(id){return db.items.find(i=>i.id.toUpperCase()===String(id).trim().toUpperCase())}function zoneOf(slot){return ZONES.find(z=>z.id===slot?.[0])}
 function firstFree(zone){return null}
 function toast(msg,error=false){let div=document.createElement('div');div.className='toast'+(error?' error':'');div.innerHTML=ico(error?'info':'check',16)+`<span>${esc(msg)}</span>`;$('#toasts').appendChild(div);setTimeout(()=>div.remove(),4000)}
@@ -130,11 +139,52 @@ function nav(p){
 }
 function goEntry(pid=null){SPV3.reset();selectedProduct=pid||selectedProduct||db.catalog[0]?.id||null;chosenSlot=null;formSerial='';formCondition='Neuf';lastAdded=null;nav('entry')}
 function goExit(id=null){scanResult=id?itemById(id)||null:null;nav('exit')}
-function layout(){document.body.classList.toggle('aurora-on',page==='dashboard');let menu=[['dashboard','Tableau de bord','grid'],['entry','Entrée en stock','in'],['exit','Sortie / scanner','barcode'],['products','Produits & stock','package'],['history','Historique','history'],['settings','Configuration','settings']];return `<div class="app">${mobileNav?'<div class="sidebackdrop" data-action="closemenu"></div>':''}<aside class="sidebar ${mobileNav?'open':''}"><div class="brand"><div class="brand-mark"><img class="sp-logo" src="/static/stockpilot-mark.svg?v=1" alt="StockPilot" width="44" height="44"></div><div><strong>Stock<span>Pilot</span></strong><small>Gestion du stock</small></div></div><div class="navlabel">ESPACE DE TRAVAIL</div>${menu.map(([id,label,icon])=>`<button class="navbtn ${page===id?'active':''}" data-nav="${id}" aria-label="${label}" title="${label}" ${page===id?'aria-current="page"':''}>${ico(icon,21)} <span>${label}</span>${id==='products'?`<span class="count">${db.items.length}</span>`:''}</button>`).join('')}<div class="sidebottom"><div class="sidecard"><strong><span class="green-dot"></span> Données centralisées</strong><p>Stock partagé et sauvegardé dans la base du NAS.</p></div><a href="/logout" style="color:#d2def0;display:block;font-size:12px;text-decoration:none;margin:0 6px 16px">↪ Se déconnecter</a><div class="sidefoot"><div class="avatar">SP</div><div><strong>${esc(me.username)}</strong><small>${me.role==='admin'?'Administrateur':'Employé'}</small></div></div></div></aside><main class="main"><div class="content" id="content">${renderPage()}</div></main><div class="mobilebottom">${[['dashboard','Accueil','grid'],['entry','Entrée','in'],['exit','Scanner','barcode'],['products','Stock','package']].map(([id,label,icon])=>`<button data-nav="${id}" class="${page===id?'active':''}">${ico(icon,19)}${label}</button>`).join('')}</div></div>${modal?renderModal():''}`}
+function layout(){document.body.classList.toggle('aurora-on',page==='dashboard');let menu=[['dashboard','Tableau de bord','dashboard-tiles'],['entry','Entrée en stock','package-plus'],['exit','Scanner une sortie','scan-out'],['products','Produits en stock','stock-boxes'],['history','Historique','history-clock'],['settings','Paramètres','settings-gear']];return `<div class="app">${mobileNav?'<div class="sidebackdrop" data-action="closemenu"></div>':''}<aside class="sidebar ${mobileNav?'open':''}"><div class="brand"><div class="brand-mark"><img class="sp-logo" src="/static/stockpilot-mark.svg?v=1" alt="StockPilot" width="44" height="44"></div><div><strong>Stock<span>Pilot</span></strong><small>Gestion du stock</small></div></div><div class="navlabel">ESPACE DE TRAVAIL</div>${menu.map(([id,label,icon])=>`<button class="navbtn ${page===id?'active':''}" data-nav="${id}" aria-label="${label}" title="${label}" ${page===id?'aria-current="page"':''}>${ico(icon,21)} <span>${label}</span>${id==='products'?`<span class="count">${db.items.length}</span>`:''}</button>`).join('')}<div class="sidebottom"><div class="sidecard"><strong><span class="green-dot"></span> Données centralisées</strong><p>Stock partagé et sauvegardé dans la base du NAS.</p></div><a href="/logout" class="sp-logout" title="Se déconnecter" aria-label="Se déconnecter">${ico('log-out',24)}<span class="sr-only">Se déconnecter</span></a><div class="sidefoot"><div class="avatar">SP</div><div><strong>${esc(me.username)}</strong><small>${me.role==='admin'?'Administrateur':'Employé'}</small></div></div></div></aside><main class="main"><div class="content" id="content">${renderPage()}</div></main><div class="mobilebottom">${[['dashboard','Accueil','dashboard-tiles'],['entry','Entrée','package-plus'],['exit','Scanner','scan-out'],['products','Stock','stock-boxes']].map(([id,label,icon])=>`<button data-nav="${id}" class="${page===id?'active':''}">${ico(icon,19)}${label}</button>`).join('')}</div></div>${modal?renderModal():''}`}
 function renderPage(){const views={dashboard:renderDashboard,entry:renderEntry,exit:renderExit,products:renderProducts,history:renderHistory,settings:renderSettings};return (views[page]||views.dashboard)();}
 function heading(kicker,title,subtitle,actions=''){return `<div class="pagehead"><div><div class="eyebrow">${kicker}</div><h1>${title}</h1><p>${subtitle}</p></div>${actions?`<div class="head-actions">${actions}</div>`:''}</div>`}
 const btn=(label,action,icon='arrow',cls='primary')=>`<button class="btn ${cls}" data-action="${action}">${ico(icon,16)} ${label}</button>`;
 function renderDashboard(){return SPBasic.dashboard({db,heading,btn,ico});}
+// Mise à jour silencieuse : aucun remplacement des nœuds animés de l'accueil.
+function syncDashboardData(){
+ const current=document.querySelector('#content .aurora-dashboard');
+ if(!current)return;
+ const wrapper=document.createElement('div');
+ wrapper.innerHTML=renderDashboard();
+ const fresh=wrapper.querySelector('.aurora-dashboard');
+ if(!fresh)return;
+ const syncText=selector=>{
+  const existing=[...current.querySelectorAll(selector)];
+  const incoming=[...fresh.querySelectorAll(selector)];
+  if(existing.length!==incoming.length)return;
+  existing.forEach((node,i)=>{
+   if(node.textContent!==incoming[i].textContent)node.textContent=incoming[i].textContent;
+  });
+ };
+ const syncInlineText=selector=>{
+  const existing=[...current.querySelectorAll(selector)];
+  const incoming=[...fresh.querySelectorAll(selector)];
+  if(existing.length!==incoming.length)return;
+  existing.forEach((node,i)=>{
+   const a=[...node.childNodes].find(child=>child.nodeType===3);
+   const b=[...incoming[i].childNodes].find(child=>child.nodeType===3);
+   if(a&&b&&a.nodeValue!==b.nodeValue)a.nodeValue=b.nodeValue;
+  });
+ };
+ syncText('.aur-metric-value strong, .aur-primary-number, .aur-primary-sub, .aur-rail-mini-metrics strong, .aur-days span');
+ syncInlineText('.aur-chart-label, .aur-rail-mini .aur-rail-count');
+ const currentWave=current.querySelector('.aur-wave'),freshWave=fresh.querySelector('.aur-wave');
+ if(currentWave&&freshWave){
+  const label=freshWave.getAttribute('aria-label');
+  if(currentWave.getAttribute('aria-label')!==label)currentWave.setAttribute('aria-label',label);
+  for(const selector of ['.aur-wave-fill','.aur-wave-glow','.aur-wave-main']){
+   const currentPath=currentWave.querySelector(selector),newPath=freshWave.querySelector(selector);
+   if(currentPath&&newPath){
+    const d=newPath.getAttribute('d');
+    if(currentPath.getAttribute('d')!==d)currentPath.setAttribute('d',d);
+   }
+  }
+ }
+}
 function stat(title,num,desc,icon,color,progress=null){return `<div class="card stat"><div class="statrow"><div><div class="stat-title">${title}</div><div class="num">${num}</div></div><div class="icbox ${color}">${ico(icon,21)}</div></div><div class="desc">${desc}</div>${progress!==null?`<div class="progress"><div style="width:${progress}%"></div></div>`:''}</div>`}
 function eventsRows(n){const latest=[...db.events].sort((a,b)=>b.at-a.at).slice(0,n);return latest.length?latest.map(e=>{const p=product(e.pid);return `<div class="activityrow"><div class="ar-icon ${e.type==='out'?'out':''}">${ico(e.type==='in'?'in':e.type==='out'?'out':'layers',17)}</div><div class="ar-info"><strong>${esc(displayName(p))}</strong><small>${e.type==='in'?'Entrée en stock':e.type==='out'?'Sortie du stock':'Déplacement'} · ${esc(e.slot||'Sans emplacement')}</small></div><span class="ar-time">${fmtDate(e.at)}<br>${fmtTime(e.at)}</span></div>`}).join(''):`<div class="empty">Aucun mouvement enregistré</div>`}
 function darken(hex,amount){let num=parseInt(hex.slice(1),16);let a=n=>Math.max(0,Math.min(255,n+amount));return '#'+[a(num>>16),a((num>>8)&255),a(num&255)].map(n=>n.toString(16).padStart(2,'0')).join('')}
