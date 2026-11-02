@@ -197,7 +197,7 @@ test('Transitions secondaires : panneau opaque, reflet et animations en cascade'
  assert.match(css,/\.sp-route-in \.sp-motion-panel/);
  assert.match(css,/animation-delay:calc\(\.055s \+ var\(--sp-order,0\)/);
  assert.doesNotMatch(css,/\.sp-motion-panel\s*\{[^}]*opacity:/);
- assert.doesNotMatch(css,/filter:blur\(/);
+ assert.doesNotMatch(css.replace(/\/\*[\s\S]*?\*\//g,''),/filter:blur\(/);
  assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
  const script=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(x=>x[1]).join('\n');
  assert.doesNotThrow(()=>new Function(script));
