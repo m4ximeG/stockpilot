@@ -28,7 +28,7 @@
 <link rel="stylesheet" href="/static/aurora.css?v=aurora-20261102-2" />
 <link rel="stylesheet" href="/static/polish.css?v=2" />
 <link rel="stylesheet" href="/static/harmony.css?v=2" />
-<link rel="stylesheet" href="/static/liquid-route.css?v=2" />
+<link rel="stylesheet" href="/static/liquid-route.css?v=3" />
 
 
 
@@ -63,13 +63,13 @@ function nav(p){
  if(p==='map')p='products';
  const reduced=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
  const serial=++spRouteSerial;
- // Revenir au même onglet peut également réinitialiser le formulaire.
- // On conserve les calques physiques du site : le fond, la sidebar et les
- // cartes ne sont jamais capturés dans une transition de la page entière.
- document.querySelector('.sp-route-light')?.remove();
- document.querySelectorAll('.sp-glass-sweep').forEach(el=>el.remove());
- document.querySelectorAll('.sp-route-in').forEach(el=>el.classList.remove('sp-route-in'));
- document.documentElement.classList.toggle('sp-route-active',!reduced);
+ // Pas de capture de l'écran complet : ni le fond d'orage, ni les vitres,
+ // ni la barre latérale ne subissent de fondu ou de flou.
+ document.documentElement.classList.remove('sp-route-active');
+ document.querySelectorAll('.sp-route-light,.sp-glass-sweep').forEach(el=>el.remove());
+ document.querySelectorAll('.sp-route-in,.sp-motion-panel,.sp-nav-arrive').forEach(el=>{
+  el.classList.remove('sp-route-in','sp-motion-panel','sp-nav-arrive');
+ });
  stopCamera();
  if(p==='entry')SPV3.reset();
  page=p;modal=null;mobileNav=false;
@@ -77,48 +77,57 @@ function nav(p){
  const content=$('#content');
  if(content)content.innerHTML=renderPage();
  else $('#app').innerHTML=layout();
+ const activeBtns=[];
  document.querySelectorAll('[data-nav]').forEach(btn=>{
   const active=btn.dataset.nav===page;
   btn.classList.toggle('active',active);
-  if(active)btn.setAttribute('aria-current','page');
-  else btn.removeAttribute('aria-current');
+  if(active){
+   btn.setAttribute('aria-current','page');
+   activeBtns.push(btn);
+  }else btn.removeAttribute('aria-current');
  });
  document.querySelector('.sidebar')?.classList.remove('open');
  document.querySelector('.sidebackdrop')?.remove();
  document.querySelector('.overlay')?.remove();
  window.scrollTo(0,0);
  if(reduced)return;
- const stage=page==='dashboard'?document.querySelector('.aurora-dashboard'):$('#content');
- if(!stage){document.documentElement.classList.remove('sp-route-active');return;}
- // Ne jamais relancer les animations de chargement opaques de l'accueil
- // après le passage du reflet : ses vitres doivent rester visibles.
- if(page==='dashboard')stage.classList.add('sp-no-intro');
- stage.classList.add('sp-route-in');
- const panels=stage.querySelectorAll(
-  '.aur-rail-main,.aur-rail-mini,.basic-entry-form,.basic-entry-help,'+
-  '.basic-table-card,.settingscard,.formcard,.card'
+ activeBtns.forEach(btn=>btn.classList.add('sp-nav-arrive'));
+ // Accueil : laisser SEULES les animations Aurora d'origine s'exécuter.
+ // Cela restaure notamment la typographie, la cascade des quatre cartes,
+ // les chiffres et le dessin progressif de la courbe, même au retour.
+ if(page==='dashboard'){
+  window.setTimeout(()=>{
+   if(serial===spRouteSerial)activeBtns.forEach(btn=>btn.classList.remove('sp-nav-arrive'));
+  },550);
+  return;
+ }
+ // Pages de travail : les cartes sont visibles dès la première frame;
+ // elles se posent en perspective, puis la lumière les traverse.
+ const stage=$('#content');
+ if(!stage)return;
+ const selectors='.basic-entry-form,.basic-entry-help,.basic-table-card,.settingscard,.formcard,.card';
+ const panels=[...stage.querySelectorAll(selectors)].filter(panel=>
+  !panel.parentElement?.closest(selectors)
  );
- panels.forEach(panel=>{
-  if(panel.parentElement?.closest('.card,.basic-entry-form,.basic-entry-help,.settingscard,.formcard'))return;
+ panels.forEach((panel,i)=>{
+  panel.classList.add('sp-motion-panel');
+  panel.style.setProperty('--sp-order',String(Math.min(i,7)));
   const sweep=document.createElement('span');
   sweep.className='sp-glass-sweep';
   sweep.setAttribute('aria-hidden','true');
   panel.appendChild(sweep);
  });
- const light=document.createElement('span');
- light.className='sp-route-light';
- light.setAttribute('aria-hidden','true');
- document.body.appendChild(light);
- const finish=()=>{
+ stage.classList.add('sp-route-in');
+ window.setTimeout(()=>{
   if(serial!==spRouteSerial)return;
-  light.remove();
   stage.classList.remove('sp-route-in');
-  stage.querySelectorAll('.sp-glass-sweep').forEach(el=>el.remove());
-  document.documentElement.classList.remove('sp-route-active');
- };
- light.addEventListener('animationend',finish,{once:true});
- // Si l'onglet devient inactif, CSS peut suspendre animationend.
- window.setTimeout(finish,1100);
+  panels.forEach(panel=>{
+   panel.classList.remove('sp-motion-panel');
+   panel.style.removeProperty('--sp-order');
+   panel.querySelectorAll('.sp-glass-sweep').forEach(el=>el.remove());
+  });
+  activeBtns.forEach(btn=>btn.classList.remove('sp-nav-arrive'));
+ },1150);
 }
 function goEntry(pid=null){SPV3.reset();selectedProduct=pid||selectedProduct||db.catalog[0]?.id||null;chosenSlot=null;formSerial='';formCondition='Neuf';lastAdded=null;nav('entry')}
 function goExit(id=null){scanResult=id?itemById(id)||null:null;nav('exit')}
