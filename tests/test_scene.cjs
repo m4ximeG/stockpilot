@@ -148,7 +148,7 @@ test('Paramètres et scanner : aucune structure blanche ni carte accolée',()=>{
 test('Fond identique pour l’accueil et les pages secondaires',()=>{
  const harmony=fs.readFileSync('static/harmony.css','utf8');
  const html=fs.readFileSync('static/index.html','utf8');
- assert.match(html,/\/static\/harmony\.css\?v=1/);
+ assert.match(html,/\/static\/harmony\.css\?v=2/);
  assert.match(harmony,/var\(--sp-storm-image\) center 45% \/ cover fixed no-repeat/);
  assert.match(harmony,/\.aurora-dashboard\s*\{\s*background:transparent!important;/);
  assert.match(harmony,/--sp-storm-image:url\("\/static\/aurora-storm\.jpg"\)/);
