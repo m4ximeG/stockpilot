@@ -63,6 +63,12 @@ test('démarrage réel du script principal avec réponse /api/state',async()=>{
   fetch:fakeFetch,history:{scrollRestoration:'auto'},
   requestAnimationFrame:cb=>cb(),setInterval:()=>0,setTimeout:()=>0,
   navigator:{},URL,console};
+ // Charger les scripts externes, comme le navigateur avant le script principal.
+ for(const path of ['static/barcode-only.js','static/reception.js']){
+   vm.runInNewContext(fs.readFileSync(path,'utf8'),context,{filename:path});
+ }
+ context.SPBasic=simulatedWindow.SPBasic;
+ context.SPV3=simulatedWindow.SPV3;
  vm.runInNewContext(scripts[0],context,{filename:'static/index.html'});
  await new Promise(resolve=>setTimeout(resolve,25));
  assert.match(appElement.innerHTML,/Tableau de bord/);
