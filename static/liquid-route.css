@@ -21,6 +21,22 @@ html.sp-route-active .aur-rail button{
   opacity:1!important;
 }
 
+/* Persiste après la fin du reflet : sinon les vieilles animations d'arrivée
+   (avec opacity:0) se relançaient aussitôt sur les cartes d'accueil. */
+.aurora-dashboard.sp-no-intro .aur-welcome,
+.aurora-dashboard.sp-no-intro .aur-welcome strong,
+.aurora-dashboard.sp-no-intro .aur-tools button,
+.aurora-dashboard.sp-no-intro .aur-chip,
+.aurora-dashboard.sp-no-intro .aur-headline span,
+.aurora-dashboard.sp-no-intro .aur-copy p,
+.aurora-dashboard.sp-no-intro .aur-metric,
+.aurora-dashboard.sp-no-intro .aur-days span,
+.aurora-dashboard.sp-no-intro .aur-chart-label,
+.aurora-dashboard.sp-no-intro .aur-rail button{
+  animation:none!important;
+  opacity:1!important;
+}
+
 /* Le texte se déplace sur un verre qui reste parfaitement opaque/stable.
    Aucun blur, opacity ou clip-path sur les cartes ou leurs ancêtres. */
 @keyframes sp-ink-settle {
