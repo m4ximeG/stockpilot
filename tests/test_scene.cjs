@@ -44,3 +44,28 @@ test('index charge les nouveaux modules uniquement',()=>{
  assert.match(index,/barcode-only\.css/);
  assert.doesNotMatch(index,/warehouse-scene\.js|reference\.css|Plan du dépôt/);
 });
+
+
+test('démarrage réel du script principal avec réponse /api/state',async()=>{
+ const html=fs.readFileSync('static/index.html','utf8');
+ const scripts=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(x=>x[1]).filter(Boolean);
+ assert.equal(scripts.length,1);
+ const appElement={innerHTML:'',className:''};
+ const elements={'#app':appElement,'#toasts':{appendChild:()=>{}}};
+ const fakeDocument={
+  querySelector:(s)=>elements[s]||null,
+  createElement:()=>({innerHTML:'',className:'',remove:()=>{}})
+ };
+ const simulatedWindow={addEventListener:()=>{},scrollTo:()=>{},open:()=>({}),location:{href:'/'}};
+ const fakeState={items:[],events:[],catalog:[],shelves:[],counter:1,me:{username:'Admin',role:'admin'},locationMode:'optional',allowReset:false};
+ const fakeFetch=async(url)=>{assert.equal(url,'/api/state');return {ok:true,status:200,headers:{get:()=> 'application/json'},json:async()=>fakeState};};
+ const context={window:simulatedWindow,document:fakeDocument,
+  fetch:fakeFetch,history:{scrollRestoration:'auto'},
+  requestAnimationFrame:cb=>cb(),setInterval:()=>0,setTimeout:()=>0,
+  navigator:{},URL,console};
+ vm.runInNewContext(scripts[0],context,{filename:'static/index.html'});
+ await new Promise(resolve=>setTimeout(resolve,25));
+ assert.match(appElement.innerHTML,/Tableau de bord/);
+ assert.match(appElement.innerHTML,/Articles en stock/);
+ assert.doesNotMatch(appElement.innerHTML,/Connexion au serveur impossible|Can't find variable/);
+});
