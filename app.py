@@ -250,23 +250,28 @@ def row_dict(row):
 
 LOGIN_HTML = '''<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101a2d"><title>StockPilot — Connexion</title>
 <style>*,*:before,*:after{box-sizing:border-box}body{margin:0;background:#f1f5fb;color:#15223b;font:15px system-ui,-apple-system,Segoe UI,Arial,sans-serif;min-height:100vh;display:grid;place-items:center;padding:20px;background-image:radial-gradient(circle at 20% 10%,#e2ecff 0,transparent 40%),radial-gradient(circle at 90% 80%,#dce6f7 0,transparent 30%)}.wrap{width:min(100%,450px);background:#fff;padding:40px;border-radius:24px;box-shadow:0 22px 80px #243a5c20;border:1px solid #e3eaf5}.brand{display:flex;align-items:center;gap:12px;font-size:24px;font-weight:800}.mark{display:grid;place-items:center;width:42px;height:42px;border-radius:12px;background:#2262e4;color:#fff}.sub{color:#687a93;font-size:14px;line-height:1.6;margin:14px 0 32px}label{display:block;font-size:13px;font-weight:700;margin:17px 0 8px}input{height:48px;padding:0 14px;border:1px solid #d9e1ed;border-radius:11px;width:100%;font:inherit;outline:0}input:focus{border-color:#2870ef;box-shadow:0 0 0 3px #2970ef18}button{margin-top:26px;background:#2469e9;border:0;color:white;border-radius:11px;width:100%;height:48px;font:inherit;font-weight:700;cursor:pointer}p.err{background:#fff1f1;border:1px solid #fecaca;color:#b42318;padding:12px;border-radius:10px}.foot{color:#8b98ab;font-size:12px;text-align:center;margin-top:30px}.wrap{border-radius:12px;box-shadow:0 8px 30px #27394210;border-color:#dfe6e7}.brand{color:#223b48;letter-spacing:-.6px}.mark{background:#2f4f5d;border-radius:8px}body{background:#f5f6f5;background-image:none;color:#233840}input{border-radius:7px}input:focus{border-color:#74949a;box-shadow:0 0 0 3px #2f647115}button{background:#294a57;border-radius:7px}button:hover{background:#3e626f}.foot{color:#87969c}
-/* Facet glass login — presentation only */
-body{background:radial-gradient(ellipse at 78% 15%,#5c4c882a,transparent 46%),radial-gradient(ellipse at 9% 88%,#343d6a21,transparent 40%),#050507;color:#eeebf4;font-family:Inter,ui-sans-serif,system-ui,Arial,sans-serif}
-body:before{content:'';position:fixed;right:8%;top:9%;width:380px;height:250px;border:1px solid #c5b5ff16;border-radius:20px;transform:rotate(16deg);pointer-events:none}
-body:after{content:'';position:fixed;left:7%;bottom:10%;width:190px;height:230px;background:linear-gradient(130deg,#9f89ce22,#11121b16);border:1px solid #ffffff18;clip-path:polygon(0 0,100% 14%,83% 100%,13% 85%);pointer-events:none}
-.wrap{position:relative;z-index:1;background:linear-gradient(135deg,#292733dc,#14141de9 63%,#1c1b23ed);border:1px solid #ffffff2e;border-radius:17px;box-shadow:0 28px 90px #0009,inset 0 1px #ffffff20;padding:43px}
-.wrap:before{content:'';position:absolute;inset:0;border-radius:inherit;background:linear-gradient(120deg,#ffffff0b,transparent 40%,#ae9bff0a);pointer-events:none}
-.brand{font-size:25px;font-weight:650;letter-spacing:-1.1px;color:#f4f0f7}
-.mark{background:linear-gradient(135deg,#444051,#171720);border:1px solid #ffffff38;border-radius:10px;color:#d0c6ff;box-shadow:inset 0 1px #ffffff2a}
-.sub{color:#9c99aa;font-size:12.5px;line-height:1.8;margin:18px 0 31px}
-label{color:#cbc6d5;font-size:11px;letter-spacing:.15px}
-input{background:#0d0e14;border:1px solid #ffffff27;color:#f0edf4;border-radius:8px;box-shadow:inset 0 1px 3px #0005}
-input:focus{border-color:#baaaff;box-shadow:0 0 0 3px #b9abff17}
-button{background:#dad4e9;color:#13131b;border:1px solid #eeebf5;border-radius:8px;box-shadow:inset 0 1px #fff;font-size:13px;transition:background .2s}
-button:hover{background:#36d67e;color:#0a140d}
-.foot{color:#757383;letter-spacing:.5px}
-p.err{background:#f08e9b16;border-color:#f08e9b4a;color:#ffb6be}
-@media(max-width:520px){.wrap{padding:27px 22px}.brand{font-size:23px}}
+/* Aurora login — the same storm-photo and frosted-glass design as the dashboard. */
+body{background:
+ linear-gradient(110deg,#061922bb 0%,#071e2355 65%,#09252a55),
+ url("/static/aurora-storm.jpg") center 45%/cover fixed no-repeat,
+ url("https://images.pexels.com/photos/39914828/pexels-photo-39914828.jpeg?auto=compress&cs=tinysrgb&w=2200") center 45%/cover fixed no-repeat,
+ #061820;color:#fff;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body:before,body:after{display:none}
+.wrap{position:relative;z-index:1;background:linear-gradient(180deg,rgba(255,255,255,.20),rgba(255,255,255,.26) 24%,rgba(255,255,255,.22));
+ border:1px solid rgba(255,255,255,.24);border-radius:26px;box-shadow:0 22px 70px #02171c42;padding:42px;
+ backdrop-filter:blur(26px) saturate(118%);-webkit-backdrop-filter:blur(26px) saturate(118%)}
+.wrap:before{display:none}
+.brand{font-size:25px;font-weight:700;letter-spacing:-1.1px;color:white}
+.mark{background:#ffffff27;border:1px solid #ffffff44;border-radius:11px;color:white;box-shadow:none}
+.sub{color:#ffffffe6;font-size:13px;line-height:1.7;margin:20px 0 30px}
+label{color:#fff;font-size:11px;letter-spacing:.2px;font-weight:650}
+input{background:#ffffff22;border:1px solid #ffffff60;color:#fff;border-radius:10px;box-shadow:none}
+input:focus{border-color:#fff;box-shadow:0 0 0 3px #ffffff26}
+button{background:#ffffffdb;color:#18323b;border:1px solid #fff;border-radius:10px;box-shadow:none;font-size:13px;transition:background .2s,transform .2s}
+button:hover{background:white;color:#18323b;transform:translateY(-1px)}
+.foot{color:#ffffffc4;letter-spacing:.5px}
+p.err{background:#76393a85;border:1px solid #ffffff52;color:white}
+@media(max-width:520px){.wrap{padding:28px 22px;border-radius:20px}.brand{font-size:23px}}
 @media(prefers-reduced-motion:reduce){button{transition:none}}
 </style></head><body><main class="wrap"><div class="brand"><span class="mark">▣</span> StockPilot</div><p class="sub">Votre inventaire, chaque mouvement, un seul endroit.<br>Connectez-vous à votre espace magasin.</p>{% if error %}<p class="err">{{error}}</p>{% endif %}<form method="post"><label for="username">Identifiant</label><input id="username" name="username" autocomplete="username" required autofocus><label for="password">Mot de passe</label><input id="password" type="password" name="password" autocomplete="current-password" required><button type="submit">Se connecter</button></form><div class="foot">StockPilot · Application interne</div></main></body></html>'''
 _failed = {}
