@@ -203,3 +203,31 @@ test('Les autres pages réutilisent exactement les animations d\'accueil en casc
  const script=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(x=>x[1]).join('\n');
  assert.doesNotThrow(()=>new Function(script));
 });
+
+test('L’actualisation périodique de l’accueil conserve les éléments animés',()=>{
+ const html=fs.readFileSync('static/index.html','utf8');
+ assert.ok(html.includes("else if(page==='dashboard')syncDashboardData()"));
+ assert.ok(html.includes('function syncDashboardData()'));
+ assert.ok(html.includes("syncText('.aur-metric-value strong"));
+ assert.ok(html.includes("syncInlineText('.aur-chart-label"));
+ assert.ok(html.includes("currentPath.setAttribute('d',d)"));
+ assert.ok(!html.includes("if(!silent||['dashboard'"));
+ assert.ok(html.includes("setInterval(()=>{if(!document.hidden"));
+});
+test('Les liens du rail possèdent des icônes explicites et une déconnexion identifiable',()=>{
+ const html=fs.readFileSync('static/index.html','utf8');
+ const css=fs.readFileSync('static/harmony.css','utf8');
+ for(const name of ['dashboard-tiles','package-plus','scan-out','stock-boxes','history-clock','settings-gear','log-out']){
+  assert.ok(html.includes("'"+name+"':")||name!=='log-out'&&html.includes("'"+name+"'"),name);
+ }
+ assert.ok(html.includes("['entry','Entrée en stock','package-plus']"));
+ assert.ok(html.includes("['exit','Scanner une sortie','scan-out']"));
+ assert.ok(html.includes("['products','Produits en stock','stock-boxes']"));
+ assert.ok(html.includes("['settings','Paramètres','settings-gear']"));
+ assert.ok(html.includes('href="/logout" class="sp-logout" title="Se déconnecter" aria-label="Se déconnecter"'));
+ assert.ok(html.includes("ico('log-out',24)"));
+ assert.ok(html.includes('/static/harmony.css?v=3'));
+ assert.ok(css.includes('.sidebar .sidebottom > a.sp-logout::after{content:none!important'));
+ assert.ok(css.includes('content:attr(aria-label)'));
+ assert.ok(css.includes('aria-label="Scanner une sortie"'));
+});
