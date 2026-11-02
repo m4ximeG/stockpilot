@@ -442,14 +442,9 @@ def entry_item():
     try:
         data = json_body()
         pid = clean_text(data.get('pid'), 'Produit', 64, True)
-        slot = clean_text(data.get('slot', ''), 'Emplacement', 15)
+        slot = ''  # Système sans emplacement : anciennes applications également compatibles.
         serial = clean_text(data.get('serial', ''), 'N° de série', 100)
         condition = clean_text(data.get('condition', 'Neuf'), 'État', 30, True)
-        if slot and slot not in SLOTS:
-            return bad('Emplacement inexistant.')
-        location_mode = g.db.execute("SELECT value FROM meta WHERE key='location_mode'").fetchone()
-        if not slot and location_mode and location_mode[0] == 'guided':
-            return bad('Choisissez une étagère pour cette entrée.')
         if condition not in ('Neuf','Retour SAV','Réparation','Reconditionné','Occasion'):
             return bad('État invalide.')
         db = g.db
@@ -618,8 +613,8 @@ def add_product():
         model = clean_text(data.get('model'), 'Modèle', 100, True)
         cat = clean_text(data.get('cat'), 'Catégorie', 60, True)
         ref = clean_text(data.get('ref'), 'Référence', 80, True)
-        zone = clean_text(data.get('zone'), 'Zone', 1, True).upper()
-        preferred_slot = clean_text(data.get('preferred_slot', ''), 'Emplacement conseillé', 15)
+        zone = 'A'  # Colonne historique conservée uniquement pour compatibilité SQLite.
+        preferred_slot = ''
         if preferred_slot and preferred_slot not in SLOTS:
             return bad('Emplacement conseillé inconnu.')
         if zone not in ZONE_CODES:
