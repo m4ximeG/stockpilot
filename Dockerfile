@@ -6,6 +6,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY app.py .
 COPY static/ ./static/
+# Cache the licensed storm photograph inside the image for stable NAS rendering.
+# The app has a remote CSS fallback if the photo host is unavailable during build.
+RUN python -c "import urllib.request; u='https://images.pexels.com/photos/39914828/pexels-photo-39914828.jpeg?auto=compress&cs=tinysrgb&w=2200'; r=urllib.request.Request(u, headers={'User-Agent':'Mozilla/5.0 StockPilot'}); data=urllib.request.urlopen(r,timeout=12).read(); assert len(data)>5000; open('/app/static/aurora-storm.jpg','wb').write(data)" || true
 USER stockpilot
 EXPOSE 8080
 VOLUME ["/data"]
