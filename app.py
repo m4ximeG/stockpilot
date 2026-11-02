@@ -526,8 +526,56 @@ def label_page(item_id):
                           FROM items JOIN products ON items.pid=products.id WHERE items.id=?""", (item_id,)).fetchone()
     if not row:
         abort(404)
-    html = """<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Étiquette {{i.id}}</title><style>@page{size:70mm 50mm;margin:2mm}*{box-sizing:border-box}body{font:11px Arial,sans-serif;margin:0;padding:2mm;color:#111}.paper{width:66mm;min-height:45mm;padding:3mm 3mm 1mm;border:1px solid #eee}.name{font-size:13px;font-weight:800;margin:7px 0 3px}.top{font-size:10px;font-weight:900;letter-spacing:.8px}.slot{display:none}.line{color:#555;font-size:9px}.below{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-top:4px}.qr{width:24mm;height:24mm;image-rendering:pixelated}.code{font:700 11px monospace}.buttons{padding:20px}.buttons button{background:#2768e8;color:#fff;border:0;border-radius:8px;padding:11px;cursor:pointer}@media print{.buttons{display:none}.paper{border:0}body{padding:0}}</style></head><body><div class="paper"><div class="top">▣ STOCKPILOT</div><div class="name">{{i.brand}} {{i.model}}</div><div class="line">{{i.ref}} · SN: {{i.serial or 'Non renseigné'}}</div><div class="below"><img class="qr" src="/api/items/{{i.id}}/qr.png" onload="window.labelReady=true" alt="QR du produit"><div><div class="code">{{i.id}}</div><div class="line">Scanner à la sortie</div></div></div></div><div class="buttons"><button onclick="print()">Imprimer l'étiquette</button></div><script>window.addEventListener('load',()=>setTimeout(()=>{if(window.labelReady)window.print()},500));</script></body></html>"""
+    html = """<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><title>Étiquette {{i.id}}</title>
+<style>
+@page{size:70mm 50mm;margin:1mm}*{box-sizing:border-box}
+body{margin:0;padding:1mm;background:white;color:#161b23;font:9px Arial,sans-serif}
+.paper{width:68mm;height:47mm;padding:2mm;border:1px solid #ddd;overflow:hidden}
+.brand{font-size:9px;font-weight:900;letter-spacing:.7px}
+.name{font-size:13px;font-weight:900;line-height:1.2;max-height:9mm;overflow:hidden;margin:2mm 0 1mm}
+.meta{font-size:8px;color:#555;margin-bottom:1mm;white-space:nowrap;overflow:hidden}
+.barcode{display:block;width:61mm;height:15mm;object-fit:fill;margin:1mm auto}
+.foot{display:flex;align-items:center;justify-content:space-between}
+.qr{width:14mm;height:14mm;image-rendering:pixelated;display:block}
+.identifier{font:900 12px monospace;text-align:right}
+.helper{font-size:8px;color:#555;text-align:right}
+.print{padding:15px;text-align:center}.print button{background:#2d5ddb;color:#fff;padding:11px 24px;border:0;border-radius:6px;cursor:pointer}
+@media print{body{padding:0}.paper{border:0}.print{display:none}}
+</style></head><body>
+<div class="paper">
+ <div class="brand">STOCKPILOT</div>
+ <div class="name">{{ ((i.brand ~ ' ' ~ i.model)|trim) }}</div>
+ <div class="meta">{{i.ref}}{% if i.serial %} · Série : {{i.serial}}{% endif %}</div>
+ <img class="barcode" src="/api/items/{{i.id}}/barcode.svg" alt="Code-barres {{i.id}}">
+ <div class="foot"><img class="qr" src="/api/items/{{i.id}}/qr.png" alt="QR code {{i.id}}"><div><div class="identifier">{{i.id}}</div><div class="helper">Scanner à la sortie</div></div></div>
+</div>
+<div class="print"><button onclick="window.print()">Imprimer l'étiquette</button></div>
+<script>
+window.addEventListener('load',()=>{
+ const images=[...document.querySelectorAll('.paper img')];
+ Promise.all(images.map(x=>x.complete?Promise.resolve():new Promise(done=>{x.onload=done;x.onerror=done}))).then(()=>window.print());
+});
+</script></body></html>"""
     return render_template_string(html, i=dict(row))
+
+@app.get('/api/items/<item_id>/barcode.svg')
+@protected()
+def item_barcode(item_id):
+    """Code-barres Code 128 réellement lisible par une douchette."""
+    from barcode import Code128
+    from barcode.writer import SVGWriter
+    item = g.db.execute('SELECT id FROM items WHERE id=?', (item_id,)).fetchone()
+    if not item:
+        abort(404)
+    image = Code128(item_id, writer=SVGWriter()).render(writer_options={
+        'module_width': 0.23, 'module_height': 9, 'quiet_zone': 1.6,
+        'font_size': 0, 'text_distance': 0, 'write_text': False,
+    })
+    response = send_file(io.BytesIO(image), mimetype='image/svg+xml', max_age=0)
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    return response
+
 
 @app.get('/api/items/<item_id>/qr.png')
 @protected()
