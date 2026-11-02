@@ -163,28 +163,42 @@ test('Logo vectoriel et code-barres cohérents, netteté à toutes les tailles',
  assert.match(html,/rel="icon" type="image\/svg\+xml"/);
  assert.match(html,/barcode:'<path d="M4 9V6/);
 });
-test('Navigation liquide : pas de capture du body, pas de fondu des vitres',()=>{
+test('Retour à l’accueil : animations Aurora originales intactes',()=>{
+ const html=fs.readFileSync('static/index.html','utf8');
+ const css=fs.readFileSync('static/aurora.css','utf8');
+ const route=fs.readFileSync('static/liquid-route.css','utf8');
+ assert.match(html,/if\(page==='dashboard'\)\{/);
+ assert.match(html,/return;\s*\}\s*\/\/ Pages de travail/);
+ assert.doesNotMatch(html,/stage\.classList\.add\('sp-no-intro'\)/);
+ assert.doesNotMatch(route,/sp-no-intro|sp-route-active|\.aur-welcome|\.aur-rail button/);
+ for(const animation of ['aurSlideR','aurRise','aurLine','aurPop','aurDraw','aurFill','aurSheen']){
+   assert.match(css,new RegExp('@keyframes '+animation));
+ }
+ assert.match(css,/\.aur-rail button\{[\s\S]{0,600}animation:aurSlideR/);
+ assert.match(css,/\.aur-wave-main\{[\s\S]{0,180}animation:aurDraw/);
+});
+test('Transitions secondaires : panneau opaque, reflet et animations en cascade',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
  const css=fs.readFileSync('static/liquid-route.css','utf8');
  const harmony=fs.readFileSync('static/harmony.css','utf8');
- assert.match(html,/\/static\/harmony\.css\?v=2/);
- assert.match(html,/\/static\/liquid-route\.css\?v=2/);
+ assert.match(html,/\/static\/liquid-route\.css\?v=3/);
  assert.match(html,/content\.innerHTML=renderPage\(\)/);
- assert.match(html,/document\.body\.classList\.toggle\('aurora-on',page==='dashboard'\)/);
+ assert.match(html,/stage\.classList\.add\('sp-route-in'\)/);
+ assert.match(html,/panel\.style\.setProperty\('--sp-order'/);
+ assert.match(html,/sp-motion-panel/);
  assert.match(html,/sp-glass-sweep/);
- assert.match(html,/sp-route-light/);
  assert.match(html,/if\(reduced\)return/);
  assert.doesNotMatch(html,/startViewTransition/);
- assert.doesNotMatch(harmony,/::view-transition/);
- assert.doesNotMatch(harmony,/sp-page-enter|filter:blur\(5px\)/);
- assert.match(css,/html\.sp-route-active \.aur-rail button/);
- assert.match(css,/\.aurora-dashboard\.sp-no-intro \.aur-rail button/);
- assert.match(html,/stage\.classList\.add\('sp-no-intro'\)/);
- assert.match(css,/\.sp-glass-sweep/);
- assert.match(css,/background-position/);
+ assert.doesNotMatch(html,/sp-route-light'\);/);
+ assert.doesNotMatch(harmony,/::view-transition|sp-page-enter/);
+ assert.match(css,/@keyframes sp-panel-liquid/);
+ assert.match(css,/@keyframes sp-word-rise/);
+ assert.match(css,/@keyframes sp-refract/);
+ assert.match(css,/\.sp-route-in \.sp-motion-panel/);
+ assert.match(css,/animation-delay:calc\(\.055s \+ var\(--sp-order,0\)/);
+ assert.doesNotMatch(css,/\.sp-motion-panel\s*\{[^}]*opacity:/);
+ assert.doesNotMatch(css,/filter:blur\(/);
  assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
- assert.doesNotMatch(css,/\.card\s*\{[^}]*opacity:\s*0/);
- assert.doesNotMatch(css,/\.aurora-dashboard\s*\{[^}]*opacity:\s*0/);
  const script=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(x=>x[1]).join('\n');
  assert.doesNotThrow(()=>new Function(script));
 });
