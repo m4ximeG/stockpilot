@@ -2,11 +2,20 @@
 
 StockPilot est une application web accessible sur **PC et téléphone** pour suivre le matériel disponible dans un magasin. La version actuelle est volontairement simple : **aucun plan 3D, aucun emplacement ni rayonnage à gérer**.
 
-## Facet Glass — proposition de direction artistique (2 novembre 2026)
+## Aurora — interface du 2 novembre 2026
 
-Refonte graphique de toutes les pages, inspirée de « Designed in glass » : fond noir anthracite, cartes en verre fumé, liserés irisés lavande/vert, typographie éditoriale, bandeau du tableau de bord à fragments de verre et reflets au pointeur. Les effets sont volontairement limités au décor, pour conserver les formulaires, les boutons, le tableau de stock, les modales et le scan utilisables sur PC et téléphone. Aucun WebGL ni dépendance graphique externe n'est requis. Le thème respecte `prefers-reduced-motion`.
+L'accueil reproduit la composition du tableau de bord à fond d'orage demandé : **photo plein écran, petite barre latérale d'icônes à gauche, accueil en haut, grande typographie blanche, six statistiques réelles, courbe des mouvements sur sept jours et quatre panneaux en verre liquide à droite**. Les statistiques sont calculées depuis les articles et l'historique SQLite (aucun chiffre fictif).
 
-**Point de retour exact :** la branche [`backup/stockpilot-avant-glass-2026-11-02`](https://github.com/m4ximeG/stockpilot/tree/backup/stockpilot-avant-glass-2026-11-02) conserve le site clair avant cette refonte, au commit `b3cc345059bfcdfc9326d8dd4ba056001307fab4`. Si le nouveau style ne convient pas, restaurer ce commit sur `main` après validation, puis reconstruire l'image Docker. Cette branche est un point de retour du **code**, pas une sauvegarde de la base : ne jamais supprimer le volume `stockpilot_data`.
+L'entrée, le scanner, l'inventaire, l'historique et la configuration restent utilisables, avec les mêmes principes de verre translucide et de navigation. Sur téléphone, le tableau de bord devient défilant et la navigation est placée en bas.
+
+- Feuille de style : `static/aurora.css`
+- Données et courbe : `static/barcode-only.js`
+- Photo de fond provisoire sous licence Pexels : [Guillaume Boulanger — Stunning Thunderstorm Over Rural Wheat Field](https://www.pexels.com/photo/stunning-thunderstorm-over-rural-wheat-field-39914828/). Il ne s'agit **pas** de l'original du prompt (celui-ci n'a été fourni qu'en capture et en texte, pas comme fichier de fond séparé).
+- Animations `aurRise`, `aurSlideR`, `aurLine`, `aurDraw`, `aurFill`, `aurSheen`, avec désactivation en cas de mouvement réduit.
+- **Retour immédiat vers la DA précédente :** branche [`backup/stockpilot-facet-avant-aurora-2026-11-02`](https://github.com/m4ximeG/stockpilot/tree/backup/stockpilot-facet-avant-aurora-2026-11-02), commit `538b17762025fbc1e4bb8289e5f562cea8262ebd`.
+- **Retour vers la DA claire** : branche [`backup/stockpilot-avant-glass-2026-11-02`](https://github.com/m4ximeG/stockpilot/tree/backup/stockpilot-avant-glass-2026-11-02).
+
+Ce sont des points de retour de code, pas des sauvegardes de données. **Ne supprimez pas le volume Docker** `stockpilot_data`.
 
 ## Fonctionnement
 
