@@ -83,7 +83,7 @@ test('Aurora est chargé et reproduit la structure sans supprimer les fonctions'
  const html=fs.readFileSync('static/index.html','utf8');
  const css=fs.readFileSync('static/aurora.css','utf8');
  assert.match(html,/aurora\.css\?v=aurora-20261102-2/);
- assert.match(html,/barcode-only\.js\?v=aurora-20261102-2/);
+ assert.match(html,/barcode-only\.js\?v=polish-20261102-1/);
  assert.match(css,/\.aurora-dashboard/);
  assert.match(css,/\.aur-rail-main/);
  assert.match(css,/\.aur-metrics/);
@@ -114,4 +114,32 @@ test('Aurora utilise un vrai fond local et ne mélange jamais ancienne page et s
  const html=basic.dashboard(context);
  assert.match(html,/class="aurora-dashboard"/);
  assert.doesNotMatch(html,/Votre stock en un coup d’œil/);
+});
+
+
+test('Finitions : aucune topbar secondaire, icônes vectorielles et nouvelles CSS',()=>{
+ const html=fs.readFileSync('static/index.html','utf8');
+ const css=fs.readFileSync('static/polish.css','utf8');
+ assert.doesNotMatch(html,/<header class="topbar">/);
+ assert.match(html,/\/static\/polish\.css\?v=2/);
+ assert.match(html,/body\.classList\.toggle\('aurora-on'/);
+ assert.match(html,/settings:'<path d="M4 7h9/);
+ assert.match(css,/\.settings-board/);
+ assert.match(css,/\.settings-column/);
+ assert.match(css,/\.settingscard \.field label/);
+ assert.match(css,/\.basic-manual-list button/);
+ assert.match(css,/\.slim-table td/);
+ assert.match(css,/@media\(max-width:520px\)/);
+});
+test('Paramètres et scanner : aucune structure blanche ni carte accolée',()=>{
+ const cfg=basic.settings(context);
+ assert.equal((cfg.match(/class="settings-column"/g)||[]).length,2);
+ assert.equal((cfg.match(/class="settings-board"/g)||[]).length,1);
+ assert.doesNotMatch(cfg,/class="flowgrid"/);
+ const scan=basic.exit(context);
+ assert.match(scan,/class="basic-manual-list"/);
+ assert.match(scan,/data-action="selectscan"/);
+ const preview=receive.entry(context);
+ assert.match(preview,/class="basic-example-bars"/);
+ assert.match(preview,/basic-help-symbol/);
 });
