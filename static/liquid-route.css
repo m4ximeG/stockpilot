@@ -83,7 +83,7 @@
       rgba(250,255,255,.13) 60.4%,
       rgba(208,238,249,.035) 60.8%,
       transparent 65%,transparent 100%)!important;
-  background-position:155% center!important;
+  background-position:155% center;
   background-size:290% 100%!important;
   background-repeat:no-repeat!important;
   animation:sp-refract .97s cubic-bezier(.17,.7,.26,1) both!important;
