@@ -2,6 +2,12 @@
 
 StockPilot est une application web accessible sur **PC et téléphone** pour suivre le matériel disponible dans un magasin. La version actuelle est volontairement simple : **aucun plan 3D, aucun emplacement ni rayonnage à gérer**.
 
+## Facet Glass — proposition de direction artistique (2 novembre 2026)
+
+Refonte graphique de toutes les pages, inspirée de « Designed in glass » : fond noir anthracite, cartes en verre fumé, liserés irisés lavande/vert, typographie éditoriale, bandeau du tableau de bord à fragments de verre et reflets au pointeur. Les effets sont volontairement limités au décor, pour conserver les formulaires, les boutons, le tableau de stock, les modales et le scan utilisables sur PC et téléphone. Aucun WebGL ni dépendance graphique externe n'est requis. Le thème respecte `prefers-reduced-motion`.
+
+**Point de retour exact :** la branche [`backup/stockpilot-avant-glass-2026-11-02`](https://github.com/m4ximeG/stockpilot/tree/backup/stockpilot-avant-glass-2026-11-02) conserve le site clair avant cette refonte, au commit `b3cc345059bfcdfc9326d8dd4ba056001307fab4`. Si le nouveau style ne convient pas, restaurer ce commit sur `main` après validation, puis reconstruire l'image Docker. Cette branche est un point de retour du **code**, pas une sauvegarde de la base : ne jamais supprimer le volume `stockpilot_data`.
+
 ## Fonctionnement
 
 1. **Entrée** : écrire le nom d'un produit. Le site suggère les références déjà connues. Si aucune référence ne correspond, il la crée pendant l'enregistrement. Le numéro de série est facultatif ; l'état est « Neuf », « Retour SAV » ou « Réparation ».
