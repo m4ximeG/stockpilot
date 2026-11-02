@@ -20,7 +20,20 @@ function dashboard(c){
  const kpis='<div class="basic-kpis">'+cards.map(([label,val,sub,icon])=>'<div class="card basic-kpi"><div class="basic-kpi-top"><span>'+escape(label)+'</span>'+c.ico(icon,21)+'</div><strong>'+val+'</strong><small>'+escape(sub)+'</small></div>').join('')+'</div>';
  const actions='<div class="basic-actions"><button class="basic-action" data-nav="entry"><span class="basic-action-icon">'+c.ico('in',25)+'</span><span><strong>Ajouter au stock</strong><small>Créer un produit et imprimer son étiquette</small></span><b>→</b></button><button class="basic-action" data-nav="exit"><span class="basic-action-icon">'+c.ico('barcode',25)+'</span><span><strong>Scanner une sortie</strong><small>Retirer un article avec son code-barres</small></span><b>→</b></button><button class="basic-action" data-nav="products"><span class="basic-action-icon">'+c.ico('package',25)+'</span><span><strong>Consulter l’inventaire</strong><small>Retrouver un modèle ou un numéro de série</small></span><b>→</b></button></div>';
  const recent='<section class="card basic-recent"><div class="cardhead"><div><h2>Derniers mouvements</h2><p>Entrées et sorties enregistrées par votre équipe.</p></div><button data-nav="history" class="more">Voir l’historique →</button></div><div class="basic-recent-list">'+(latest.length?latest.map(e=>'<div class="basic-move"><span class="basic-move-icon '+(e.type==='in'?'inc':'outc')+'">'+c.ico(e.type==='in'?'in':'out',17)+'</span><div><strong>'+escape(name(db.catalog.find(p=>p.id===e.pid)))+'</strong><small>'+escape(e.itemId)+' · '+escape(e.actor||'Utilisateur')+'</small></div><div class="basic-move-date">'+stamp(e.at)+'</div></div>').join(''):'<div class="basic-empty">Aucun mouvement pour le moment. Commencez par enregistrer votre premier produit.</div>')+'</div></section>';
- return c.heading('GESTION DU STOCK','Votre stock en un coup d’œil','Suivez vos quantités et vos mouvements sans gérer les emplacements des produits.')+kpis+actions+recent;
+ const hero='<section class="facet-hero glass-interactive" data-glass-hero aria-label="Vue générale du stock">'+
+ '<div class="facet-hero-copy"><div class="facet-kicker"><span class="facet-line"></span> STOCKPILOT / VUE D’ENSEMBLE <span class="facet-index">01—04</span></div>'+
+ '<h1>Le stock.<br><em>En mouvement.</em></h1>'+
+ '<p>Un seul espace pour réceptionner, identifier et suivre votre matériel. Sans complexité.</p>'+
+ '<div class="facet-hero-controls"><button data-nav="entry" class="facet-hero-primary">Nouvelle réception <span>↗</span></button><button data-nav="exit" class="facet-hero-secondary">Scanner une sortie <span>→</span></button></div>'+
+ '<div class="facet-live"><span class="facet-live-dot"></span> STOCK CENTRALISÉ <span class="facet-live-separator"></span> SUIVI EN TEMPS RÉEL</div></div>'+
+ '<div class="facet-hero-art" aria-hidden="true">'+
+ '<div class="facet-orbit facet-orbit-outer"></div><div class="facet-orbit facet-orbit-inner"></div>'+
+ '<div class="facet-shard facet-shard-a"><span class="facet-shard-index">01 / RÉCEPTION</span><strong>IN</strong><span class="facet-shard-corner">↗</span></div>'+
+ '<div class="facet-shard facet-shard-b"><span class="facet-shard-index">02 / IDENTIFICATION</span><strong>SCAN</strong></div>'+
+ '<div class="facet-shard facet-shard-c"><span class="facet-shard-index">03 / MOUVEMENT</span><strong>OUT</strong><span class="facet-shard-corner">↘</span></div>'+
+ '<div class="facet-art-stamp">ONE SYSTEM. EVERY ITEM.</div></div></section>';
+ return hero+'<div class="facet-section-head"><div><span class="facet-section-kicker">CHIFFRES CLÉS</span><h2>Situation actuelle</h2></div><span class="facet-section-aside">MISE À JOUR AUTOMATIQUE</span></div>'+kpis+
+ '<div class="facet-section-head facet-actions-heading"><div><span class="facet-section-kicker">ACCÈS RAPIDE</span><h2>Opérations</h2></div><span class="facet-section-aside">VOTRE ESPACE DE TRAVAIL</span></div>'+actions+recent;
 }
 function inventory(c){
  const filter=(c.tableFilter||'').toLocaleLowerCase('fr');
