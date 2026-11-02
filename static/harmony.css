@@ -55,46 +55,12 @@ body.aurora-on{background-color:#071b22!important}
   transition:transform .24s cubic-bezier(.2,.7,.1,1),opacity .24s;
 }
 .sidebar .navbtn:hover .ic{transform:scale(1.08)}
-/* Transitions de contenu : le menu ne bouge pas, seule la page change. */
-@keyframes sp-page-enter{
-  from{opacity:0;filter:blur(5px);transform:translate3d(0,15px,0)}
-  to{opacity:1;filter:blur(0);transform:translate3d(0,0,0)}
-}
-@keyframes sp-home-enter{
-  from{opacity:0;filter:blur(6px)}
-  to{opacity:1;filter:blur(0)}
-}
-body:not(.aurora-on) .content.sp-page-enter{
-  animation:sp-page-enter .58s cubic-bezier(.16,1,.3,1) both;
-}
-body.aurora-on .aurora-dashboard.sp-page-enter{
-  animation:sp-home-enter .55s cubic-bezier(.16,1,.3,1) both;
-}
-body:not(.aurora-on) .content.sp-page-enter .card{
-  transition:border-color .24s ease,box-shadow .24s ease,background .24s ease;
-}
-
-/* Safari/Chrome : transition native entre l'ancienne et la nouvelle page. */
-@keyframes sp-leave-view{
- from{opacity:1;filter:blur(0)}
- to{opacity:0;filter:blur(6px)}
-}
-@keyframes sp-enter-view{
- from{opacity:0;filter:blur(8px)}
- to{opacity:1;filter:blur(0)}
-}
-::view-transition-old(root){
- animation: .19s cubic-bezier(.35,0,.7,1) both sp-leave-view;
-}
-::view-transition-new(root){
- animation: .48s cubic-bezier(.16,1,.3,1) both sp-enter-view;
-}
+/* Changement de page : géré sans capture du document entier, dans liquid-route.css.
+   Aucun fondu du body ni des surfaces en verre, et aucune transition native root. */
 @media(max-width:860px){
  .sidebar .brand{display:none!important}
  body{background-attachment:scroll!important}
 }
 @media(prefers-reduced-motion:reduce){
- .sp-page-enter{animation:none!important;transition:none!important}
- ::view-transition-old(root),::view-transition-new(root){animation-duration:.01ms!important}
  .sidebar .brand:hover .sp-logo,.sidebar .navbtn:hover .ic{transform:none!important}
 }
