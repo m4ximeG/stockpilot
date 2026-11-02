@@ -44,7 +44,7 @@ body.aurora-on{background-color:#071b22!important}
   filter:drop-shadow(0 0 12px rgba(213,249,244,.32));
 }
 /* BarcodeScanner: traits de scan vectoriels fins et unifiés. */
-.sidebar .navbtn[aria-label="Sortie / scanner"] .ic,
+.sidebar .navbtn[aria-label="Scanner une sortie"] .ic,
 .basic-entry-help .basic-help-symbol .ic,
 .scan-panel>.ic{
   stroke-width:1.85!important;
