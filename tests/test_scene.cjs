@@ -27,8 +27,9 @@ test('entrée en stock sans emplacement obligatoire',()=>{
 });
 test('tableau de bord affiche les stocks sans plan',()=>{
  const html=basic.dashboard(context);
- assert.match(html,/Articles en stock/);
- assert.match(html,/Sorties aujourd’hui/);
+ assert.match(html,/Stock central/);
+ assert.match(html,/Gestion du stock/);
+ assert.match(html,/Sorties du jour/);
  assert.doesNotMatch(html,/shelf|warehouse|emplacement|3D/);
 });
 test('inventaire, scanner, historique et configuration sans rangement',()=>{
@@ -53,6 +54,7 @@ test('démarrage réel du script principal avec réponse /api/state',async()=>{
  const appElement={innerHTML:'',className:''};
  const elements={'#app':appElement,'#toasts':{appendChild:()=>{}}};
  const fakeDocument={
+  body:{classList:{toggle:()=>{}}},
   querySelector:(s)=>elements[s]||null,
   createElement:()=>({innerHTML:'',className:'',remove:()=>{}})
  };
@@ -72,30 +74,31 @@ test('démarrage réel du script principal avec réponse /api/state',async()=>{
  vm.runInNewContext(scripts[0],context,{filename:'static/index.html'});
  await new Promise(resolve=>setTimeout(resolve,25));
  assert.match(appElement.innerHTML,/Tableau de bord/);
- assert.match(appElement.innerHTML,/Articles en stock/);
+ assert.match(appElement.innerHTML,/Stock central/);
  assert.doesNotMatch(appElement.innerHTML,/Connexion au serveur impossible|Can't find variable/);
 });
 
 
-test('Facet Glass est chargé sur toutes les pages sans altérer le suivi',()=>{
+test('Aurora est chargé et reproduit la structure sans supprimer les fonctions',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
- const css=fs.readFileSync('static/glass.css','utf8');
- const motion=fs.readFileSync('static/glass-motion.js','utf8');
- assert.match(html,/glass\.css\?v=1/);
- assert.match(html,/glass-motion\.js\?v=1/);
- assert.match(css,/--bg:#050507/);
- assert.match(css,/\.facet-hero/);
- assert.match(css,/\.basic-entry/);
- assert.match(css,/\.scan-panel/);
- assert.match(css,/\.slim-table/);
- assert.match(css,/\.modal/);
+ const css=fs.readFileSync('static/aurora.css','utf8');
+ assert.match(html,/aurora\.css\?v=1/);
+ assert.match(css,/\.aurora-dashboard/);
+ assert.match(css,/\.aur-rail-main/);
+ assert.match(css,/\.aur-metrics/);
+ assert.match(css,/\.aur-wave-main/);
+ assert.match(css,/@keyframes aurDraw/);
+ assert.match(css,/@media\(max-width:860px\)/);
  assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
- assert.match(motion,/prefers-reduced-motion: reduce/);
- assert.doesNotMatch(motion,/WebGLRenderer|THREE\.|fetch\(/);
  const markup=basic.dashboard(context);
- assert.match(markup,/facet-hero/);
+ assert.match(markup,/Gestion du stock/);
+ assert.match(markup,/centralisé/);
+ assert.match(markup,/Réceptions du jour/);
+ assert.match(markup,/Sorties du jour/);
+ assert.match(markup,/Stock central/);
+ assert.match(markup,/aur-wave/);
  assert.match(markup,/data-nav="entry"/);
  assert.match(markup,/data-nav="exit"/);
- assert.match(markup,/Situation actuelle/);
- assert.match(markup,/Derniers mouvements/);
+ assert.match(markup,/data-nav="products"/);
+ assert.doesNotMatch(markup,/facet-shard|facet-hero|rayonnage/);
 });
