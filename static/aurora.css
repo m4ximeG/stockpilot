@@ -8,7 +8,7 @@
  --e-out:cubic-bezier(.16,1,.3,1);--e-soft:cubic-bezier(.22,.61,.36,1);
 }
 html{background:#04141b!important}
-body{background:linear-gradient(110deg,#061a22c0 0%,#03141a5c 45%,#071a1b32 100%),url("/static/aurora-storm.jpg") center 45% / cover fixed no-repeat,url("https://images.pexels.com/photos/39914828/pexels-photo-39914828.jpeg?auto=compress&cs=tinysrgb&w=2200") center 45% / cover fixed no-repeat!important;color:white!important}
+body{background:linear-gradient(110deg,#061a22c0 0%,#03141a5c 45%,#071a1b32 100%),url("/static/aurora-storm.jpg") center 45% / cover fixed no-repeat,url("https://images.pexels.com/photos/39914828/pexels-photo-39914828/free-photo-of-stunning-thunderstorm-over-rural-wheat-field.png?auto=compress&dpr=1&w=2200") center 45% / cover fixed no-repeat!important;color:white!important}
 body,button,input,select,textarea{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif!important}
 button{cursor:pointer}
 .sidebar{width:74px!important;left:13px!important;top:13px!important;bottom:13px!important;height:auto!important;right:auto!important;padding:20px 8px 26px!important;align-items:center!important;
@@ -87,7 +87,7 @@ body.aurora-on .content{padding:0!important;margin:0!important;max-width:none!im
  linear-gradient(105deg,rgba(4,16,24,.36) 0%,rgba(4,16,24,.22) 40%,rgba(4,16,24,.06) 78%,transparent),
  linear-gradient(180deg,rgba(4,16,24,.10),transparent 23%),
  linear-gradient(0deg,rgba(4,16,24,.11),rgba(4,16,24,.11)),
- url("/static/aurora-storm.jpg") center 45% / cover no-repeat,url("https://images.pexels.com/photos/39914828/pexels-photo-39914828.jpeg?auto=compress&cs=tinysrgb&w=2200") center 45% / cover no-repeat,#071b22}
+ url("/static/aurora-storm.jpg") center 45% / cover no-repeat,url("https://images.pexels.com/photos/39914828/pexels-photo-39914828/free-photo-of-stunning-thunderstorm-over-rural-wheat-field.png?auto=compress&dpr=1&w=2200") center 45% / cover no-repeat,#071b22}
 .aurora-dashboard button{font-family:inherit!important;color:white}
 .aur-header{position:absolute;left:8.9%;right:5.2%;top:2.1%;height:60px;display:flex;justify-content:space-between;align-items:flex-start;z-index:4}
 .aur-welcome{display:flex;flex-direction:column;gap:8px;font-size:16px;color:#ffffffed;animation:aurRise .70s .14s both}
