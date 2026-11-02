@@ -254,7 +254,7 @@ LOGIN_HTML = '''<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta
 body{background:
  linear-gradient(110deg,#061922bb 0%,#071e2355 65%,#09252a55),
  url("/static/aurora-storm.jpg") center 45%/cover fixed no-repeat,
- url("https://images.pexels.com/photos/39914828/pexels-photo-39914828.jpeg?auto=compress&cs=tinysrgb&w=2200") center 45%/cover fixed no-repeat,
+ url("https://images.pexels.com/photos/39914828/pexels-photo-39914828/free-photo-of-stunning-thunderstorm-over-rural-wheat-field.png?auto=compress&dpr=1&w=2200") center 45%/cover fixed no-repeat,
  #061820;color:#fff;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 body:before,body:after{display:none}
 .wrap{position:relative;z-index:1;background:linear-gradient(180deg,rgba(255,255,255,.20),rgba(255,255,255,.26) 24%,rgba(255,255,255,.22));
