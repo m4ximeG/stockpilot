@@ -315,6 +315,17 @@ def home():
     return r
 
 
+@app.after_request
+def prevent_stale_frontend_assets(response):
+    # La DA a subi plusieurs refontes : interdire les anciennes versions
+    # JS/CSS en cache évite les mélanges de pages et de styles.
+    if request.path.startswith('/static/') and request.path.endswith(('.js', '.css')):
+        response.headers['Cache-Control'] = 'no-store, max-age=0, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    return response
+
+
 @app.get('/healthz')
 def healthz():
     return jsonify(status='ok')
