@@ -1,0 +1,83 @@
+/* StockPilot — ambiance unifiée, navigation et identité.
+ * N'altère ni l'API ni les données. Fichier final après polish.css.
+ */
+:root{--sp-storm-image:url("/static/aurora-storm.jpg")}
+html{background:#071b22!important}
+body{
+  background:
+    linear-gradient(105deg,rgba(4,16,24,.36) 0%,rgba(4,16,24,.22) 40%,rgba(4,16,24,.06) 78%,transparent),
+    linear-gradient(180deg,rgba(4,16,24,.10),transparent 23%),
+    linear-gradient(0deg,rgba(4,16,24,.11),rgba(4,16,24,.11)),
+    var(--sp-storm-image) center 45% / cover fixed no-repeat,
+    #071b22!important;
+  background-color:#071b22!important;
+}
+/* Jusqu'ici l'accueil et les formulaires utilisaient deux couches
+   de dégradés différentes, ce qui verdissait la photo sur les sous-pages.
+   Une seule image peinte par body supprime cette différence et les sauts
+   au changement de page. */
+.aurora-dashboard{
+  background:transparent!important;
+}
+body.aurora-on{background-color:#071b22!important}
+.main,.content,.app{background-color:transparent!important}
+.sidebar .brand-mark{
+  width:51px!important;height:56px!important;
+  display:flex!important;align-items:center!important;justify-content:center!important;
+  background:transparent!important;overflow:visible!important;
+}
+.sidebar .brand-mark img.sp-logo{
+  display:block!important;
+  width:44px!important;height:44px!important;
+  max-width:none!important;object-fit:contain;
+  filter:drop-shadow(0 3px 10px rgba(0,0,0,.2));
+  transition:transform .35s cubic-bezier(.2,.8,.2,1),filter .35s;
+}
+.sidebar .brand-mark:after{
+  content:"StockPilot"!important;top:55px!important;
+  letter-spacing:-.45px!important;font-size:10.5px!important;
+  line-height:1.1!important;font-weight:700!important;
+}
+.sidebar .brand{margin-bottom:58px!important}
+.sidebar .brand:hover .sp-logo{
+  transform:translateY(-2px) scale(1.045);
+  filter:drop-shadow(0 0 12px rgba(213,249,244,.32));
+}
+/* BarcodeScanner: traits de scan vectoriels fins et unifiés. */
+.sidebar .navbtn[aria-label="Sortie / scanner"] .ic,
+.basic-entry-help .basic-help-symbol .ic,
+.scan-panel>.ic{
+  stroke-width:1.85!important;
+  stroke-linecap:round!important;
+  stroke-linejoin:round!important;
+}
+.sidebar .navbtn .ic{
+  transition:transform .24s cubic-bezier(.2,.7,.1,1),opacity .24s;
+}
+.sidebar .navbtn:hover .ic{transform:scale(1.08)}
+/* Transitions de contenu : le menu ne bouge pas, seule la page change. */
+@keyframes sp-page-enter{
+  from{opacity:0;filter:blur(5px);transform:translate3d(0,15px,0)}
+  to{opacity:1;filter:blur(0);transform:translate3d(0,0,0)}
+}
+@keyframes sp-home-enter{
+  from{opacity:0;filter:blur(6px)}
+  to{opacity:1;filter:blur(0)}
+}
+body:not(.aurora-on) .content.sp-page-enter{
+  animation:sp-page-enter .58s cubic-bezier(.16,1,.3,1) both;
+}
+body.aurora-on .aurora-dashboard.sp-page-enter{
+  animation:sp-home-enter .55s cubic-bezier(.16,1,.3,1) both;
+}
+body:not(.aurora-on) .content.sp-page-enter .card{
+  transition:border-color .24s ease,box-shadow .24s ease,background .24s ease;
+}
+@media(max-width:860px){
+ .sidebar .brand{display:none!important}
+ body{background-attachment:scroll!important}
+}
+@media(prefers-reduced-motion:reduce){
+ .sp-page-enter{animation:none!important;transition:none!important}
+ .sidebar .brand:hover .sp-logo,.sidebar .navbtn:hover .ic{transform:none!important}
+}
