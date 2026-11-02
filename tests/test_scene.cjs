@@ -168,7 +168,7 @@ test('Retour à l’accueil : animations Aurora originales intactes',()=>{
  const css=fs.readFileSync('static/aurora.css','utf8');
  const route=fs.readFileSync('static/liquid-route.css','utf8');
  assert.match(html,/if\(page==='dashboard'\)\{/);
- assert.match(html,/return;\s*\}\s*\/\/ Pages de travail/);
+ assert.match(html,/return;\s*\}\s*\/\/ Pages secondaires/);
  assert.doesNotMatch(html,/stage\.classList\.add\('sp-no-intro'\)/);
  assert.doesNotMatch(route,/sp-no-intro|sp-route-active|\.aur-welcome|\.aur-rail button/);
  for(const animation of ['aurSlideR','aurRise','aurLine','aurPop','aurDraw','aurFill','aurSheen']){
