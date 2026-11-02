@@ -168,7 +168,7 @@ test('Navigation liquide : pas de capture du body, pas de fondu des vitres',()=>
  const css=fs.readFileSync('static/liquid-route.css','utf8');
  const harmony=fs.readFileSync('static/harmony.css','utf8');
  assert.match(html,/\/static\/harmony\.css\?v=2/);
- assert.match(html,/\/static\/liquid-route\.css\?v=1/);
+ assert.match(html,/\/static\/liquid-route\.css\?v=2/);
  assert.match(html,/content\.innerHTML=renderPage\(\)/);
  assert.match(html,/document\.body\.classList\.toggle\('aurora-on',page==='dashboard'\)/);
  assert.match(html,/sp-glass-sweep/);
@@ -178,6 +178,8 @@ test('Navigation liquide : pas de capture du body, pas de fondu des vitres',()=>
  assert.doesNotMatch(harmony,/::view-transition/);
  assert.doesNotMatch(harmony,/sp-page-enter|filter:blur\(5px\)/);
  assert.match(css,/html\.sp-route-active \.aur-rail button/);
+ assert.match(css,/\.aurora-dashboard\.sp-no-intro \.aur-rail button/);
+ assert.match(html,/stage\.classList\.add\('sp-no-intro'\)/);
  assert.match(css,/\.sp-glass-sweep/);
  assert.match(css,/background-position/);
  assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
