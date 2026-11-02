@@ -1,141 +1,67 @@
-/* StockPilot · Liquid Route v3
-   Fond d'orage et sidebar immobiles, aucune opacité ou blur sur les vitres.
-   Les animations originales Aurora sont conservées pour l'accueil.
-   Sur les pages de travail: révélation éditoriale, pose des panneaux en
-   perspective et reflet mobile sur les panneaux, sans masque global. */
+/* StockPilot — transitions d'application sobres
+   Le fond, les vitres et la barre latérale ne subissent aucun fondu,
+   flou, mouvement ou variation d'opacité. L'accueil garde les effets Aurora. */
 
-@keyframes sp-word-rise{
-  0%{opacity:0;transform:translate3d(0,22px,0);clip-path:inset(0 0 85% 0)}
-  55%{opacity:1;clip-path:inset(0)}
-  100%{opacity:1;transform:translate3d(0,0,0);clip-path:inset(0)}
+@keyframes sp-heading-enter {
+  from { opacity:.68; transform:translate3d(0,9px,0); }
+  to { opacity:1; transform:translate3d(0,0,0); }
 }
-@keyframes sp-label-appear{
-  from{opacity:0;transform:translate3d(-12px,0,0);letter-spacing:.25em}
-  to{opacity:1;transform:translate3d(0,0,0);letter-spacing:inherit}
+@keyframes sp-details-enter {
+  from { opacity:.82; transform:translate3d(0,6px,0); }
+  to { opacity:1; transform:translate3d(0,0,0); }
 }
-@keyframes sp-content-liquid{
-  0%{opacity:.25;transform:translate3d(0,14px,0)}
-  64%{opacity:1;transform:translate3d(0,-2px,0)}
-  100%{opacity:1;transform:none}
+@keyframes sp-active-marker {
+  from { transform:scaleY(.72); }
+  to { transform:scaleY(1); }
 }
-@keyframes sp-rim-glint{
-  0%{border-color:rgba(255,255,255,.22)}
-  48%{border-color:rgba(242,255,255,.49)}
-  100%{border-color:rgba(255,255,255,.24)}
-}
-@keyframes sp-nav-active{
-  from{transform:translateY(-7px) scaleY(.68);opacity:.45}
-  65%{transform:translateY(1.5px) scaleY(1.08);opacity:1}
-  to{transform:translateY(0) scaleY(1);opacity:1}
-}
-@keyframes sp-icon-pop{
-  0%{transform:scale(.84)}
-  55%{transform:scale(1.17)}
-  100%{transform:scale(1)}
-}
-
-/* La transition ne concerne QUE les titres, pas leur conteneur de verre. */
+/* Hiérarchie : le titre, sa description, puis les contenus des cartes.
+   Pas de masque, pas de décalage important et pas de grand effet lumineux. */
 .sp-route-in .pagehead .eyebrow,
-.sp-route-in .basic-entry-heading>div>span{
-  animation:sp-label-appear .48s cubic-bezier(.2,.76,.2,1) both!important;
+.sp-route-in .basic-entry-heading>div>span {
+  animation:sp-heading-enter .30s cubic-bezier(.2,.7,.2,1) both;
 }
 .sp-route-in .pagehead h1,
-.sp-route-in .basic-entry-heading h1{
-  animation:sp-word-rise .74s cubic-bezier(.16,1,.3,1) .055s both!important;
+.sp-route-in .basic-entry-heading h1 {
+  animation:sp-heading-enter .37s cubic-bezier(.2,.7,.2,1) .045s both;
 }
 .sp-route-in .pagehead p,
-.sp-route-in .basic-entry-heading p{
-  animation:sp-word-rise .64s cubic-bezier(.16,1,.3,1) .14s both!important;
+.sp-route-in .basic-entry-heading p {
+  animation:sp-details-enter .34s cubic-bezier(.2,.7,.2,1) .075s both;
 }
 .sp-route-in .head-actions,
-.sp-route-in .basic-entry-tag{
-  animation:sp-word-rise .63s cubic-bezier(.16,1,.3,1) .19s both!important;
+.sp-route-in .basic-entry-tag {
+  animation:sp-details-enter .34s cubic-bezier(.2,.7,.2,1) .08s both;
 }
-
-/* Ne JAMAIS transformer le panneau en verre lui-même : Safari peut
-   perdre le backdrop-filter au changement de calque. Le verre garde sa
-   peinture et son épaisseur; seuls ses éléments intérieurs se révèlent. */
-.sp-route-in .sp-motion-panel{
-  position:relative;
-  animation:sp-rim-glint .9s cubic-bezier(.18,.71,.31,1) both!important;
-  animation-delay:calc(var(--sp-order,0) * .06s)!important;
+/* On n'anime jamais .card elle-même : Safari perdrait momentanément
+   le backdrop-filter. Seuls les éléments directs contenus dans la carte
+   arrivent de quelques pixels. Cela préserve le verre du premier au dernier frame. */
+.sp-route-in .sp-motion-panel > * {
+  animation:sp-details-enter .36s cubic-bezier(.2,.7,.2,1) both;
+  animation-delay:calc(.075s + var(--sp-order,0) * .045s);
 }
-.sp-route-in .sp-motion-panel > :not(.sp-glass-sweep){
-  animation:sp-content-liquid .75s cubic-bezier(.16,1,.3,1) both;
-  animation-delay:calc(.045s + var(--sp-order,0) * .067s);
+.sp-route-in .sp-motion-panel > :nth-child(2) {
+  animation-delay:calc(.105s + var(--sp-order,0) * .045s);
 }
-.sp-route-in .sp-motion-panel > :nth-child(2):not(.sp-glass-sweep){
-  animation-delay:calc(.12s + var(--sp-order,0) * .067s);
+.sp-route-in .sp-motion-panel > :nth-child(3) {
+  animation-delay:calc(.135s + var(--sp-order,0) * .045s);
 }
-.sp-route-in .sp-motion-panel > :nth-child(3):not(.sp-glass-sweep){
-  animation-delay:calc(.17s + var(--sp-order,0) * .067s);
+.sidebar .navbtn.sp-nav-arrive::before {
+  animation:sp-active-marker .24s cubic-bezier(.2,.7,.2,1) both;
 }
-
-/* Reflets quasi-iridescents : deux raies lumineuses balayent chaque vitre,
-   mais les champs, boutons et données restent à leur opacité normale. */
-.sp-glass-sweep{
-  position:absolute!important;
-  inset:0!important;
-  z-index:3!important;
-  pointer-events:none!important;
-  border-radius:inherit!important;
-  background-image:
-    linear-gradient(112deg,
-      transparent 0%,transparent 34%,
-      rgba(223,249,255,.015) 39%,
-      rgba(239,253,255,.08) 42.3%,
-      rgba(249,255,255,.22) 42.8%,
-      rgba(219,248,252,.09) 43.4%,
-      rgba(166,227,230,.045) 49%,
-      transparent 56%,transparent 100%),
-    linear-gradient(111deg,
-      transparent 0%,transparent 59%,
-      rgba(224,244,252,.045) 60.1%,
-      rgba(250,255,255,.13) 60.4%,
-      rgba(208,238,249,.035) 60.8%,
-      transparent 65%,transparent 100%)!important;
-  background-position:155% center;
-  background-size:290% 100%!important;
-  background-repeat:no-repeat!important;
-  animation:sp-refract .97s cubic-bezier(.17,.7,.26,1) both!important;
-  animation-delay:calc(.08s + var(--sp-order,0) * .074s)!important;
-  will-change:background-position;
+@media(max-width:860px) {
+  .sp-route-in .sp-motion-panel > * {
+    animation-duration:.28s;
+    animation-delay:calc(.045s + var(--sp-order,0) * .028s);
+  }
+  .sp-route-in .pagehead h1,
+  .sp-route-in .basic-entry-heading h1 { animation-duration:.29s; }
 }
-@keyframes sp-refract{
-  0%{background-position:155% center}
-  100%{background-position:-57% center}
-}
-
-/* Le sélecteur de menu répond avec un ressort court, sans remuer la sidebar. */
-.sidebar .navbtn.sp-nav-arrive::before{
-  animation:sp-nav-active .53s cubic-bezier(.17,.8,.23,1) both!important;
-}
-.sidebar .navbtn.sp-nav-arrive .ic{
-  animation:sp-icon-pop .42s cubic-bezier(.18,.8,.25,1) both;
-}
-.mobilebottom button.sp-nav-arrive .ic{
-  animation:sp-icon-pop .42s cubic-bezier(.18,.8,.25,1) both;
-}
-
-@media(max-width:860px){
- .sp-route-in .sp-motion-panel > :not(.sp-glass-sweep){
-  animation-duration:.58s!important;
-  animation-delay:calc(var(--sp-order,0) * .048s)!important;
- }
- .sp-glass-sweep{animation-duration:.65s!important}
- .sp-route-in .pagehead h1,
- .sp-route-in .basic-entry-heading h1{animation-duration:.62s!important}
-}
-@media(prefers-reduced-motion:reduce){
- .sp-route-in .sp-motion-panel,
- .sp-route-in .pagehead *,
- .sp-route-in .basic-entry-heading *,
- .sp-glass-sweep,
- .sidebar .navbtn.sp-nav-arrive::before,
- .sidebar .navbtn.sp-nav-arrive .ic,
- .mobilebottom button.sp-nav-arrive .ic{
-  animation:none!important;
-  transition:none!important;
- }
- .sp-glass-sweep{display:none!important}
+@media(prefers-reduced-motion:reduce) {
+  .sp-route-in .pagehead *,
+  .sp-route-in .basic-entry-heading *,
+  .sp-route-in .sp-motion-panel > *,
+  .sidebar .navbtn.sp-nav-arrive::before {
+    animation:none!important;
+    transition:none!important;
+  }
 }
