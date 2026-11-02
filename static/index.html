@@ -90,6 +90,9 @@ function nav(p){
  if(reduced)return;
  const stage=page==='dashboard'?document.querySelector('.aurora-dashboard'):$('#content');
  if(!stage){document.documentElement.classList.remove('sp-route-active');return;}
+ // Ne jamais relancer les animations de chargement opaques de l'accueil
+ // après le passage du reflet : ses vitres doivent rester visibles.
+ if(page==='dashboard')stage.classList.add('sp-no-intro');
  stage.classList.add('sp-route-in');
  const panels=stage.querySelectorAll(
   '.aur-rail-main,.aur-rail-mini,.basic-entry-form,.basic-entry-help,'+
