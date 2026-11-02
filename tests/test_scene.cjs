@@ -75,3 +75,27 @@ test('démarrage réel du script principal avec réponse /api/state',async()=>{
  assert.match(appElement.innerHTML,/Articles en stock/);
  assert.doesNotMatch(appElement.innerHTML,/Connexion au serveur impossible|Can't find variable/);
 });
+
+
+test('Facet Glass est chargé sur toutes les pages sans altérer le suivi',()=>{
+ const html=fs.readFileSync('static/index.html','utf8');
+ const css=fs.readFileSync('static/glass.css','utf8');
+ const motion=fs.readFileSync('static/glass-motion.js','utf8');
+ assert.match(html,/glass\.css\?v=1/);
+ assert.match(html,/glass-motion\.js\?v=1/);
+ assert.match(css,/--bg:#050507/);
+ assert.match(css,/\.facet-hero/);
+ assert.match(css,/\.basic-entry/);
+ assert.match(css,/\.scan-panel/);
+ assert.match(css,/\.slim-table/);
+ assert.match(css,/\.modal/);
+ assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
+ assert.match(motion,/prefers-reduced-motion: reduce/);
+ assert.doesNotMatch(motion,/WebGLRenderer|THREE\.|fetch\(/);
+ const markup=basic.dashboard(context);
+ assert.match(markup,/facet-hero/);
+ assert.match(markup,/data-nav="entry"/);
+ assert.match(markup,/data-nav="exit"/);
+ assert.match(markup,/Situation actuelle/);
+ assert.match(markup,/Derniers mouvements/);
+});
