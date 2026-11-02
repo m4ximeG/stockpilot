@@ -1,0 +1,115 @@
+/* StockPilot · Liquid Route v2
+   Navigation sans capture de la page, sans fondu global, sans blur de la scène
+   ni changement d'opacité des panneaux backdrop-filter.
+   L'image de fond et la barre latérale restent peintes et immobiles.
+*/
+
+/* Les animations d'entrée de l'accueil historique mettaient ses panneaux
+   temporairement à opacity:0. Elles ne doivent pas se rejouer au changement
+   de rubrique. La courbe de statistiques peut garder son tracé. */
+html.sp-route-active .aur-welcome,
+html.sp-route-active .aur-welcome strong,
+html.sp-route-active .aur-tools button,
+html.sp-route-active .aur-chip,
+html.sp-route-active .aur-headline span,
+html.sp-route-active .aur-copy p,
+html.sp-route-active .aur-metric,
+html.sp-route-active .aur-days span,
+html.sp-route-active .aur-chart-label,
+html.sp-route-active .aur-rail button{
+  animation:none!important;
+  opacity:1!important;
+}
+
+/* Le texte se déplace sur un verre qui reste parfaitement opaque/stable.
+   Aucun blur, opacity ou clip-path sur les cartes ou leurs ancêtres. */
+@keyframes sp-ink-settle {
+  0%{transform:translate3d(0,12px,0)}
+  65%{transform:translate3d(0,-2px,0)}
+  100%{transform:translate3d(0,0,0)}
+}
+.sp-route-in .pagehead,
+.sp-route-in .basic-entry-heading,
+.sp-route-in .aur-copy,
+.sp-route-in .aur-metrics,
+.sp-route-in .aur-header{
+  animation:sp-ink-settle .52s cubic-bezier(.22,.75,.15,1) both!important;
+}
+.sp-route-in .basic-entry-form h2,
+.sp-route-in .basic-entry-help h2,
+.sp-route-in .cardhead,
+.sp-route-in .settingscard h2,
+.sp-route-in .formcard h2 {
+  animation:sp-ink-settle .50s cubic-bezier(.22,.75,.15,1) both;
+}
+
+/* Un véritable reflet traverse les vitres : l'effet vit DANS le calque
+   décoratif, sans jamais animer le panneau ni son opacité. */
+.sp-glass-sweep {
+  position:absolute!important;
+  inset:0!important;
+  width:100%!important;
+  height:100%!important;
+  border-radius:inherit!important;
+  pointer-events:none!important;
+  z-index:3!important;
+  background-image:linear-gradient(
+    107deg,
+    transparent 35%,
+    rgba(211,239,249,.015) 43%,
+    rgba(247,254,255,.14) 49.2%,
+    rgba(187,222,240,.035) 55%,
+    transparent 64%
+  )!important;
+  background-size:320% 100%!important;
+  background-repeat:no-repeat!important;
+  animation:sp-glass-refraction .68s cubic-bezier(.18,.71,.34,1) both!important;
+  will-change:background-position;
+}
+@keyframes sp-glass-refraction {
+  from{background-position:145% center}
+  to{background-position:-45% center}
+}
+
+/* Halo liquide discret qui balaie le contenu, sans recouvrir l'arrière-plan
+   par un masque noir ou transparent, ni gêner les clics. */
+.sp-route-light{
+  position:fixed;
+  inset:0;
+  z-index:54;
+  pointer-events:none;
+  overflow:hidden;
+  contain:strict;
+  background:linear-gradient(101deg,
+    transparent 0%,
+    transparent 35%,
+    rgba(226,252,255,.018) 43%,
+    rgba(239,253,255,.065) 49.9%,
+    rgba(194,234,249,.021) 55%,
+    transparent 63%,
+    transparent 100%);
+  background-size:330% 100%;
+  background-position:150% 0;
+  animation:sp-light-passage .72s cubic-bezier(.14,.66,.32,1) both;
+}
+@keyframes sp-light-passage{
+  0%{background-position:150% 0}
+  100%{background-position:-45% 0}
+}
+
+/* Le pointeur peut changer rapidement de rubrique; les animations
+   sont indépendantes et ne peuvent jamais masquer le contenu. */
+@media(max-width:860px){
+  .sp-route-light{animation-duration:.52s}
+  .sp-glass-sweep{animation-duration:.54s!important}
+}
+@media(prefers-reduced-motion:reduce){
+  .sp-route-in *,
+  .sp-route-in,
+  .sp-route-light,
+  .sp-glass-sweep{
+    animation:none!important;
+    transition:none!important;
+  }
+  .sp-route-light,.sp-glass-sweep{display:none!important}
+}
