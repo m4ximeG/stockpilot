@@ -6,34 +6,65 @@ const name = p => p ? [p.brand,p.model].filter(Boolean).join(' ') : 'Produit inc
 const stamp = (ms) => ms ? new Date(ms).toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
 const actionButton=(action,text,extra='')=>'<button type="button" class="basic-btn '+extra+'" data-action="'+action+'">'+text+'</button>';
 function dashboard(c){
- const db=c.db, today=new Date().toDateString();
- const moves=db.events.filter(x=>new Date(x.at).toDateString()===today);
- const inCount=moves.filter(x=>x.type==='in').length,outCount=moves.filter(x=>x.type==='out').length;
- const distinct=new Set(db.items.map(i=>i.pid)).size;
- const latest=[...db.events].sort((a,b)=>b.at-a.at).filter(e=>e.type==='in'||e.type==='out').slice(0,7);
- const cards=[
-  ['Articles en stock',db.items.length,'Unités actuellement disponibles','package'],
-  ['Références en stock',distinct,'Modèles différents','layers'],
-  ['Entrées aujourd’hui',inCount,'Réceptions enregistrées','in'],
-  ['Sorties aujourd’hui',outCount,'Articles retirés','out']
+ const db=c.db, now=new Date(), today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+ const movements=db.events.filter(e=>e.type==='in'||e.type==='out');
+ const todayEvents=movements.filter(e=>new Date(e.at)>=today);
+ const entries=todayEvents.filter(e=>e.type==='in').length, exits=todayEvents.filter(e=>e.type==='out').length;
+ const refs=new Set(db.items.map(i=>i.pid)).size;
+ const sav=db.items.filter(i=>(i.condition||'').toLowerCase().includes('sav')).length;
+ const repair=db.items.filter(i=>(i.condition||'').toLowerCase().includes('réparation')).length;
+ const total=db.items.length, num=n=>new Intl.NumberFormat('fr-FR').format(n);
+ const metrics=[['Articles',total,'package'],['Références',refs,'layers'],['Entrées',entries,'in'],
+  ['Sorties',exits,'out'],['Retour SAV',sav,'history'],['Réparation',repair,'settings']];
+ const metricHTML=metrics.map(([label,value,icon],i)=>
+  '<div class="aur-metric" style="--seq:'+i+'"><span>'+label+'</span><div class="aur-metric-value"><strong>'+num(value)+'</strong>'+c.ico(icon,20)+'</div></div>').join('');
+ const railList=[
+  ['Réceptions du jour','Produits enregistrés',entries,'in','entry'],
+  ['Sorties du jour','Articles retirés',exits,'out','history'],
+  ['Articles à traiter','Retour SAV et réparation',sav+repair,'settings','products']
  ];
- const kpis='<div class="basic-kpis">'+cards.map(([label,val,sub,icon])=>'<div class="card basic-kpi"><div class="basic-kpi-top"><span>'+escape(label)+'</span>'+c.ico(icon,21)+'</div><strong>'+val+'</strong><small>'+escape(sub)+'</small></div>').join('')+'</div>';
- const actions='<div class="basic-actions"><button class="basic-action" data-nav="entry"><span class="basic-action-icon">'+c.ico('in',25)+'</span><span><strong>Ajouter au stock</strong><small>Créer un produit et imprimer son étiquette</small></span><b>→</b></button><button class="basic-action" data-nav="exit"><span class="basic-action-icon">'+c.ico('barcode',25)+'</span><span><strong>Scanner une sortie</strong><small>Retirer un article avec son code-barres</small></span><b>→</b></button><button class="basic-action" data-nav="products"><span class="basic-action-icon">'+c.ico('package',25)+'</span><span><strong>Consulter l’inventaire</strong><small>Retrouver un modèle ou un numéro de série</small></span><b>→</b></button></div>';
- const recent='<section class="card basic-recent"><div class="cardhead"><div><h2>Derniers mouvements</h2><p>Entrées et sorties enregistrées par votre équipe.</p></div><button data-nav="history" class="more">Voir l’historique →</button></div><div class="basic-recent-list">'+(latest.length?latest.map(e=>'<div class="basic-move"><span class="basic-move-icon '+(e.type==='in'?'inc':'outc')+'">'+c.ico(e.type==='in'?'in':'out',17)+'</span><div><strong>'+escape(name(db.catalog.find(p=>p.id===e.pid)))+'</strong><small>'+escape(e.itemId)+' · '+escape(e.actor||'Utilisateur')+'</small></div><div class="basic-move-date">'+stamp(e.at)+'</div></div>').join(''):'<div class="basic-empty">Aucun mouvement pour le moment. Commencez par enregistrer votre premier produit.</div>')+'</div></section>';
- const hero='<section class="facet-hero glass-interactive" data-glass-hero aria-label="Vue générale du stock">'+
- '<div class="facet-hero-copy"><div class="facet-kicker"><span class="facet-line"></span> STOCKPILOT / VUE D’ENSEMBLE <span class="facet-index">01—04</span></div>'+
- '<h1>Le stock.<br><em>En mouvement.</em></h1>'+
- '<p>Un seul espace pour réceptionner, identifier et suivre votre matériel. Sans complexité.</p>'+
- '<div class="facet-hero-controls"><button data-nav="entry" class="facet-hero-primary">Nouvelle réception <span>↗</span></button><button data-nav="exit" class="facet-hero-secondary">Scanner une sortie <span>→</span></button></div>'+
- '<div class="facet-live"><span class="facet-live-dot"></span> STOCK CENTRALISÉ <span class="facet-live-separator"></span> SUIVI EN TEMPS RÉEL</div></div>'+
- '<div class="facet-hero-art" aria-hidden="true">'+
- '<div class="facet-orbit facet-orbit-outer"></div><div class="facet-orbit facet-orbit-inner"></div>'+
- '<div class="facet-shard facet-shard-a"><span class="facet-shard-index">01 / RÉCEPTION</span><strong>IN</strong><span class="facet-shard-corner">↗</span></div>'+
- '<div class="facet-shard facet-shard-b"><span class="facet-shard-index">02 / IDENTIFICATION</span><strong>SCAN</strong></div>'+
- '<div class="facet-shard facet-shard-c"><span class="facet-shard-index">03 / MOUVEMENT</span><strong>OUT</strong><span class="facet-shard-corner">↘</span></div>'+
- '<div class="facet-art-stamp">ONE SYSTEM. EVERY ITEM.</div></div></section>';
- return hero+'<div class="facet-section-head"><div><span class="facet-section-kicker">CHIFFRES CLÉS</span><h2>Situation actuelle</h2></div><span class="facet-section-aside">MISE À JOUR AUTOMATIQUE</span></div>'+kpis+
- '<div class="facet-section-head facet-actions-heading"><div><span class="facet-section-kicker">ACCÈS RAPIDE</span><h2>Opérations</h2></div><span class="facet-section-aside">VOTRE ESPACE DE TRAVAIL</span></div>'+actions+recent;
+ const railHTML=railList.map(([title,subtitle,value,icon,target],i)=>
+  '<button type="button" data-nav="'+target+'" class="aur-rail-mini aur-sheen" style="--seq:'+i+'">'+
+  '<span><strong>'+title+'</strong><small>'+subtitle+'</small></span><span class="aur-rail-count">'+num(value)+c.ico(icon,21)+'</span></button>').join('');
+ const days=[],counts=[];
+ for(let n=6;n>=0;n--){
+  const day=new Date(today);day.setDate(day.getDate()-n);
+  const next=new Date(day);next.setDate(next.getDate()+1);
+  counts.push(movements.filter(e=>{const at=new Date(e.at);return at>=day&&at<next}).length);
+  days.push(day.toLocaleDateString('fr-FR',{weekday:'short'}).replace('.',''));
+ }
+ const max=Math.max(1,...counts),pts=counts.map((v,i)=>({x:i*150,y:153-(v/max)*82}));
+ const line=pts.map((p,i)=>{if(!i)return 'M '+p.x+' '+p.y;
+  const q=pts[i-1],mx=(p.x+q.x)/2;return ' C '+mx+' '+q.y+', '+mx+' '+p.y+', '+p.x+' '+p.y}).join('');
+ const area=line+' L 900 220 L 0 220 Z';
+ const week=counts.reduce((a,b)=>a+b,0);
+ const chart='<svg viewBox="0 0 900 220" class="aur-wave" preserveAspectRatio="none" role="img" aria-label="'+week+' mouvements sur les sept derniers jours">'+
+ '<defs><linearGradient id="aur-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#f7ffff" stop-opacity=".39"/><stop offset="100%" stop-color="#e6f3f5" stop-opacity=".02"/></linearGradient></defs>'+
+ '<path class="aur-wave-fill" d="'+area+'" fill="url(#aur-fill)"/>'+
+ '<path class="aur-wave-glow" d="'+line+'" fill="none" stroke="#fff" stroke-width="10" opacity=".15"/>'+
+ '<path class="aur-wave-main" d="'+line+'" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" pathLength="1"/></svg>';
+ const dayRow=days.map((d,i)=>'<span class="'+(i===6?'on':'')+'">'+escape(d)+'</span>').join('');
+ return '<section class="aurora-dashboard" aria-label="Tableau de bord du stock">'+
+ '<header class="aur-header"><div class="aur-welcome"><span>Bienvenue sur</span><strong>StockPilot</strong></div>'+
+ '<div class="aur-tools"><button data-nav="entry" title="Nouvelle réception" aria-label="Nouvelle réception">'+c.ico('plus',23)+'</button>'+
+ '<button data-nav="products" title="Rechercher" aria-label="Rechercher un article">'+c.ico('search',23)+'</button>'+
+ '<button data-nav="history" title="Historique" aria-label="Voir les mouvements">'+c.ico('history',23)+'</button>'+
+ '<button data-nav="settings" title="Mon compte" aria-label="Mon compte" class="aur-avatar">SP</button></div></header>'+
+ '<div class="aur-copy"><span class="aur-chip aur-sheen">'+c.ico('package',17)+' Gestion des stocks</span>'+
+ '<h1><span class="aur-headline"><span>Gestion du stock</span></span><span class="aur-headline"><span>centralisé</span></span></h1>'+
+ '<p>Suivez vos produits, vos entrées, vos sorties et vos étiquettes en un seul endroit. Gardez une vision claire de votre stock et restez toujours à jour.</p></div>'+
+ '<div class="aur-metrics" role="group" aria-label="Statistiques du stock">'+metricHTML+'</div>'+
+ '<div class="aur-chart"><div class="aur-chart-label">'+c.ico('package',17)+' '+week+' mouvement'+(week>1?'s':'')+' en 7 jours</div>'+chart+
+ '<div class="aur-days">'+dayRow+'</div></div>'+
+ '<div class="aur-rail"><button type="button" data-nav="products" class="aur-rail-main aur-sheen"><div class="aur-rail-main-title">'+c.ico('package',23)+' <strong>Stock central</strong></div>'+
+ '<div class="aur-primary-number">'+num(total)+'</div><div class="aur-primary-sub">article'+(total>1?'s':'')+' disponible'+(total>1?'s':'')+'</div>'+
+ '<div class="aur-rail-mini-metrics"><div>'+c.ico('in',18)+'<strong>'+entries+'</strong><span>entrées</span></div>'+
+ '<div>'+c.ico('out',18)+'<strong>'+exits+'</strong><span>sorties</span></div>'+
+ '<div>'+c.ico('layers',18)+'<strong>'+refs+'</strong><span>réf.</span></div>'+
+ '<div>'+c.ico('settings',18)+'<strong>'+(sav+repair)+'</strong><span>à traiter</span></div></div></button>'+railHTML+'</div>'+
+ '<div class="aur-action-row"><button data-nav="entry">'+c.ico('in',18)+' Entrée en stock <span>→</span></button>'+
+ '<button data-nav="exit">'+c.ico('barcode',18)+' Scanner une sortie <span>→</span></button>'+
+ '<button data-nav="products">'+c.ico('package',18)+' Inventaire <span>→</span></button></div></section>';
 }
 function inventory(c){
  const filter=(c.tableFilter||'').toLocaleLowerCase('fr');
