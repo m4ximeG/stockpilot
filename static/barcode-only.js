@@ -1,7 +1,7 @@
 /* StockPilot — mode inventaire et codes-barres, sans gestion d'emplacement. */
 (function(){
 'use strict';
-const escape = v => String(v ?? '').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;':'&quot;',"'":'&#39;'}[ch]));
+const escape = v => String(v ?? '').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const name = p => p ? [p.brand,p.model].filter(Boolean).join(' ') : 'Produit inconnu';
 const stamp = (ms) => ms ? new Date(ms).toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
 const actionButton=(action,text,extra='')=>'<button type="button" class="basic-btn '+extra+'" data-action="'+action+'">'+text+'</button>';
