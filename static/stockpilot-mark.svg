@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" role="img" aria-labelledby="title desc">
+<title id="title">StockPilot</title>
+<desc id="desc">Colis géométrique encadré de repères de scan</desc>
+<path d="M15 7H9a2 2 0 0 0-2 2v6M49 57h6a2 2 0 0 0 2-2v-6" stroke="#C8F6EC" stroke-width="3.25" stroke-linecap="round"/>
+<path d="m32 14 17 9.8v16.4L32 50l-17-9.8V23.8L32 14Z" stroke="#F8FDFF" stroke-width="3.25" stroke-linejoin="round"/>
+<path d="M15.8 24.3 32 33.7l16.2-9.4M32 33.7v15.7" stroke="#F8FDFF" stroke-width="3.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="m24.6 18.2 16.2 9.3" stroke="#C8F6EC" stroke-width="2.65" stroke-linecap="round"/>
+</svg>
