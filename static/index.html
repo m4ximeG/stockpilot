@@ -61,7 +61,6 @@ const btn=(label,action,icon='arrow',cls='primary')=>`<button class="btn ${cls}"
 function renderDashboard(){return SPBasic.dashboard({db,heading,btn,ico});}
 function stat(title,num,desc,icon,color,progress=null){return `<div class="card stat"><div class="statrow"><div><div class="stat-title">${title}</div><div class="num">${num}</div></div><div class="icbox ${color}">${ico(icon,21)}</div></div><div class="desc">${desc}</div>${progress!==null?`<div class="progress"><div style="width:${progress}%"></div></div>`:''}</div>`}
 function eventsRows(n){const latest=[...db.events].sort((a,b)=>b.at-a.at).slice(0,n);return latest.length?latest.map(e=>{const p=product(e.pid);return `<div class="activityrow"><div class="ar-icon ${e.type==='out'?'out':''}">${ico(e.type==='in'?'in':e.type==='out'?'out':'layers',17)}</div><div class="ar-info"><strong>${esc(displayName(p))}</strong><small>${e.type==='in'?'Entrée en stock':e.type==='out'?'Sortie du stock':'Déplacement'} · ${esc(e.slot||'Sans emplacement')}</small></div><span class="ar-time">${fmtDate(e.at)}<br>${fmtTime(e.at)}</span></div>`}).join(''):`<div class="empty">Aucun mouvement enregistré</div>`}
-function mapSVG(){return SPV2.room({db,ZONES,selectedSlot});}
 function darken(hex,amount){let num=parseInt(hex.slice(1),16);let a=n=>Math.max(0,Math.min(255,n+amount));return '#'+[a(num>>16),a((num>>8)&255),a(num&255)].map(n=>n.toString(16).padStart(2,'0')).join('')}
 
 function renderEntry(){return SPV3.entry({db,me});}
