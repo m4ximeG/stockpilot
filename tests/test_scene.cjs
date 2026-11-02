@@ -143,3 +143,34 @@ test('Paramètres et scanner : aucune structure blanche ni carte accolée',()=>{
  assert.match(preview,/class="basic-example-bars"/);
  assert.match(preview,/basic-help-symbol/);
 });
+
+
+test('Fond identique pour l’accueil et les pages secondaires',()=>{
+ const harmony=fs.readFileSync('static/harmony.css','utf8');
+ const html=fs.readFileSync('static/index.html','utf8');
+ assert.match(html,/\/static\/harmony\.css\?v=1/);
+ assert.match(harmony,/var\(--sp-storm-image\) center 45% \/ cover fixed no-repeat/);
+ assert.match(harmony,/\.aurora-dashboard\s*\{\s*background:transparent!important;/);
+ assert.match(harmony,/--sp-storm-image:url\("\/static\/aurora-storm\.jpg"\)/);
+ assert.doesNotMatch(harmony,/images\.pexels\.com/);
+});
+test('Logo vectoriel et code-barres cohérents, netteté à toutes les tailles',()=>{
+ const svg=fs.readFileSync('static/stockpilot-mark.svg','utf8');
+ const html=fs.readFileSync('static/index.html','utf8');
+ assert.match(svg,/<svg[^>]+viewBox="0 0 64 64"/);
+ assert.match(svg,/<title id="title">StockPilot<\/title>/);
+ assert.match(html,/class="sp-logo" src="\/static\/stockpilot-mark\.svg\?v=1"/);
+ assert.match(html,/rel="icon" type="image\/svg\+xml"/);
+ assert.match(html,/barcode:'<path d="M4 9V6/);
+});
+test('Navigation : transition fluide, fallback, et reduced-motion',()=>{
+ const html=fs.readFileSync('static/index.html','utf8');
+ const css=fs.readFileSync('static/harmony.css','utf8');
+ assert.match(html,/document\.startViewTransition\(changePage\)/);
+ assert.match(html,/target\.classList\.add\('sp-page-enter'\)/);
+ assert.match(css,/::view-transition-old\(root\)/);
+ assert.match(css,/::view-transition-new\(root\)/);
+ assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
+ const script=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(x=>x[1]).join('\n');
+ assert.doesNotThrow(()=>new Function(script));
+});
