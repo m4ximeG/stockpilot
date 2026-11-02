@@ -28,7 +28,7 @@
 <link rel="stylesheet" href="/static/aurora.css?v=aurora-20261102-2" />
 <link rel="stylesheet" href="/static/polish.css?v=2" />
 <link rel="stylesheet" href="/static/harmony.css?v=2" />
-<link rel="stylesheet" href="/static/liquid-route.css?v=5" />
+<link rel="stylesheet" href="/static/liquid-route.css?v=6" />
 
 
 
@@ -97,10 +97,18 @@ function nav(p){
   },380);
   return;
  }
- // Pages de travail : légère arrivée des titres et du contenu intérieur.
- // Le verre, ses couleurs et ses contours ne sont jamais animés.
+ // Pages secondaires : reprendre les vrais mouvements Aurora de l'accueil.
+ // Les titres et les panneaux arrivent progressivement, en cascade.
  const stage=$('#content');
  if(!stage)return;
+ // Pour l'effet aurLine de l'accueil, révéler le titre depuis sa ligne.
+ // Déplacer ses nœuds (et non innerHTML) conserve tout le contenu existant.
+ stage.querySelectorAll('.pagehead h1,.basic-entry-heading h1').forEach(title=>{
+  const line=document.createElement('span');
+  line.className='sp-route-headline';
+  while(title.firstChild)line.appendChild(title.firstChild);
+  title.appendChild(line);
+ });
  const selectors='.basic-entry-form,.basic-entry-help,.basic-table-card,.settingscard,.formcard,.card';
  const panels=[...stage.querySelectorAll(selectors)].filter(panel=>
   !panel.parentElement?.closest(selectors)
@@ -118,7 +126,7 @@ function nav(p){
    panel.style.removeProperty('--sp-order');
   });
   activeBtns.forEach(btn=>btn.classList.remove('sp-nav-arrive'));
- },600);
+ },2400);
 }
 function goEntry(pid=null){SPV3.reset();selectedProduct=pid||selectedProduct||db.catalog[0]?.id||null;chosenSlot=null;formSerial='';formCondition='Neuf';lastAdded=null;nav('entry')}
 function goExit(id=null){scanResult=id?itemById(id)||null:null;nav('exit')}
