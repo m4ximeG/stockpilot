@@ -163,14 +163,26 @@ test('Logo vectoriel et code-barres cohérents, netteté à toutes les tailles',
  assert.match(html,/rel="icon" type="image\/svg\+xml"/);
  assert.match(html,/barcode:'<path d="M4 9V6/);
 });
-test('Navigation : transition fluide, fallback, et reduced-motion',()=>{
+test('Navigation liquide : pas de capture du body, pas de fondu des vitres',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
- const css=fs.readFileSync('static/harmony.css','utf8');
- assert.match(html,/document\.startViewTransition\(changePage\)/);
- assert.match(html,/target\.classList\.add\('sp-page-enter'\)/);
- assert.match(css,/::view-transition-old\(root\)/);
- assert.match(css,/::view-transition-new\(root\)/);
+ const css=fs.readFileSync('static/liquid-route.css','utf8');
+ const harmony=fs.readFileSync('static/harmony.css','utf8');
+ assert.match(html,/\/static\/harmony\.css\?v=2/);
+ assert.match(html,/\/static\/liquid-route\.css\?v=1/);
+ assert.match(html,/content\.innerHTML=renderPage\(\)/);
+ assert.match(html,/document\.body\.classList\.toggle\('aurora-on',page==='dashboard'\)/);
+ assert.match(html,/sp-glass-sweep/);
+ assert.match(html,/sp-route-light/);
+ assert.match(html,/if\(reduced\)return/);
+ assert.doesNotMatch(html,/startViewTransition/);
+ assert.doesNotMatch(harmony,/::view-transition/);
+ assert.doesNotMatch(harmony,/sp-page-enter|filter:blur\(5px\)/);
+ assert.match(css,/html\.sp-route-active \.aur-rail button/);
+ assert.match(css,/\.sp-glass-sweep/);
+ assert.match(css,/background-position/);
  assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
+ assert.doesNotMatch(css,/\.card\s*\{[^}]*opacity:\s*0/);
+ assert.doesNotMatch(css,/\.aurora-dashboard\s*\{[^}]*opacity:\s*0/);
  const script=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(x=>x[1]).join('\n');
  assert.doesNotThrow(()=>new Function(script));
 });
