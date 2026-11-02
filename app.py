@@ -307,7 +307,7 @@ def state():
     shelves = [dict(slot=r['slot'],size=r['size'],note=r['note']) for r in db.execute('SELECT slot,size,note FROM shelf_levels ORDER BY slot')]
     counter = int(db.execute("SELECT value FROM meta WHERE key='next_item'").fetchone()[0])
     location_mode = db.execute("SELECT value FROM meta WHERE key='location_mode'").fetchone()
-    return jsonify(items=items,events=events,counter=counter,catalog=products,shelves=shelves,me=dict(id=g.user['id'],username=g.user['username'],role=g.user['role']),allowReset=ALLOW_RESET and DEMO_SEED,warehousePhoto=WAREHOUSE_PHOTO.is_file(),locationMode=location_mode[0] if location_mode else 'optional')
+    return jsonify(items=items,events=events,counter=counter,catalog=products,shelves=shelves,me=dict(id=g.user['id'],username=g.user['username'],role=g.user['role']),allowReset=ALLOW_RESET and DEMO_SEED,warehousePhoto=WAREHOUSE_PHOTO.is_file(),locationMode='optional')
 
 
 @app.get('/api/mockup-upscaled')
@@ -384,16 +384,12 @@ def receive_free_text():
         data=json_body()
         name=clean_text(data.get('name',''), 'Nom du produit', 120, True)
         serial=clean_text(data.get('serial',''), 'Numéro de série', 100)
-        slot=clean_text(data.get('slot',''), 'Emplacement',15)
+        # Mode inventaire simple : aucune localisation n'est demandée.
+        slot = ''
         condition=clean_text(data.get('condition','Neuf'), 'État',30,True)
         product_id=clean_text(data.get('product_id',''), 'Référence sélectionnée',64)
         if condition not in ('Neuf','Retour SAV','Réparation'):
             return bad('État invalide.')
-        if slot and slot not in SLOTS:
-            return bad('Emplacement inconnu.')
-        location_mode=db.execute("SELECT value FROM meta WHERE key='location_mode'").fetchone()
-        if not slot and location_mode and location_mode[0]=='guided':
-            return bad('Un emplacement est requis dans ce mode.')
         db.execute('BEGIN IMMEDIATE')
         created=False
         if product_id:
@@ -535,7 +531,7 @@ def label_page(item_id):
                           FROM items JOIN products ON items.pid=products.id WHERE items.id=?""", (item_id,)).fetchone()
     if not row:
         abort(404)
-    html = """<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Étiquette {{i.id}}</title><style>@page{size:70mm 50mm;margin:2mm}*{box-sizing:border-box}body{font:11px Arial,sans-serif;margin:0;padding:2mm;color:#111}.paper{width:66mm;min-height:45mm;padding:3mm 3mm 1mm;border:1px solid #eee}.name{font-size:13px;font-weight:800;margin:7px 0 3px}.top{font-size:10px;font-weight:900;letter-spacing:.8px}.slot{font-size:12px;font-weight:900;margin:6px 0}.line{color:#555;font-size:9px}.below{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-top:4px}.qr{width:24mm;height:24mm;image-rendering:pixelated}.code{font:700 11px monospace}.buttons{padding:20px}.buttons button{background:#2768e8;color:#fff;border:0;border-radius:8px;padding:11px;cursor:pointer}@media print{.buttons{display:none}.paper{border:0}body{padding:0}}</style></head><body><div class="paper"><div class="top">▣ STOCKPILOT</div><div class="name">{{i.brand}} {{i.model}}</div><div class="line">{{i.ref}} · SN: {{i.serial or 'Non renseigné'}}</div><div class="slot">Étagère {{i.slot[0] if i.slot else '—'}} · Niveau {{i.slot.split('-')[1] if i.slot else 'non renseigné'}}</div><div class="below"><img class="qr" src="/api/items/{{i.id}}/qr.png" onload="window.labelReady=true" alt="QR du produit"><div><div class="code">{{i.id}}</div><div class="line">Scanner à la sortie</div></div></div></div><div class="buttons"><button onclick="print()">Imprimer l'étiquette</button></div><script>window.addEventListener('load',()=>setTimeout(()=>{if(window.labelReady)window.print()},500));</script></body></html>"""
+    html = """<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Étiquette {{i.id}}</title><style>@page{size:70mm 50mm;margin:2mm}*{box-sizing:border-box}body{font:11px Arial,sans-serif;margin:0;padding:2mm;color:#111}.paper{width:66mm;min-height:45mm;padding:3mm 3mm 1mm;border:1px solid #eee}.name{font-size:13px;font-weight:800;margin:7px 0 3px}.top{font-size:10px;font-weight:900;letter-spacing:.8px}.slot{display:none}.line{color:#555;font-size:9px}.below{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-top:4px}.qr{width:24mm;height:24mm;image-rendering:pixelated}.code{font:700 11px monospace}.buttons{padding:20px}.buttons button{background:#2768e8;color:#fff;border:0;border-radius:8px;padding:11px;cursor:pointer}@media print{.buttons{display:none}.paper{border:0}body{padding:0}}</style></head><body><div class="paper"><div class="top">▣ STOCKPILOT</div><div class="name">{{i.brand}} {{i.model}}</div><div class="line">{{i.ref}} · SN: {{i.serial or 'Non renseigné'}}</div><div class="below"><img class="qr" src="/api/items/{{i.id}}/qr.png" onload="window.labelReady=true" alt="QR du produit"><div><div class="code">{{i.id}}</div><div class="line">Scanner à la sortie</div></div></div></div><div class="buttons"><button onclick="print()">Imprimer l'étiquette</button></div><script>window.addEventListener('load',()=>setTimeout(()=>{if(window.labelReady)window.print()},500));</script></body></html>"""
     return render_template_string(html, i=dict(row))
 
 @app.get('/api/items/<item_id>/qr.png')
