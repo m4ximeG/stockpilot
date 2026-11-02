@@ -52,41 +52,48 @@ class StockPilotTests(unittest.TestCase):
         types=[e['type'] for e in self.client.get('/api/state').json['events'] if e['itemId']==item_id]
         self.assertEqual(set(types), {'in','out','move'})
 
-    def test_shared_shelf_and_optional_location(self):
-        headers=self.headers
-        first=self.client.post('/api/items', json={'pid':'hp450','slot':'B-4','serial':'SHARED-1','condition':'Neuf'},headers=headers)
-        second=self.client.post('/api/items', json={'pid':'hp450','slot':'B-4','serial':'SHARED-2','condition':'Neuf'},headers=headers)
-        self.assertEqual(first.status_code, 201, first.text)
-        self.assertEqual(second.status_code, 201, second.text)
-        loose=self.client.post('/api/items', json={'pid':'hp450','slot':'','serial':'UNPLACED-1','condition':'Neuf'},headers=headers)
-        self.assertEqual(loose.status_code, 201, loose.text)
-        label=self.client.get(f"/label/{loose.json['item']['id']}")
-        self.assertEqual(label.status_code, 200, label.text)
-        self.assertIn(b'non renseign', label.data)
-        self.assertEqual(self.client.post(f"/api/items/{loose.json['item']['id']}/move",json={'slot':'B-4'},headers=headers).status_code,200)
-        self.assertEqual(self.client.post('/api/settings/location-mode',json={'mode':'guided'},headers=headers).status_code,200)
-        self.assertEqual(self.client.post('/api/items',json={'pid':'hp450','slot':'','serial':'UNPLACED-2','condition':'Neuf'},headers=headers).status_code,400)
-        self.assertEqual(self.client.get('/api/state').json['locationMode'],'guided')
-        self.assertEqual(self.client.post('/api/settings/location-mode',json={'mode':'optional'},headers=headers).status_code,200)
-
-    def test_five_levels_and_preferred_location_rules(self):
+    def test_simple_barcode_stock_without_location(self):
         product=self.client.post('/api/products',json={
-            'brand':'TERRA','model':'Mobile 1517','cat':'PC portable','zone':'B',
-            'preferred_slot':'B-5','ref':'TE-MOB-1517'
+            'brand':'TERRA','model':'Mobile 1517','cat':'PC portable','ref':'TERRA-BARCODE'
+        },headers=self.headers)
+        self.assertEqual(product.status_code,201,product.text)
+        pid=product.json['id']
+        self.assertEqual(next(p for p in self.client.get('/api/state').json['catalog'] if p['id']==pid)['preferred_slot'],'')
+        # L'ancien paramètre guidé ne bloque plus les réceptions.
+        self.assertEqual(self.client.post('/api/settings/location-mode',json={'mode':'guided'},headers=self.headers).status_code,200)
+        first=self.client.post('/api/receive',json={'name':'TERRA Mobile 1517','product_id':pid,
+            'slot':'H-3','condition':'Neuf','serial':''},headers=self.headers)
+        self.assertEqual(first.status_code,201,first.text)
+        self.assertEqual(first.json['item']['slot'],'')
+        second=self.client.post('/api/receive',json={'name':'TERRA Mobile 1517','product_id':pid,
+            'condition':'Retour SAV','serial':''},headers=self.headers)
+        self.assertEqual(second.status_code,201,second.text)
+        self.assertNotEqual(first.json['item']['id'],second.json['item']['id'])
+        self.assertEqual(self.client.get('/api/state').json['locationMode'],'optional')
+        barcode=self.client.get(f"/api/items/{first.json['item']['id']}/barcode.svg")
+        self.assertEqual(barcode.status_code,200)
+        self.assertIn('image/svg+xml',barcode.content_type)
+        self.assertIn(b'<svg',barcode.data)
+        label=self.client.get(f"/label/{first.json['item']['id']}")
+        self.assertEqual(label.status_code,200)
+        self.assertIn(b'/barcode.svg',label.data)
+        self.assertNotIn(b'tag',label.data.lower())  # pas de rayon ou étagère
+        self.assertEqual(self.client.post(f"/api/items/{first.json['item']['id']}/out",json={},headers=self.headers).status_code,200)
+
+    def test_catalog_sans_emplacements(self):
+        product=self.client.post('/api/products',json={
+            'brand':'TERRA','model':'Mobile 1517','cat':'PC portable','ref':'TE-MOB-1517'
         },headers=self.headers)
         self.assertEqual(product.status_code,201,product.text)
         pid=product.json['id']
         info=next(p for p in self.client.get('/api/state').json['catalog'] if p['id']==pid)
-        self.assertEqual(info['preferred_slot'],'B-5')
+        self.assertEqual(info['preferred_slot'],'')
+        self.assertEqual(info['zone'],'A')
         created=self.client.post('/api/items',json={'pid':pid,'slot':'B-5','serial':'FIVE-LEVEL-TEST','condition':'Neuf'},headers=self.headers)
         self.assertEqual(created.status_code,201,created.text)
-        # Changer la règle ne déplace jamais les produits déjà en rayon.
-        edit=self.client.patch('/api/products/'+pid,json={'preferred_slot':'C-2'},headers=self.headers)
-        self.assertEqual(edit.status_code,200,edit.text)
-        item=next(i for i in self.client.get('/api/state').json['items'] if i['pid']==pid)
-        self.assertEqual(item['slot'],'B-5')
-        self.assertEqual(self.client.patch('/api/products/'+pid,json={'preferred_slot':'F-9'},headers=self.headers).status_code,400)
-        self.assertEqual(self.client.patch('/api/products/'+pid,json={'preferred_slot':''},headers=self.headers).status_code,200)
+        self.assertEqual(created.json['item']['slot'],'')
+        update=self.client.patch('/api/products/'+pid,json={'model':'Mobile 1517 Mk2'},headers=self.headers)
+        self.assertEqual(update.status_code,200,update.text)
 
     def test_admin_can_create_product_and_user(self):
         product=self.client.post('/api/products',json={'brand':'TERRA','model':'Mobile 1517','cat':'PC portable','zone':'A','ref':'TE-1517-NEW'},headers=self.headers)
@@ -133,6 +140,7 @@ class StockPilotTests(unittest.TestCase):
         self.assertEqual(first.status_code,201,first.text)
         self.assertTrue(first.json['createdProduct'])
         self.assertEqual(first.json['item']['condition'],'Réparation')
+        self.assertEqual(first.json['item']['slot'],'')
         other=self.client.post('/api/receive',json={**data,'condition':'Retour SAV'},headers=self.headers)
         self.assertEqual(other.status_code,201,other.text)
         self.assertFalse(other.json['createdProduct'])
@@ -190,6 +198,13 @@ class StockPilotTests(unittest.TestCase):
         self.assertEqual(self.client.delete('/api/warehouse-photo',headers=self.headers).status_code,200)
         self.assertFalse(self.client.get('/api/state').json['warehousePhoto'])
         self.assertEqual(self.client.get('/api/warehouse-photo').status_code,404)
+
+    def test_accueil_sans_plan_de_reserve(self):
+        index=self.client.get('/')
+        self.assertEqual(index.status_code,200)
+        self.assertIn(b'barcode-only.js',index.data)
+        self.assertNotIn(b'Plan du d\xc3\xa9p\xc3\xb4t',index.data)
+        self.assertNotIn(b'reference.css',index.data)
 
     def test_security_and_backup(self):
         self.assertEqual(self.client.post('/api/items',json={},headers={}).status_code,403)
