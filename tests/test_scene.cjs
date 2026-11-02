@@ -177,24 +177,28 @@ test('Retour à l’accueil : animations Aurora originales intactes',()=>{
  assert.match(css,/\.aur-rail button\{[\s\S]{0,600}animation:aurSlideR/);
  assert.match(css,/\.aur-wave-main\{[\s\S]{0,180}animation:aurDraw/);
 });
-test('Transitions secondaires sobres sans barre lumineuse ni dégradation du verre',()=>{
+test('Les autres pages réutilisent exactement les animations d\'accueil en cascade',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
  const css=fs.readFileSync('static/liquid-route.css','utf8');
+ const aurora=fs.readFileSync('static/aurora.css','utf8');
  const harmony=fs.readFileSync('static/harmony.css','utf8');
- assert.match(html,/\/static\/liquid-route\.css\?v=5/);
+ assert.match(html,/\/static\/liquid-route\.css\?v=6/);
  assert.match(html,/content\.innerHTML=renderPage\(\)/);
  assert.match(html,/stage\.classList\.add\('sp-route-in'\)/);
  assert.match(html,/panel\.style\.setProperty\('--sp-order'/);
+ assert.match(html,/className='sp-route-headline'/);
  assert.match(html,/if\(reduced\)return/);
+ assert.match(html,/\},2400\)/);
  assert.doesNotMatch(html,/startViewTransition|sp-glass-sweep|sp-route-light/);
  assert.doesNotMatch(harmony,/::view-transition|sp-page-enter/);
+ for(const name of ['aurWipeRight','aurLine','aurWipeDown','aurPop','aurSlideR']){
+   assert.match(aurora,new RegExp('@keyframes '+name));
+   assert.match(css,new RegExp('animation:'+name));
+ }
+ assert.match(css,/\.sp-route-in \.sp-motion-panel \{/);
+ assert.match(css,/animation-delay:calc\(\.8s \+ var\(--sp-order,0\) \* \.11s\)/);
  assert.doesNotMatch(css,/sp-glass-sweep|sp-refract|sp-rim-glint|sp-route-light|linear-gradient/);
- assert.match(css,/@keyframes sp-heading-enter/);
- assert.match(css,/@keyframes sp-details-enter/);
- assert.match(css,/\.sp-route-in \.sp-motion-panel > \*/);
- assert.match(css,/animation-delay:calc\(\.075s \+ var\(--sp-order,0\)/);
- assert.doesNotMatch(css,/\.sp-route-in \.sp-motion-panel\s*\{/);
- assert.doesNotMatch(css.replace(/\/\*[\s\S]*?\*\//g,''),/filter:blur\(|backdrop-filter:|clip-path:/);
+ assert.doesNotMatch(css.replace(/\/\*[\s\S]*?\*\//g,''),/filter:blur\(|backdrop-filter:/);
  assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
  const script=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(x=>x[1]).join('\n');
  assert.doesNotThrow(()=>new Function(script));
