@@ -1,65 +1,59 @@
-/* StockPilot — transitions d'application sobres
-   Le fond, les vitres et la barre latérale ne subissent aucun fondu,
-   flou, mouvement ou variation d'opacité. L'accueil garde les effets Aurora. */
+/* StockPilot — exactement les animations d'entrée de l'accueil Aurora.
+   Réutiliser les keyframes originaux pour les pages secondaires :
+   aurWipeRight, aurLine, aurWipeDown, aurPop et aurSlideR.
+   Le fond d'orage et la sidebar ne sont jamais animés. */
 
-@keyframes sp-heading-enter {
-  from { opacity:.68; transform:translate3d(0,9px,0); }
-  to { opacity:1; transform:translate3d(0,0,0); }
+/* Badge, titre, description et actions : même séquence que l'accueil. */
+.sp-route-in .pagehead .eyebrow,
+.sp-route-in .basic-entry-heading > div > span {
+  animation:aurWipeRight .80s .44s both;
 }
-@keyframes sp-details-enter {
-  from { opacity:.82; transform:translate3d(0,6px,0); }
-  to { opacity:1; transform:translate3d(0,0,0); }
+.sp-route-in .pagehead h1,
+.sp-route-in .basic-entry-heading h1 {
+  overflow:hidden;
 }
+.sp-route-headline { display:block; }
+.sp-route-in .pagehead h1 > .sp-route-headline,
+.sp-route-in .basic-entry-heading h1 > .sp-route-headline {
+  animation:aurLine 1.05s .56s var(--e-out, cubic-bezier(.16,1,.3,1)) both;
+}
+.sp-route-in .pagehead p,
+.sp-route-in .basic-entry-heading p {
+  animation:aurWipeDown .90s .90s both;
+}
+.sp-route-in .head-actions,
+.sp-route-in .basic-entry-tag {
+  animation:aurPop .58s var(--e-out, cubic-bezier(.16,1,.3,1)) .37s both;
+}
+
+/* Identique aux cartes de l'accueil (.aur-rail button) :
+   glissement de 30px, léger scale, opacité 0→1 et cascade 0.8/0.92/1.03/1.14s.
+   Aucun balayage lumineux, nouveau flou, changement de fond ou flash de verre. */
+.sp-route-in .sp-motion-panel {
+  animation:aurSlideR .95s var(--e-out, cubic-bezier(.16,1,.3,1)) both;
+  animation-delay:calc(.8s + var(--sp-order,0) * .11s);
+}
+
+/* L'indicateur du menu réagit sans animer la barre latérale. */
 @keyframes sp-active-marker {
   from { transform:scaleY(.72); }
   to { transform:scaleY(1); }
 }
-/* Hiérarchie : le titre, sa description, puis les contenus des cartes.
-   Pas de masque, pas de décalage important et pas de grand effet lumineux. */
-.sp-route-in .pagehead .eyebrow,
-.sp-route-in .basic-entry-heading>div>span {
-  animation:sp-heading-enter .30s cubic-bezier(.2,.7,.2,1) both;
-}
-.sp-route-in .pagehead h1,
-.sp-route-in .basic-entry-heading h1 {
-  animation:sp-heading-enter .37s cubic-bezier(.2,.7,.2,1) .045s both;
-}
-.sp-route-in .pagehead p,
-.sp-route-in .basic-entry-heading p {
-  animation:sp-details-enter .34s cubic-bezier(.2,.7,.2,1) .075s both;
-}
-.sp-route-in .head-actions,
-.sp-route-in .basic-entry-tag {
-  animation:sp-details-enter .34s cubic-bezier(.2,.7,.2,1) .08s both;
-}
-/* On n'anime jamais .card elle-même : Safari perdrait momentanément
-   le backdrop-filter. Seuls les éléments directs contenus dans la carte
-   arrivent de quelques pixels. Cela préserve le verre du premier au dernier frame. */
-.sp-route-in .sp-motion-panel > * {
-  animation:sp-details-enter .36s cubic-bezier(.2,.7,.2,1) both;
-  animation-delay:calc(.075s + var(--sp-order,0) * .045s);
-}
-.sp-route-in .sp-motion-panel > :nth-child(2) {
-  animation-delay:calc(.105s + var(--sp-order,0) * .045s);
-}
-.sp-route-in .sp-motion-panel > :nth-child(3) {
-  animation-delay:calc(.135s + var(--sp-order,0) * .045s);
-}
 .sidebar .navbtn.sp-nav-arrive::before {
   animation:sp-active-marker .24s cubic-bezier(.2,.7,.2,1) both;
 }
-@media(max-width:860px) {
-  .sp-route-in .sp-motion-panel > * {
-    animation-duration:.28s;
-    animation-delay:calc(.045s + var(--sp-order,0) * .028s);
-  }
-  .sp-route-in .pagehead h1,
-  .sp-route-in .basic-entry-heading h1 { animation-duration:.29s; }
-}
+
+/* Respect de l'accessibilité et des utilisateurs qui désactivent le mouvement. */
 @media(prefers-reduced-motion:reduce) {
-  .sp-route-in .pagehead *,
-  .sp-route-in .basic-entry-heading *,
-  .sp-route-in .sp-motion-panel > *,
+  .sp-route-in .pagehead .eyebrow,
+  .sp-route-in .pagehead h1 > .sp-route-headline,
+  .sp-route-in .pagehead p,
+  .sp-route-in .head-actions,
+  .sp-route-in .basic-entry-heading > div > span,
+  .sp-route-in .basic-entry-heading h1 > .sp-route-headline,
+  .sp-route-in .basic-entry-heading p,
+  .sp-route-in .basic-entry-tag,
+  .sp-route-in .sp-motion-panel,
   .sidebar .navbtn.sp-nav-arrive::before {
     animation:none!important;
     transition:none!important;
