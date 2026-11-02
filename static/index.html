@@ -28,7 +28,7 @@
 <link rel="stylesheet" href="/static/aurora.css?v=aurora-20261102-2" />
 <link rel="stylesheet" href="/static/polish.css?v=2" />
 <link rel="stylesheet" href="/static/harmony.css?v=2" />
-<link rel="stylesheet" href="/static/liquid-route.css?v=4" />
+<link rel="stylesheet" href="/static/liquid-route.css?v=5" />
 
 
 
@@ -63,12 +63,11 @@ function nav(p){
  if(p==='map')p='products';
  const reduced=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
  const serial=++spRouteSerial;
- // Pas de capture de l'écran complet : ni le fond d'orage, ni les vitres,
- // ni la barre latérale ne subissent de fondu ou de flou.
- document.documentElement.classList.remove('sp-route-active');
- document.querySelectorAll('.sp-route-light,.sp-glass-sweep').forEach(el=>el.remove());
+ // Conserver les mêmes éléments de structure : fond d'orage, sidebar et
+ // backdrop-filter restent affichés sans fondu ni capture du document.
  document.querySelectorAll('.sp-route-in,.sp-motion-panel,.sp-nav-arrive').forEach(el=>{
   el.classList.remove('sp-route-in','sp-motion-panel','sp-nav-arrive');
+  el.style.removeProperty('--sp-order');
  });
  stopCamera();
  if(p==='entry')SPV3.reset();
@@ -81,10 +80,8 @@ function nav(p){
  document.querySelectorAll('[data-nav]').forEach(btn=>{
   const active=btn.dataset.nav===page;
   btn.classList.toggle('active',active);
-  if(active){
-   btn.setAttribute('aria-current','page');
-   activeBtns.push(btn);
-  }else btn.removeAttribute('aria-current');
+  if(active){btn.setAttribute('aria-current','page');activeBtns.push(btn);}
+  else btn.removeAttribute('aria-current');
  });
  document.querySelector('.sidebar')?.classList.remove('open');
  document.querySelector('.sidebackdrop')?.remove();
@@ -92,17 +89,16 @@ function nav(p){
  window.scrollTo(0,0);
  if(reduced)return;
  activeBtns.forEach(btn=>btn.classList.add('sp-nav-arrive'));
- // Accueil : laisser SEULES les animations Aurora d'origine s'exécuter.
- // Cela restaure notamment la typographie, la cascade des quatre cartes,
- // les chiffres et le dessin progressif de la courbe, même au retour.
+ // L'accueil conserve toutes ses animations Aurora originales,
+ // y compris la courbe et l'apparition des cartes.
  if(page==='dashboard'){
   window.setTimeout(()=>{
    if(serial===spRouteSerial)activeBtns.forEach(btn=>btn.classList.remove('sp-nav-arrive'));
-  },550);
+  },380);
   return;
  }
- // Pages de travail : les cartes sont visibles dès la première frame;
- // elles se posent en perspective, puis la lumière les traverse.
+ // Pages de travail : légère arrivée des titres et du contenu intérieur.
+ // Le verre, ses couleurs et ses contours ne sont jamais animés.
  const stage=$('#content');
  if(!stage)return;
  const selectors='.basic-entry-form,.basic-entry-help,.basic-table-card,.settingscard,.formcard,.card';
@@ -111,11 +107,7 @@ function nav(p){
  );
  panels.forEach((panel,i)=>{
   panel.classList.add('sp-motion-panel');
-  panel.style.setProperty('--sp-order',String(Math.min(i,7)));
-  const sweep=document.createElement('span');
-  sweep.className='sp-glass-sweep';
-  sweep.setAttribute('aria-hidden','true');
-  panel.appendChild(sweep);
+  panel.style.setProperty('--sp-order',String(Math.min(i,5)));
  });
  stage.classList.add('sp-route-in');
  window.setTimeout(()=>{
@@ -124,10 +116,9 @@ function nav(p){
   panels.forEach(panel=>{
    panel.classList.remove('sp-motion-panel');
    panel.style.removeProperty('--sp-order');
-   panel.querySelectorAll('.sp-glass-sweep').forEach(el=>el.remove());
   });
   activeBtns.forEach(btn=>btn.classList.remove('sp-nav-arrive'));
- },1150);
+ },600);
 }
 function goEntry(pid=null){SPV3.reset();selectedProduct=pid||selectedProduct||db.catalog[0]?.id||null;chosenSlot=null;formSerial='';formCondition='Neuf';lastAdded=null;nav('entry')}
 function goExit(id=null){scanResult=id?itemById(id)||null:null;nav('exit')}
