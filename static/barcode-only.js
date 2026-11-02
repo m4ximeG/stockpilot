@@ -15,13 +15,13 @@ function dashboard(c){
  const repair=db.items.filter(i=>(i.condition||'').toLowerCase().includes('réparation')).length;
  const total=db.items.length, num=n=>new Intl.NumberFormat('fr-FR').format(n);
  const metrics=[['Articles',total,'package'],['Références',refs,'layers'],['Entrées',entries,'in'],
-  ['Sorties',exits,'out'],['Retour SAV',sav,'history'],['Réparation',repair,'settings']];
+  ['Sorties',exits,'out'],['Retour SAV',sav,'history'],['Réparation',repair,'wrench']];
  const metricHTML=metrics.map(([label,value,icon],i)=>
   '<div class="aur-metric" style="--seq:'+i+'"><span>'+label+'</span><div class="aur-metric-value"><strong>'+num(value)+'</strong>'+c.ico(icon,20)+'</div></div>').join('');
  const railList=[
   ['Réceptions du jour','Produits enregistrés',entries,'in','entry'],
   ['Sorties du jour','Articles retirés',exits,'out','history'],
-  ['Articles à traiter','Retour SAV et réparation',sav+repair,'settings','products']
+  ['Articles à traiter','Retour SAV et réparation',sav+repair,'alert','products']
  ];
  const railHTML=railList.map(([title,subtitle,value,icon,target],i)=>
   '<button type="button" data-nav="'+target+'" class="aur-rail-mini aur-sheen" style="--seq:'+i+'">'+
@@ -61,7 +61,7 @@ function dashboard(c){
  '<div class="aur-rail-mini-metrics"><div>'+c.ico('in',18)+'<strong>'+entries+'</strong><span>entrées</span></div>'+
  '<div>'+c.ico('out',18)+'<strong>'+exits+'</strong><span>sorties</span></div>'+
  '<div>'+c.ico('layers',18)+'<strong>'+refs+'</strong><span>réf.</span></div>'+
- '<div>'+c.ico('settings',18)+'<strong>'+(sav+repair)+'</strong><span>à traiter</span></div></div></button>'+railHTML+'</div>'+
+ '<div>'+c.ico('alert',18)+'<strong>'+(sav+repair)+'</strong><span>à traiter</span></div></div></button>'+railHTML+'</div>'+
  '<div class="aur-action-row"><button data-nav="entry">'+c.ico('in',18)+' Entrée en stock <span>→</span></button>'+
  '<button data-nav="exit">'+c.ico('barcode',18)+' Scanner une sortie <span>→</span></button>'+
  '<button data-nav="products">'+c.ico('package',18)+' Inventaire <span>→</span></button></div></section>';
