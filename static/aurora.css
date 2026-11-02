@@ -165,6 +165,7 @@ body.aurora-on .content{padding:0!important;margin:0!important;max-width:none!im
  .aur-metric-value svg{width:15px;height:15px}
 }
 @media(max-width:860px){
+ .mobilebottom,.mobilemenu,.sidebackdrop{display:none!important}
  body.aurora-on{overflow:auto!important}
  .sidebar{bottom:9px!important;top:auto!important;left:12px!important;right:12px!important;width:auto!important;height:64px!important;display:flex!important;flex-direction:row!important;align-items:center!important;justify-content:space-around!important;padding:5px 9px!important;border-radius:21px!important;transform:none!important}
  .sidebar .brand,.sidebar .sidebottom{display:none!important}
