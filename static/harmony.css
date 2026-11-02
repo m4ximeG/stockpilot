@@ -64,3 +64,40 @@ body.aurora-on{background-color:#071b22!important}
 @media(prefers-reduced-motion:reduce){
  .sidebar .brand:hover .sp-logo,.sidebar .navbtn:hover .ic{transform:none!important}
 }
+
+/* Navigation explicite : un vrai pictogramme de sortie et des intitulés au survol. */
+.sidebar .sidebottom > a.sp-logout {
+ position:relative;display:grid!important;place-items:center!important;
+ width:52px!important;height:52px!important;padding:0!important;margin:0!important;
+ border-radius:15px!important;color:white!important;opacity:.88;
+ transition:background .2s,opacity .2s,transform .2s!important;
+}
+.sidebar .sidebottom > a.sp-logout::after{content:none!important;display:none!important}
+.sidebar .sidebottom > a.sp-logout .ic{width:24px;height:24px;stroke-width:1.85}
+.sidebar .sidebottom > a.sp-logout:hover,
+.sidebar .sidebottom > a.sp-logout:focus-visible{
+ background:rgba(255,255,255,.16)!important;opacity:1;transform:translateY(-2px);
+}
+.sidebar .sr-only{
+ position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;
+ overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
+}
+@media(min-width:861px){
+ .sidebar .navbtn::after,.sidebar .sp-logout::before{
+  content:attr(aria-label);position:absolute;left:calc(100% + 18px);top:50%;
+  transform:translate(-5px,-50%);opacity:0;visibility:hidden;pointer-events:none;
+  padding:9px 13px;border-radius:10px;white-space:nowrap;
+  font-size:12px;font-weight:650;letter-spacing:0;line-height:1.3;
+  color:#fff;background:rgba(15,31,42,.96);border:1px solid rgba(255,255,255,.19);
+  box-shadow:0 9px 24px rgba(0,0,0,.22);z-index:100;
+  transition:opacity .16s,transform .16s,visibility .16s;
+ }
+ .sidebar .navbtn:is(:hover,:focus-visible)::after,
+ .sidebar .sp-logout:is(:hover,:focus-visible)::before{
+  opacity:1;visibility:visible;transform:translate(0,-50%);
+ }
+}
+@media(prefers-reduced-motion:reduce){
+ .sidebar .sidebottom > a.sp-logout{transition:none!important}
+ .sidebar .navbtn::after,.sidebar .sp-logout::before{transition:none!important}
+}
