@@ -84,6 +84,60 @@ function renderModal(){
  return '';
 }
 
+// Rendu et opérations indispensables — conservés lors de la suppression du plan.
+function renderContent(){
+ const container=$('#content');
+ if(container)container.innerHTML=renderPage();
+}
+function renderApp(){
+ const target=$('#app');
+ if(target)target.innerHTML=layout();
+}
+function printLabel(id){
+ const item=itemById(id)||lastAdded;
+ if(!item)return toast('Article introuvable',true);
+ const popup=window.open('/label/'+encodeURIComponent(item.id),'_blank');
+ if(!popup)toast('Autorisez les fenêtres contextuelles pour imprimer',true);
+}
+async function removeItem(id){
+ const item=itemById(id);
+ if(!item)return toast('Article déjà sorti du stock',true);
+ try {
+  await api('/api/items/'+encodeURIComponent(id)+'/out','POST',{});
+  modal=null;scanResult=null;
+  await refreshState(true);
+  renderApp();
+  toast(displayName(product(item.pid))+' sorti du stock');
+ } catch(error) {
+  toast(error.message,true);
+  await refreshState(true);
+  renderApp();
+ }
+}
+function lookup(code){
+ const id=String(code||'').trim().toUpperCase();
+ if(!id)return toast('Saisissez ou scannez un identifiant',true);
+ const item=itemById(id);
+ if(!item)return toast('Aucun produit en stock avec cet identifiant',true);
+ scanResult=item;
+ renderContent();
+ toast('Produit trouvé : '+displayName(product(item.pid)));
+}
+// Compatibilité avec les anciens boutons : aucun emplacement physique n'est enregistré.
+function setSlot(){return}
+async function recordEntry(){
+ const pid=selectedProduct, serial=$('#serial-in')?.value.trim()||'';
+ if(!pid)return toast('Sélectionnez un produit',true);
+ const condition=$('#condition-in')?.value||'Neuf';
+ try{
+  const result=await api('/api/items','POST',{pid,serial,condition});
+  lastAdded=result.item;
+  await refreshState(true);
+  renderContent();
+  toast('Produit ajouté au stock');
+ }catch(error){toast(error.message,true)}
+}
+
 function downloadCSV(name,rows){let csv='\ufeff'+rows.map(cols=>cols.map(x=>'"'+String(x??'').replace(/"/g,'""')+'"').join(';')).join('\r\n');let url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));let a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),600)}
 function exportStock(){downloadCSV('stockpilot-inventaire.csv',[['Identifiant','Marque','Modèle','Catégorie','N° de série','État','Date entrée'],...db.items.map(i=>{let p=product(i.pid);return [i.id,p?.brand,p?.model,p?.cat,i.serial,i.condition,new Date(i.inAt).toLocaleString('fr-FR')]})]);toast('Inventaire CSV téléchargé')}
 function exportHistory(){downloadCSV('stockpilot-historique.csv',[['Date','Type','Produit','Identifiant','Opérateur'],...db.events.filter(e=>e.type==='in'||e.type==='out').map(e=>[new Date(e.at).toLocaleString('fr-FR'),e.type==='in'?'Entrée':'Sortie',displayName(product(e.pid)),e.itemId,e.actor])]);toast('Journal CSV téléchargé')}
