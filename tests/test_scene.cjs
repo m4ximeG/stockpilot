@@ -181,7 +181,7 @@ test('Transitions secondaires : panneau opaque, reflet et animations en cascade'
  const html=fs.readFileSync('static/index.html','utf8');
  const css=fs.readFileSync('static/liquid-route.css','utf8');
  const harmony=fs.readFileSync('static/harmony.css','utf8');
- assert.match(html,/\/static\/liquid-route\.css\?v=3/);
+ assert.match(html,/\/static\/liquid-route\.css\?v=4/);
  assert.match(html,/content\.innerHTML=renderPage\(\)/);
  assert.match(html,/stage\.classList\.add\('sp-route-in'\)/);
  assert.match(html,/panel\.style\.setProperty\('--sp-order'/);
@@ -191,11 +191,15 @@ test('Transitions secondaires : panneau opaque, reflet et animations en cascade'
  assert.doesNotMatch(html,/startViewTransition/);
  assert.doesNotMatch(html,/sp-route-light'\);/);
  assert.doesNotMatch(harmony,/::view-transition|sp-page-enter/);
- assert.match(css,/@keyframes sp-panel-liquid/);
+ assert.match(css,/@keyframes sp-content-liquid/);
+ assert.match(css,/@keyframes sp-rim-glint/);
  assert.match(css,/@keyframes sp-word-rise/);
  assert.match(css,/@keyframes sp-refract/);
  assert.match(css,/\.sp-route-in \.sp-motion-panel/);
- assert.match(css,/animation-delay:calc\(\.055s \+ var\(--sp-order,0\)/);
+ assert.match(css,/animation-delay:calc\(\.045s \+ var\(--sp-order,0\)/);
+ assert.match(css,/\.sp-motion-panel > :not\(\.sp-glass-sweep\)/);
+ const panelBlock=css.match(/\.sp-route-in \.sp-motion-panel\{([\s\S]*?)\}/)?.[1]||'';
+ assert.doesNotMatch(panelBlock,/transform:|filter:blur|opacity:/);
  assert.doesNotMatch(css,/\.sp-motion-panel\s*\{[^}]*opacity:/);
  assert.doesNotMatch(css.replace(/\/\*[\s\S]*?\*\//g,''),/filter:blur\(/);
  assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
