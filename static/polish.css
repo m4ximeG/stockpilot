@@ -1,0 +1,266 @@
+/* StockPilot Aurora • finitions visuelles 2026-11-02
+   Feuille indépendante et réversible. Ne modifie pas la logique du stock. */
+
+/* Sur les sous-pages, le titre suffit : aucune ancienne topbar. */
+body:not(.aurora-on) .topbar{display:none!important}
+body:not(.aurora-on) .main{min-height:100dvh!important}
+body:not(.aurora-on) #content{
+  max-width:1510px!important;
+  width:100%!important;
+  margin:0 auto!important;
+  padding:clamp(42px,4.8vw,68px) clamp(24px,4vw,58px) 92px!important;
+}
+body:not(.aurora-on) .pagehead{
+  margin:0 0 26px!important;
+  padding:0!important;
+  display:flex!important;
+  justify-content:space-between;
+  align-items:end;
+  gap:26px;
+}
+body:not(.aurora-on) .pagehead h1,
+body:not(.aurora-on) .basic-entry-heading h1{
+  color:#fff!important;
+  font-weight:650!important;
+  font-size:clamp(31px,3vw,43px)!important;
+  line-height:1.12!important;
+  letter-spacing:-1.45px!important;
+}
+body:not(.aurora-on) .pagehead p,
+body:not(.aurora-on) .basic-entry-heading p{
+  color:rgba(241,250,252,.82)!important;
+  font-size:13px!important;
+  line-height:1.6!important;
+  max-width:660px;
+  font-weight:430;
+}
+body:not(.aurora-on) .pagehead .eyebrow,
+body:not(.aurora-on) .basic-entry-heading>div>span{
+  color:#bde2e7!important;
+  font-size:11px!important;
+  font-weight:700!important;
+  letter-spacing:1.9px!important;
+  margin-bottom:11px!important;
+}
+body:not(.aurora-on) .basic-entry-heading{
+  margin:0 0 27px!important;
+  padding:0!important;
+  align-items:end;
+}
+body:not(.aurora-on) .head-actions{display:flex;justify-content:flex-end}
+body:not(.aurora-on) .head-actions .btn{white-space:nowrap}
+body:not(.aurora-on) .basic-entry{max-width:none!important}
+body:not(.aurora-on) .basic-entry-grid{gap:22px!important}
+body:not(.aurora-on) .basic-entry-form,
+body:not(.aurora-on) .basic-entry-help,
+body:not(.aurora-on) .formcard,
+body:not(.aurora-on) .basic-table-card,
+body:not(.aurora-on) .settingscard{
+  padding:clamp(23px,2.2vw,34px)!important;
+  border:1px solid rgba(238,250,253,.24)!important;
+  background:linear-gradient(155deg,rgba(211,226,235,.22),rgba(199,212,226,.18) 55%,rgba(242,225,233,.18))!important;
+  box-shadow:inset 0 1px rgba(255,255,255,.13),0 9px 32px rgba(6,17,26,.13)!important;
+  border-radius:19px!important;
+  color:#fff!important;
+}
+body:not(.aurora-on) .formcard:hover,
+body:not(.aurora-on) .settingscard:hover,
+body:not(.aurora-on) .basic-table-card:hover{border-color:rgba(255,255,255,.34)!important}
+
+/* Étiquettes, titres et champs lisibles, sans vieilles couleurs bleues foncées. */
+body:not(.aurora-on) .card h2,
+body:not(.aurora-on) .settingscard h2,
+body:not(.aurora-on) .formcard h2{font-size:20px!important;font-weight:680!important;letter-spacing:-.5px!important;color:#fff!important}
+body:not(.aurora-on) .card h3{color:#fff!important}
+body:not(.aurora-on) .card p,
+body:not(.aurora-on) .basic-intro,
+body:not(.aurora-on) .formcard>.intro{color:rgba(245,251,255,.82)!important;font-size:12.5px!important;line-height:1.7!important}
+body:not(.aurora-on) .settingscard label,
+body:not(.aurora-on) .settingscard .field label,
+body:not(.aurora-on) .formcard label,
+body:not(.aurora-on) .basic-field label,
+body:not(.aurora-on) .basic-entry-form label{
+ color:#f0f7fa!important;font-size:12px!important;font-weight:660!important;letter-spacing:0!important;
+ margin:0 0 9px!important;line-height:1.5!important;
+}
+body:not(.aurora-on) .basic-field label small{color:#d1dde3!important}
+body:not(.aurora-on) .settingscard .field input,
+body:not(.aurora-on) .settingscard .field select,
+body:not(.aurora-on) .settingscard form input,
+body:not(.aurora-on) .settingscard form select,
+body:not(.aurora-on) .basic-field input,
+body:not(.aurora-on) .scan-input input,
+body:not(.aurora-on) .basic-filters input,
+body:not(.aurora-on) .basic-filters select{
+  background:rgba(6,20,31,.28)!important;
+  color:white!important;
+  border:1px solid rgba(234,249,255,.35)!important;
+  border-radius:10px!important;
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.11)!important;
+}
+body:not(.aurora-on) input::placeholder{
+  color:rgba(242,250,253,.64)!important;
+}
+body:not(.aurora-on) .basic-field input:focus,
+body:not(.aurora-on) .settingscard input:focus,
+body:not(.aurora-on) .scan-input input:focus,
+body:not(.aurora-on) .basic-filters input:focus{
+ border-color:rgba(230,252,255,.85)!important;
+ box-shadow:0 0 0 3px rgba(224,247,252,.16)!important;
+}
+body:not(.aurora-on) select option{background:#263b47;color:#fff}
+body:not(.aurora-on) .btn,
+body:not(.aurora-on) .basic-btn{min-height:39px;padding:10px 15px!important;border-radius:9px!important;font-weight:660!important}
+body:not(.aurora-on) .btn.primary,
+body:not(.aurora-on) .basic-submit{background:#eff6f8!important;color:#213b45!important;border:1px solid #fff!important;box-shadow:none!important}
+body:not(.aurora-on) .btn.primary:hover,
+body:not(.aurora-on) .basic-submit:hover{background:white!important;color:#15323a!important}
+body:not(.aurora-on) .btn.negative{color:#fff!important;background:rgba(184,45,68,.32)!important;border:1px solid rgba(255,174,187,.52)!important}
+body:not(.aurora-on) .btn.negative:hover{background:rgba(184,45,68,.48)!important}
+body:not(.aurora-on) .basic-conditions{border-color:rgba(240,249,254,.33)!important}
+body:not(.aurora-on) .basic-conditions button{font-weight:650!important}
+body:not(.aurora-on) .basic-reused{color:#a8f2da!important}
+
+/* Configuration : deux colonnes structurelles, chaque groupe espacé de manière indépendante. */
+body:not(.aurora-on) .settings-board{
+ display:grid!important;
+ grid-template-columns:minmax(0,1.08fr) minmax(0,1fr)!important;
+ column-gap:26px!important;
+ align-items:start!important;
+ margin:0!important;
+}
+body:not(.aurora-on) .settings-column{
+ display:flex!important;
+ flex-direction:column!important;
+ gap:26px!important;
+ min-width:0!important;
+}
+body:not(.aurora-on) .settings-board .settingscard{
+ width:100%!important;
+ max-width:none!important;
+ min-width:0!important;
+ margin:0!important;
+ height:auto!important;
+ flex:0 0 auto!important;
+ overflow:visible!important;
+}
+body:not(.aurora-on) .settingscard .field{margin-bottom:20px!important}
+body:not(.aurora-on) .settingscard .twofields{gap:17px!important;margin-bottom:5px}
+body:not(.aurora-on) .settingscard .catalog-form{margin:21px 0 10px}
+body:not(.aurora-on) .settingscard form .btn{margin-top:4px!important}
+body:not(.aurora-on) .settingscard>p{margin:10px 0 21px!important}
+body:not(.aurora-on) .settingscard a{color:#f4ffff!important;text-decoration:underline;text-decoration-color:rgba(255,255,255,.5);text-underline-offset:3px}
+body:not(.aurora-on) .settingscard .basic-management{
+ display:flex!important;align-items:center;flex-wrap:wrap;gap:10px!important;margin:22px 0!important;
+}
+body:not(.aurora-on) .settingscard .basic-catalog{margin-top:19px!important}
+body:not(.aurora-on) .basic-catalog-row{gap:14px!important;padding:14px 0!important;border-color:rgba(255,255,255,.19)!important}
+body:not(.aurora-on) .basic-catalog-row strong{color:#fff!important;font-weight:600!important}
+body:not(.aurora-on) .basic-catalog-row small{color:#d2dfe5!important}
+body:not(.aurora-on) .basic-danger{border-color:rgba(255,175,184,.4)!important}
+body:not(.aurora-on) .basic-danger h2{color:#ffe3e7!important}
+
+/* Scanner : supprimer la bande blanche héritée d'une ancienne feuille CSS. */
+body:not(.aurora-on) .basic-manual-list{margin-top:26px!important;padding-top:15px;border-top:1px solid rgba(255,255,255,.17)}
+body:not(.aurora-on) .basic-manual-list h3{font-size:12px!important;color:#f6fbff!important;margin-bottom:11px!important;font-weight:710!important}
+body:not(.aurora-on) .basic-manual-list button{
+ background:rgba(8,24,34,.17)!important;
+ border:1px solid rgba(240,248,255,.15)!important;
+ border-radius:9px!important;
+ min-height:47px!important;
+ margin-bottom:7px!important;
+ padding:11px 13px!important;
+ color:#f7fbfd!important;
+ font-size:12px!important;
+ display:flex;align-items:center;gap:14px;justify-content:space-between;
+}
+body:not(.aurora-on) .basic-manual-list button:hover{
+ background:rgba(255,255,255,.19)!important;border-color:rgba(240,248,255,.4)!important;
+}
+body:not(.aurora-on) .basic-manual-list button span{color:#fff!important;overflow:hidden;text-overflow:ellipsis}
+body:not(.aurora-on) .basic-manual-list button strong{color:#e2f4fa!important;font-size:11px!important;white-space:nowrap}
+body:not(.aurora-on) .basic-scan-empty{
+ background:rgba(6,22,30,.18)!important;
+ border:1px dashed rgba(240,251,255,.42)!important;
+ border-radius:12px!important;
+ color:#dce9ef!important;
+ padding:38px 16px!important;
+}
+body:not(.aurora-on) .basic-scan-empty p{color:#f7fbff!important;margin:13px 0 0!important}
+body:not(.aurora-on) .scan-panel{border-radius:14px!important;min-height:210px;box-shadow:inset 0 1px rgba(255,255,255,.13)!important}
+body:not(.aurora-on) .scan-panel:before,body:not(.aurora-on) .scan-panel:after{border-color:#a4f6e5!important;opacity:.8}
+body:not(.aurora-on) .scan-panel strong{color:#fff!important}
+body:not(.aurora-on) .basic-scan-buttons{gap:10px!important}
+body:not(.aurora-on) .basic-scan-buttons .btn{min-width:0;flex:1!important;white-space:normal}
+body:not(.aurora-on) .basic-scanned{background:rgba(3,21,33,.17)!important;border:1px solid rgba(255,255,255,.18)!important}
+body:not(.aurora-on) .basic-scanned span{color:#d5e1ea!important}
+body:not(.aurora-on) .basic-scanned strong{color:#fff!important}
+body:not(.aurora-on) .productpick{background:rgba(9,30,41,.24)!important}
+body:not(.aurora-on) .productpick strong{color:#fff!important}
+body:not(.aurora-on) .productpick small{color:#c9dde2!important}
+
+/* Inventaire/historique : lignes aérées et lisibles sur les vitres. */
+body:not(.aurora-on) .basic-table-card .cardhead{margin-bottom:22px!important}
+body:not(.aurora-on) .basic-table-card .cardhead h2{font-size:21px!important}
+body:not(.aurora-on) .basic-table-card .slim-table{border-collapse:separate!important;border-spacing:0!important}
+body:not(.aurora-on) .slim-table th{
+ color:#e6f2f6!important;font-size:11px!important;
+ font-weight:650!important;letter-spacing:.08em!important;
+ background:rgba(11,32,42,.22)!important;
+ padding:14px 17px!important;border-color:rgba(255,255,255,.18)!important;
+}
+body:not(.aurora-on) .slim-table td{
+ color:#fff!important;font-size:12px!important;
+ border-color:rgba(255,255,255,.18)!important;
+ padding:15px 17px!important;
+}
+body:not(.aurora-on) .slim-table tbody tr:hover{background:rgba(255,255,255,.1)!important}
+body:not(.aurora-on) .slim-table td small{color:#d5e2e7!important}
+body:not(.aurora-on) .basic-id{color:#e8f7fb!important}
+body:not(.aurora-on) .linkbtn{color:#fff!important;text-decoration:underline;text-underline-offset:3px}
+body:not(.aurora-on) .basic-filters{gap:11px!important}
+body:not(.aurora-on) .basic-filters input{min-width:0}
+body:not(.aurora-on) .basic-filters select{min-width:174px!important}
+body:not(.aurora-on) .pill.green{background:rgba(115,236,188,.24)!important;color:#d3ffed!important}
+body:not(.aurora-on) .pill.red{background:rgba(255,152,171,.27)!important;color:#ffe5e9!important}
+
+/* Navigation : icons vectoriels cohérents, pas de pseudo-emoji ni anciens styles carrés. */
+.sidebar .navbtn .ic{stroke-width:1.85!important;stroke-linecap:round;stroke-linejoin:round;width:22px!important;height:22px!important;opacity:1!important}
+.sidebar .brand-mark .ic{width:29px!important;height:29px!important;stroke-width:1.8!important}
+.sidebar .navbtn:hover .ic{filter:drop-shadow(0 0 5px rgba(255,255,255,.37))}
+.sidebar .navbtn[aria-current="page"] .ic{filter:drop-shadow(0 0 4px rgba(255,255,255,.18))}
+body:not(.aurora-on) .mobilebottom{display:none!important}
+
+/* La barre d'icônes sert aussi de navigation mobile. */
+@media(max-width:1090px){
+ body:not(.aurora-on) .settings-board{grid-template-columns:1fr!important;gap:24px!important}
+ body:not(.aurora-on) .settings-column{gap:24px!important}
+}
+@media(max-width:860px){
+ body:not(.aurora-on) #content{padding:32px 20px 118px!important}
+ body:not(.aurora-on) .sidebar{display:flex!important;z-index:60!important}
+ body:not(.aurora-on) .pagehead{display:flex!important;align-items:flex-start!important;gap:14px!important}
+ body:not(.aurora-on) .pagehead h1{font-size:32px!important}
+ body:not(.aurora-on) .flowgrid{grid-template-columns:minmax(0,1fr)!important;gap:19px!important}
+ body:not(.aurora-on) .settings-board{grid-template-columns:1fr!important;gap:22px!important}
+ body:not(.aurora-on) .settings-column{gap:22px!important}
+ body:not(.aurora-on) .settingscard{padding:22px!important}
+}
+@media(max-width:520px){
+ body:not(.aurora-on) #content{padding:26px 14px 118px!important}
+ body:not(.aurora-on) .pagehead{flex-direction:column!important}
+ body:not(.aurora-on) .pagehead h1{font-size:29px!important}
+ body:not(.aurora-on) .basic-entry-heading{display:flex!important;flex-direction:column;align-items:flex-start!important;gap:10px}
+ body:not(.aurora-on) .basic-entry-heading h1{font-size:30px!important}
+ body:not(.aurora-on) .basic-entry-form,
+ body:not(.aurora-on) .basic-entry-help,
+ body:not(.aurora-on) .formcard,
+ body:not(.aurora-on) .basic-table-card,
+ body:not(.aurora-on) .settingscard{padding:18px!important}
+ body:not(.aurora-on) .basic-scan-buttons{flex-direction:column}
+ body:not(.aurora-on) .basic-filters{flex-direction:column}
+ body:not(.aurora-on) .basic-entry-grid{grid-template-columns:minmax(0,1fr)!important}
+ body:not(.aurora-on) .sidebar .navbtn{width:42px!important;min-width:42px!important;height:44px!important;min-height:44px!important}
+ .sidebar{left:7px!important;right:7px!important}
+ body:not(.aurora-on) .settings-card .twofields{grid-template-columns:1fr!important}
+}
