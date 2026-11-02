@@ -82,7 +82,8 @@ test('démarrage réel du script principal avec réponse /api/state',async()=>{
 test('Aurora est chargé et reproduit la structure sans supprimer les fonctions',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
  const css=fs.readFileSync('static/aurora.css','utf8');
- assert.match(html,/aurora\.css\?v=1/);
+ assert.match(html,/aurora\.css\?v=aurora-20261102-2/);
+ assert.match(html,/barcode-only\\.js\\?v=aurora-20261102-2/);
  assert.match(css,/\.aurora-dashboard/);
  assert.match(css,/\.aur-rail-main/);
  assert.match(css,/\.aur-metrics/);
@@ -101,4 +102,16 @@ test('Aurora est chargé et reproduit la structure sans supprimer les fonctions'
  assert.match(markup,/data-nav="exit"/);
  assert.match(markup,/data-nav="products"/);
  assert.doesNotMatch(markup,/facet-shard|facet-hero|rayonnage/);
+});
+
+test('Aurora utilise un vrai fond local et ne mélange jamais ancienne page et styles',()=>{
+ const css=fs.readFileSync('static/aurora.css','utf8');
+ const img=fs.readFileSync('static/aurora-storm.jpg');
+ assert.ok(img.length>50000,'Le fond JPG doit être inclus au build');
+ assert.match(css,/url\("\/static\/aurora-storm\.jpg"\)/);
+ assert.doesNotMatch(css,/images\.pexels\.com/);
+ assert.match(css,/body\.aurora-on \.pagehead/);
+ const html=basic.dashboard(context);
+ assert.match(html,/class="aurora-dashboard"/);
+ assert.doesNotMatch(html,/Votre stock en un coup d’œil/);
 });
