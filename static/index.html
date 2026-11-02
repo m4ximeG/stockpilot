@@ -27,7 +27,8 @@
 
 <link rel="stylesheet" href="/static/aurora.css?v=aurora-20261102-2" />
 <link rel="stylesheet" href="/static/polish.css?v=2" />
-<link rel="stylesheet" href="/static/harmony.css?v=1" />
+<link rel="stylesheet" href="/static/harmony.css?v=2" />
+<link rel="stylesheet" href="/static/liquid-route.css?v=1" />
 
 
 
@@ -57,29 +58,64 @@ async function refreshState(silent=false){try{const data=await api('/api/state')
 function product(pid){return db.catalog.find(p=>p.id===pid)}function itemAt(slot){return db.items.find(i=>i.slot===slot)}function itemById(id){return db.items.find(i=>i.id.toUpperCase()===String(id).trim().toUpperCase())}function zoneOf(slot){return ZONES.find(z=>z.id===slot?.[0])}
 function firstFree(zone){return null}
 function toast(msg,error=false){let div=document.createElement('div');div.className='toast'+(error?' error':'');div.innerHTML=ico(error?'info':'check',16)+`<span>${esc(msg)}</span>`;$('#toasts').appendChild(div);setTimeout(()=>div.remove(),4000)}
+let spRouteSerial=0;
 function nav(p){
  if(p==='map')p='products';
  const reduced=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
- const changePage=()=>{
-  stopCamera();
-  if(p==='entry')SPV3.reset();
-  page=p;modal=null;mobileNav=false;
-  $('#app').innerHTML=layout();
-  window.scrollTo(0,0);
-  requestAnimationFrame(()=>window.scrollTo(0,0));
-  if(!reduced && !document.startViewTransition){
-   const target=page==='dashboard'?document.querySelector('.aurora-dashboard'):$('#content');
-   if(target){
-    target.classList.add('sp-page-enter');
-    target.addEventListener('animationend',()=>target.classList.remove('sp-page-enter'),{once:true});
-   }
-  }
+ const serial=++spRouteSerial;
+ // Revenir au même onglet peut également réinitialiser le formulaire.
+ // On conserve les calques physiques du site : le fond, la sidebar et les
+ // cartes ne sont jamais capturés dans une transition de la page entière.
+ document.querySelector('.sp-route-light')?.remove();
+ document.querySelectorAll('.sp-glass-sweep').forEach(el=>el.remove());
+ document.querySelectorAll('.sp-route-in').forEach(el=>el.classList.remove('sp-route-in'));
+ document.documentElement.classList.toggle('sp-route-active',!reduced);
+ stopCamera();
+ if(p==='entry')SPV3.reset();
+ page=p;modal=null;mobileNav=false;
+ document.body.classList.toggle('aurora-on',page==='dashboard');
+ const content=$('#content');
+ if(content)content.innerHTML=renderPage();
+ else $('#app').innerHTML=layout();
+ document.querySelectorAll('[data-nav]').forEach(btn=>{
+  const active=btn.dataset.nav===page;
+  btn.classList.toggle('active',active);
+  if(active)btn.setAttribute('aria-current','page');
+  else btn.removeAttribute('aria-current');
+ });
+ document.querySelector('.sidebar')?.classList.remove('open');
+ document.querySelector('.sidebackdrop')?.remove();
+ document.querySelector('.overlay')?.remove();
+ window.scrollTo(0,0);
+ if(reduced)return;
+ const stage=page==='dashboard'?document.querySelector('.aurora-dashboard'):$('#content');
+ if(!stage){document.documentElement.classList.remove('sp-route-active');return;}
+ stage.classList.add('sp-route-in');
+ const panels=stage.querySelectorAll(
+  '.aur-rail-main,.aur-rail-mini,.basic-entry-form,.basic-entry-help,'+
+  '.basic-table-card,.settingscard,.formcard,.card'
+ );
+ panels.forEach(panel=>{
+  if(panel.parentElement?.closest('.card,.basic-entry-form,.basic-entry-help,.settingscard,.formcard'))return;
+  const sweep=document.createElement('span');
+  sweep.className='sp-glass-sweep';
+  sweep.setAttribute('aria-hidden','true');
+  panel.appendChild(sweep);
+ });
+ const light=document.createElement('span');
+ light.className='sp-route-light';
+ light.setAttribute('aria-hidden','true');
+ document.body.appendChild(light);
+ const finish=()=>{
+  if(serial!==spRouteSerial)return;
+  light.remove();
+  stage.classList.remove('sp-route-in');
+  stage.querySelectorAll('.sp-glass-sweep').forEach(el=>el.remove());
+  document.documentElement.classList.remove('sp-route-active');
  };
- if(!reduced && typeof document.startViewTransition==='function'){
-  document.startViewTransition(changePage);
- }else{
-  changePage();
- }
+ light.addEventListener('animationend',finish,{once:true});
+ // Si l'onglet devient inactif, CSS peut suspendre animationend.
+ window.setTimeout(finish,1100);
 }
 function goEntry(pid=null){SPV3.reset();selectedProduct=pid||selectedProduct||db.catalog[0]?.id||null;chosenSlot=null;formSerial='';formCondition='Neuf';lastAdded=null;nav('entry')}
 function goExit(id=null){scanResult=id?itemById(id)||null:null;nav('exit')}
