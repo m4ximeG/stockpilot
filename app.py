@@ -1,6 +1,7 @@
 """StockPilot — serveur multi-utilisateurs à stockage SQLite persistant."""
 import io
 import os
+import json
 import re
 import secrets
 import sqlite3
