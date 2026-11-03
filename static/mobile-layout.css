@@ -286,3 +286,18 @@
 @media screen and (min-width:861px){
   .sp-mobile-scrim,.sp-mobile-menu{display:none!important}
 }
+
+/* Menu Plus : apparition comme un vrai panneau iOS, pas un élément instantané. */
+@keyframes spMobileMenuArrive{
+ from{opacity:0;transform:translate3d(0,20px,0) scale(.975)}
+ to{opacity:1;transform:translate3d(0,0,0) scale(1)}
+}
+@keyframes spMobileBackdropArrive{from{opacity:0}to{opacity:1}}
+@media(max-width:860px){
+ .sp-mobile-menu:not([hidden]){transform-origin:bottom center;
+  animation:spMobileMenuArrive .32s cubic-bezier(.16,1,.3,1) both}
+ .sp-mobile-scrim:not([hidden]){animation:spMobileBackdropArrive .23s ease-out both}
+}
+@media(prefers-reduced-motion:reduce){
+ .sp-mobile-menu:not([hidden]),.sp-mobile-scrim:not([hidden]){animation:none!important}
+}
