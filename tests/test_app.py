@@ -311,6 +311,85 @@ class StockPilotTests(unittest.TestCase):
         self.assertEqual(item.status_code,201,item.text)
         self.assertEqual(len(self.client.get('/api/state').json['items']),1)
 
+    def test_reception_types_and_deferred_computer_preparation(self):
+        # Aucun détail de RAM / processeur obligatoire à la réception.
+        reception=self.client.post('/api/receive', json={
+            'name':'TERRA PC déballé', 'category':'Ordinateur portable',
+            'condition':'Neuf','serial':''
+        }, headers=self.headers)
+        self.assertEqual(reception.status_code,201,reception.text)
+        article=reception.json['item']
+        self.assertEqual(article['prepStatus'],'pending')
+        self.assertEqual(article['specs'],{})
+        snapshot=self.client.get('/api/state').json
+        self.assertEqual(next(x for x in snapshot['catalog'] if x['id']==article['pid'])['cat'],
+                         'Ordinateur portable')
+        self.assertEqual(next(x for x in snapshot['items'] if x['id']==article['id'])['prepStatus'],'pending')
+
+        update=self.client.patch(f"/api/items/{article['id']}/preparation",json={
+            'serial':'TERRA-SN-123',
+            'prep_status':'in_progress',
+            'specs':{'ram_gb':16,'cores':10,'cpu':'Intel Core i5-1235U'}
+        },headers=self.headers)
+        self.assertEqual(update.status_code,200,update.text)
+        self.assertEqual(update.json['item']['specs']['cores'],10)
+        self.assertEqual(update.json['item']['serial'],'TERRA-SN-123')
+        done=self.client.patch(f"/api/items/{article['id']}/preparation",json={
+            'prep_status':'ready',
+            'specs':{'storage':'SSD 512 Go', 'os':'Windows 11 Pro'}
+        },headers=self.headers)
+        self.assertEqual(done.status_code,200,done.text)
+        self.assertEqual(done.json['item']['prepStatus'],'ready')
+        self.assertEqual(done.json['item']['specs']['ram_gb'],16)
+        self.assertEqual(done.json['item']['specs']['storage'],'SSD 512 Go')
+        self.assertEqual(done.json['item']['specs']['cpu'],'Intel Core i5-1235U')
+
+        second=self.client.post('/api/receive',json={
+            'name':'TERRA PC déballé','product_id':article['pid'],
+            'category':'Matériel','condition':'Neuf'
+        },headers=self.headers)
+        self.assertEqual(second.status_code,201,second.text)
+        self.assertFalse(second.json['createdProduct'])
+        self.assertEqual(second.json['item']['prepStatus'],'pending')
+        self.assertEqual(second.json['item']['specs'],{})
+        self.assertEqual(self.client.patch(f"/api/items/{article['id']}/preparation",
+                          json={'specs':{'cores':0}},headers=self.headers).status_code,400)
+        self.assertEqual(self.client.patch(f"/api/items/{article['id']}/preparation",
+                          json={'specs':{'random':'injection'}},headers=self.headers).status_code,400)
+        self.assertEqual(self.client.patch(f"/api/items/{article['id']}/preparation",
+                          json={'prep_status':'invalid'},headers=self.headers).status_code,400)
+
+    def test_simple_material_and_other_category_specs(self):
+        simple=self.client.post('/api/receive',json={
+            'name':'Câble HDMI 2 m','category':'Matériel','condition':'Neuf'
+        },headers=self.headers)
+        self.assertEqual(simple.status_code,201,simple.text)
+        self.assertEqual(simple.json['item']['prepStatus'],'not_required')
+        self.assertEqual(simple.json['item']['specs'],{})
+        self.assertEqual(self.client.post('/api/receive',json={
+            'name':'Autre câble','category':'Matériel',
+            'specs':{'ram_gb':16}
+        },headers=self.headers).status_code,400)
+        printer=self.client.post('/api/receive',json={
+            'name':'DYMO LabelWriter 450','category':'Imprimante','condition':'Neuf',
+            'specs':{'technology':'Thermique','connection':'USB'}
+        },headers=self.headers)
+        self.assertEqual(printer.status_code,201,printer.text)
+        self.assertEqual(printer.json['item']['specs']['connection'],'USB')
+        iid=printer.json['item']['id']
+        edit=self.client.patch(f'/api/items/{iid}/preparation',json={
+            'specs':{'connection':'Ethernet'}
+        },headers=self.headers)
+        self.assertEqual(edit.status_code,200,edit.text)
+        self.assertEqual(edit.json['item']['specs']['technology'],'Thermique')
+        self.assertEqual(edit.json['item']['specs']['connection'],'Ethernet')
+        self.assertEqual(self.client.patch(f'/api/items/{iid}/preparation',
+                         json={'prep_status':'ready'},headers=self.headers).status_code,400)
+        self.assertEqual(self.client.patch('/api/items/NOT-FOUND/preparation',
+                         json={'specs':{}},headers=self.headers).status_code,404)
+        self.assertEqual(stock.app.test_client().patch(f'/api/items/{iid}/preparation',
+                         json={'specs':{}}).status_code,403)
+
     def test_reception_libre_creation_reutilisation_et_etats(self):
         initial=self.client.get('/api/state').json
         count=len(initial['catalog'])
