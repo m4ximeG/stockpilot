@@ -306,18 +306,23 @@
    Aucun impact sur la version bureau : styles limités à <= 860px.
    Historique : journal chronologique. Paramètres : options réellement utiles.
    Entrée : aide supprimée uniquement sur mobile. */
-.sp-mobile-history,.sp-mobile-settings{display:none}
+.sp-mobile-history,.sp-mobile-settings,.sp-mobile-pagehead{display:none}
 @media screen and (max-width:860px){
   /* L'aide "Comment ça marche" ne concerne plus l'application mobile. */
   body:not(.aurora-on) .basic-entry-help{display:none!important}
   body:not(.aurora-on) .basic-entry-grid{display:grid!important;grid-template-columns:minmax(0,1fr)!important}
   .si-mobile-push[hidden]{display:none!important}
 
+  .sp-mobile-pagehead{display:block!important;margin:0 0 17px!important}
+  .sp-mobile-pagehead span{display:block;color:#bad0dd;font-size:10px;font-weight:750;letter-spacing:.18em}
+  .sp-mobile-pagehead h1{margin:12px 0 0!important;font-size:clamp(28px,8vw,35px)!important;line-height:1.13!important;
+    font-weight:740;color:#fff;letter-spacing:-.04em}
+  .sp-mobile-settings .sp-mobile-pagehead{margin:0 0 4px!important}
   /* Historique : priorité à la lecture d'un mouvement, pas à un tableau de champs. */
   .sp-history-page > .basic-table-card{display:none!important}
   .sp-history-page .pagehead .head-actions,
   .sp-history-page .pagehead > .btn{display:none!important}
-  .sp-history-page .pagehead{margin-bottom:16px!important}
+  .sp-history-page .pagehead{display:none!important}
   .sp-history-page .pagehead h1{font-size:clamp(26px,7.1vw,34px)!important;line-height:1.15!important}
   .sp-history-page .pagehead p{display:none!important}
   .sp-mobile-history{
@@ -374,7 +379,7 @@
 
   /* Configuration : une page d'usage, pas un panneau d'administration complet. */
   .sp-settings-page > .settings-board{display:none!important}
-  .sp-settings-page .pagehead{margin-bottom:18px!important}
+  .sp-settings-page .pagehead{display:none!important}
   .sp-settings-page .pagehead h1{font-size:clamp(27px,7.5vw,34px)!important}
   .sp-settings-page .pagehead p{display:none!important}
   .sp-mobile-settings{display:grid!important;gap:12px;max-width:100%;min-width:0}
