@@ -54,6 +54,7 @@ test('démarrage réel du script principal avec réponse /api/state',async()=>{
  const appElement={innerHTML:'',className:''};
  const elements={'#app':appElement,'#toasts':{appendChild:()=>{}}};
  const fakeDocument={
+  addEventListener:()=>{},
   body:{classList:{toggle:()=>{}}},
   querySelector:(s)=>elements[s]||null,
   createElement:()=>({innerHTML:'',className:'',remove:()=>{}})
