@@ -299,7 +299,7 @@ test('Application iPhone / Android : manifeste et protections des données',()=>
  assert.match(html,/rel="manifest" href="\/static\/app\.webmanifest"/);
  assert.match(html,/apple-touch-icon/);
  assert.match(html,/navigator\.serviceWorker\.register\('\/sw\.js'\)/);
- assert.match(html,/\/static\/mobile-app\.css\?v=3/);
+ assert.match(html,/\/static\/mobile-app\.css\?v=4/);
  assert.match(app,/@app\.get\('\/sw\.js'\)/);
  assert.match(app,/@app\.get\('\/apple-touch-icon\.png'\)/);
  assert.doesNotMatch(worker,/cache\.addAll\(\[['"][\/]api/);
@@ -365,4 +365,42 @@ test('Étiquettes DYMO : PDF à l’échelle choisie depuis les paramètres',()=
  assert.match(settings,/id="label-size"/);
  assert.match(settings,/option value="57x32" selected/);
  assert.match(html,/stockPilotLabelSize\(\)/);
+});
+
+test('iPhone : fond unique stable dans la composition, sans parallax Safari',()=>{
+ const html=fs.readFileSync('static/index.html','utf8');
+ const css=fs.readFileSync('static/mobile-layout.css','utf8');
+ assert.match(html,/\/static\/mobile-layout\.css\?v=1/);
+ assert.match(css,/body::before\s*\{/);
+ assert.match(css,/position:fixed; top:0; left:0/);
+ assert.match(css,/height:100lvh/);
+ assert.match(css,/url\("\/static\/aurora-storm\.jpg"\) 64% 52% \/ cover no-repeat/);
+ assert.match(css,/body\.aurora-on \.aurora-dashboard\s*\{[\s\S]*?background:transparent!important;background-image:none!important/);
+ assert.match(css,/background-attachment:scroll!important/);
+ assert.doesNotMatch(css,/background-attachment:fixed!important/);
+});
+test('Navigation mobile : cinq onglets lisibles et actions secondaires accessibles',()=>{
+ const html=fs.readFileSync('static/index.html','utf8');
+ const css=fs.readFileSync('static/mobile-layout.css','utf8');
+ assert.match(html,/<nav class="mobilebottom" aria-label="Navigation mobile"/);
+ assert.match(html,/data-action="mobilemore"/);
+ assert.match(html,/id="sp-mobile-menu"/);
+ assert.match(html,/data-nav="history"/);
+ assert.match(html,/data-nav="settings"/);
+ assert.match(html,/href="\/logout"/);
+ assert.match(html,/function toggleMobileMore\(force\)/);
+ assert.match(html,/case'mobilemore':toggleMobileMore\(\)/);
+ assert.match(html,/case'closemobilemore':toggleMobileMore\(false\)/);
+ assert.match(css,/\.mobilebottom\s*\{[\s\S]*?grid-template-columns:repeat\(5,minmax\(0,1fr\)\)/);
+ assert.match(css,/body:not\(\.aurora-on\) \.sidebar,body\.aurora-on \.sidebar\s*\{[\s\S]*?display:none!important/);
+ assert.match(css,/\.sp-mobile-menu\[hidden\],\.sp-mobile-scrim\[hidden\]\{display:none!important\}/);
+});
+test('iPhone : accueil en flux vertical et champs sans zoom',()=>{
+ const css=fs.readFileSync('static/mobile-layout.css','utf8');
+ assert.match(css,/\.aur-rail\s*\{[\s\S]*?order:2;position:relative!important/);
+ assert.match(css,/\.aur-metrics\s*\{[\s\S]*?order:3;position:relative!important/);
+ assert.match(css,/\.aur-chart\s*\{[\s\S]*?order:4;position:relative!important/);
+ assert.match(css,/\.basic-entry-grid,\.settings-board,\.flowgrid\s*\{[\s\S]*?grid-template-columns:minmax\(0,1fr\)!important/);
+ assert.match(css,/\.field textarea,[\s\S]*?font-size:16px!important/);
+ assert.match(css,/env\(safe-area-inset-bottom,0px\)/);
 });
