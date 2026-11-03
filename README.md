@@ -52,7 +52,7 @@ Variables essentielles :
 
 **Étiqueteuse** : installer l'imprimante thermique sur le PC de l'accueil. Le navigateur imprime les étiquettes 70 × 50 mm en utilisant le pilote de cette imprimante. L'impression automatique sans boîte de dialogue nécessiterait une intégration complémentaire.
 
-**Scanner** : une douchette USB ou Bluetooth configurée en mode clavier peut lire le Code 128 ; sur téléphone, le lecteur caméra est proposé si le navigateur prend en charge `BarcodeDetector`. La saisie manuelle reste toujours possible.
+**Scanner** : une douchette USB/Bluetooth configurée en mode clavier peut lire le Code 128. Le lecteur caméra web utilise `html5-qrcode` (chargé à la demande via CDN, version 2.3.8) pour lire les QR codes et les Code 128/39 sur Safari iOS, Android et ordinateurs. Il nécessite HTTPS, une caméra autorisée et un accès au CDN. La saisie manuelle reste possible ; aucun article n'est sorti sans confirmation.
 
 ## Sauvegardes et sécurité
 
