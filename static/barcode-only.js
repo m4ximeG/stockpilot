@@ -67,68 +67,98 @@ function dashboard(c){
  '<button data-nav="products">'+c.ico('package',18)+' Inventaire <span>→</span></button></div></section>';
 }
 function inventory(c){
- const filter=(c.tableFilter||'').trim().toLocaleLowerCase('fr'),statusFilter=c.tableStockFilter||'all';
- const categories=[...new Set(c.db.catalog.map(p=>p.cat).filter(Boolean))].sort();
- const unitMap=new Map();
- for(const u of c.db.items){if(!unitMap.has(u.pid))unitMap.set(u.pid,[]);unitMap.get(u.pid).push(u)}
- const all=c.db.catalog.map(p=>{
-  const units=unitMap.get(p.id)||[],qty=units.filter(i=>!/(sav|répar|repar)/i.test(i.condition||'Neuf')).length,min=Math.max(0,Number(p.min_stock)||0);
-  return {p,units,qty,pending:units.length-qty,min,status:qty===0?'empty':min>0&&qty<=min?'low':'ok'};
+ const search=(c.tableFilter||'').trim().toLocaleLowerCase('fr'),filter=c.tableStockFilter||'all';
+ const cats=[...new Set(c.db.catalog.map(p=>p.cat).filter(Boolean))].sort();
+ const byProduct=new Map();
+ c.db.items.forEach(i=>{if(!byProduct.has(i.pid))byProduct.set(i.pid,[]);byProduct.get(i.pid).push(i)});
+ const products=c.db.catalog.map(p=>{
+  const units=byProduct.get(p.id)||[];
+  const qty=units.filter(i=>!/(sav|répar|repar)/i.test(i.condition||'Neuf')).length;
+  const min=Math.max(0,Number(p.min_stock)||0);
+  return {p,units,qty,min,pending:units.length-qty,alert:p.active!==0&&min>0&&qty<=min};
  });
- const total=all.reduce((a,x)=>a+x.qty,0);
- const lowCount=all.filter(x=>x.status!=='ok'&&x.p.active!==0).length;
- const visible=all.filter(x=>{
-  if(c.tableType!=='all'&&c.tableType!==x.p.cat)return false;
-  if(statusFilter==='low'&&x.status==='ok')return false;
-  if(statusFilter==='in'&&x.qty===0)return false;
-  if(!filter)return true;
-  return [name(x.p),x.p.ref,x.p.cat,...x.units.flatMap(i=>[i.id,i.serial||''])].join(' ').toLocaleLowerCase('fr').includes(filter);
- }).sort((a,b)=>({empty:0,low:1,ok:2}[a.status]-{empty:0,low:1,ok:2}[b.status])||name(a.p).localeCompare(name(b.p),'fr'));
- const chip=(value,label)=>'<button type="button" class="sp-stock-chip '+(statusFilter===value?'is-active':'')+
-  '" data-action="stockfilter" data-status="'+value+'" aria-pressed="'+(statusFilter===value)+'">'+label+'</button>';
- const summary='<div class="sp-stock-overview" aria-label="Résumé des stocks">'+
-  '<div><span>Articles disponibles</span><strong>'+total+'</strong></div>'+
-  '<div><span>Références</span><strong>'+all.length+'</strong></div>'+
-  '<div class="sp-stock-overview-alert"><span>À réapprovisionner</span><strong>'+lowCount+'</strong></div></div>';
+ const alerts=products.filter(x=>x.alert).length,total=products.reduce((sum,x)=>sum+x.qty,0);
+ const visible=products.filter(x=>{
+  if((c.tableType||'all')!=='all'&&c.tableType!==x.p.cat)return false;
+  if(filter==='low'&&!x.alert)return false;
+  if(filter==='in'&&x.qty===0)return false;
+  return !search||[name(x.p),x.p.ref,x.p.cat,...x.units.flatMap(i=>[i.id,i.serial||''])].join(' ').toLocaleLowerCase('fr').includes(search);
+ }).sort((a,b)=>Number(b.alert)-Number(a.alert)||name(a.p).localeCompare(name(b.p),'fr'));
+ const seg=(value,label)=>'<button type="button" class="si-segment'+(filter===value?' is-selected':'')+
+  '" data-action="stockfilter" data-status="'+value+'" aria-pressed="'+(filter===value)+'">'+label+'</button>';
  const rows=visible.map(x=>{
-  const p=x.p,min=x.min,status=x.status,qty=x.qty;
-  const statusClass=status==='empty'?'sp-stock-empty':status==='low'?'sp-stock-low':'sp-stock-ok';
-  const stateLabel=status==='empty'?'Rupture de stock':status==='low'?'À réapprovisionner':'En stock';
-  const threshold=c.me?.role==='admin'?
-   '<div class="sp-stock-threshold"><label for="sp-min-'+escape(p.id)+'">Seuil d’alerte</label>'+
-   '<input id="sp-min-'+escape(p.id)+'" type="number" min="0" max="99999" step="1" inputmode="numeric" value="'+min+'" aria-label="Seuil pour '+escape(name(p))+'">'+
-   '<button type="button" data-action="stockthreshold" data-id="'+escape(p.id)+'" class="sp-stock-save">Enregistrer</button></div>':
-   '<div class="sp-stock-threshold-read">Seuil : '+(min>0?min+' articles':'non défini')+'</div>';
-  const individual=x.units.length?
-   '<details class="sp-stock-units"><summary>Voir les '+x.units.length+' unité'+(x.units.length>1?'s':'')+' et leurs étiquettes</summary>'+
-   '<div class="sp-stock-units-list">'+x.units.slice().sort((a,b)=>b.inAt-a.inAt).map(i=>
-    '<div class="sp-stock-unit"><div><strong>'+escape(i.id)+'</strong><small>'+
-    escape(i.serial||'Sans numéro de série')+' · '+escape(i.condition||'Neuf')+'</small></div>'+
-    '<div class="sp-stock-unit-actions"><button type="button" data-action="details" data-id="'+escape(i.id)+'">Détails</button>'+
-    '<button type="button" data-action="print" data-id="'+escape(i.id)+'">Étiquette</button></div></div>').join('')+
-   '</div></details>':'';
-  return '<article class="sp-stock-row '+statusClass+'">'+
-   '<div class="sp-stock-main"><div class="sp-stock-name"><h3>'+escape(name(p))+'</h3>'+
-   '<div class="sp-stock-ref">'+escape(p.ref||'Sans référence')+(p.cat?' · '+escape(p.cat):'')+
-   (p.active===0?' · Référence désactivée':'')+(x.pending?' · '+x.pending+' en SAV / réparation':'')+'</div>'+
-   '<span class="sp-stock-status">'+stateLabel+'</span></div>'+
-   '<div class="sp-stock-count"><strong>'+qty+'</strong><span>en stock</span></div></div>'+
-   '<div class="sp-stock-bottom">'+threshold+
-   '<button type="button" class="sp-stock-entry" data-action="newentryproduct" data-id="'+escape(p.id)+'">+ Réceptionner</button></div>'+
-   individual+'</article>';
+  const p=x.p,id=escape(p.id),q=x.qty,min=x.min;
+  const status=min===0?'<span class="si-badge si-neutral">Sans alerte</span>':
+   x.alert?'<span class="si-badge '+(q===0?'si-critical':'si-warning')+'">'+
+    (q===0?'Rupture · à commander':'Stock faible · à commander')+'</span>':
+    '<span class="si-badge si-safe">Stock suffisant</span>';
+  const alertEditor=c.me?.role==='admin'?[
+   '<section class="si-alert-editor" aria-label="Alerte pour '+escape(name(p))+'">',
+   '<div class="si-alert-description"><strong>Alerte de réapprovisionnement</strong>',
+   '<p>Facultative. Signaler cette référence quand la quantité atteint le minimum.</p></div>',
+   '<label class="si-alert-toggle" for="si-alert-'+id+'"><input id="si-alert-'+id+'" type="checkbox"'+(min>0?' checked':'')+'><span>Activer</span></label>',
+   '<div class="si-alert-controls" data-si-min="'+id+'"'+(min>0?'':' hidden')+'>',
+   '<label for="si-min-'+id+'">Seuil minimum</label>',
+   '<input id="si-min-'+id+'" type="number" min="1" max="99999" step="1" inputmode="numeric" value="'+(min||1)+'"></div>',
+   '<button type="button" class="si-save" data-action="stockthreshold" data-id="'+id+'">Enregistrer</button></section>'
+  ].join(''):'<p class="si-alert-readonly">'+(min>0?'Alerte activée à '+min+' unité'+(min>1?'s':'')+'.':'Aucune alerte configurée.')+'</p>';
+  const unitList=x.units.length?[
+   '<details class="si-units"><summary>Unités et étiquettes <span>'+x.units.length+'</span></summary>',
+   '<div class="si-units-list">',
+   ...x.units.slice().sort((a,b)=>(b.inAt||0)-(a.inAt||0)).map(i=>[
+    '<div class="si-unit"><div><strong>'+escape(i.id)+'</strong><small>'+escape(i.serial||'Sans numéro de série')+
+      ' · '+escape(i.condition||'Neuf')+'</small></div>',
+    '<div class="si-unit-actions"><button type="button" data-action="details" data-id="'+escape(i.id)+'">Détails</button>',
+    '<button type="button" data-action="print" data-id="'+escape(i.id)+'">Étiquette</button></div></div>'
+   ].join('')),
+   '</div></details>'
+  ].join(''):'<p class="si-empty-units">Aucune unité enregistrée.</p>';
+  return [
+   '<details class="si-record'+(x.alert?' si-is-alert':'')+'" data-inventory-id="'+id+'">',
+   '<summary class="si-record-summary">',
+   '<span class="si-product"><strong>'+escape(name(p))+'</strong><small>'+escape(p.ref||'Sans référence')+
+    (p.cat?' · '+escape(p.cat):'')+(x.pending?' · '+x.pending+' en SAV / réparation':'')+'</small></span>',
+   '<span class="si-quantity"><b>'+q+'</b><small>disponible'+(q!==1?'s':'')+'</small></span>',
+   '<span class="si-status">'+status+(min>0?'<small>Minimum : '+min+'</small>':'')+'</span>',
+   '<span class="si-expand"><span>Détails</span><span class="si-chevron" aria-hidden="true"></span></span>',
+   '</summary><div class="si-record-details">',
+   '<div class="si-record-actions"><div><strong>Gestion du produit</strong><p>Réceptions, alertes et étiquettes.</p></div>',
+   '<button type="button" class="si-receive" data-action="newentryproduct" data-id="'+id+'">+ Réceptionner</button></div>',
+   alertEditor,unitList,'</div></details>'
+  ].join('');
  }).join('');
- return c.heading('INVENTAIRE','Produits en stock','Quantités par référence, alertes de réapprovisionnement et détail des unités.',c.btn('Nouvelle entrée','newentry','plus'))+
-  '<section class="sp-stock-page">'+summary+
-  '<div class="sp-stock-toolbar"><div class="sp-stock-chips">'+
-  chip('all','Tous les produits')+chip('low','À commander')+chip('in','Disponibles')+'</div>'+
-  '<div class="sp-stock-search"><input id="filter-products" type="search" value="'+escape(c.tableFilter||'')+
-  '" placeholder="Rechercher un produit ou une référence…" autocomplete="off" aria-label="Rechercher dans le stock"/>'+
-  '<select id="filter-type" aria-label="Filtrer par catégorie"><option value="all">Toutes les catégories</option>'+
-  categories.map(cat=>'<option value="'+escape(cat)+'"'+(c.tableType===cat?' selected':'')+'>'+escape(cat)+'</option>').join('')+
-  '</select></div></div>'+
-  '<div class="sp-stock-list">'+(rows||'<div class="sp-stock-none">Aucune référence ne correspond à ces filtres.</div>')+'</div>'+
-  '<div class="sp-stock-footer"><span>'+visible.length+' référence'+(visible.length>1?'s':'')+' affichée'+(visible.length>1?'s':'')+'</span>'+
-  '<button type="button" data-action="exportstocksummary">Exporter les quantités (CSV)</button></div></section>';
+ const summary=[
+  '<div class="si-summary"><div class="si-summary-numbers">',
+  '<span><strong>'+total+'</strong> unités disponibles</span><i aria-hidden="true"></i>',
+  '<span><strong>'+products.length+'</strong> références</span></div>',
+  alerts?'<button type="button" class="si-summary-alert" data-action="stockfilter" data-status="low">'+
+   alerts+' alerte'+(alerts>1?'s':'')+' de stock</button>':
+   '<span class="si-summary-clear">Aucune alerte active</span>',
+  '</div>'
+ ].join('');
+ const toolbar=[
+  '<div class="si-toolbar"><input id="filter-products" type="search" value="'+escape(c.tableFilter||'')+'" autocomplete="off"',
+  ' placeholder="Rechercher un produit, une référence…" aria-label="Rechercher dans le stock">',
+  '<select id="filter-type" aria-label="Filtrer par catégorie"><option value="all">Toutes les catégories</option>',
+  ...cats.map(cat=>'<option value="'+escape(cat)+'"'+(c.tableType===cat?' selected':'')+'>'+escape(cat)+'</option>'),
+  '</select></div>'
+ ].join('');
+ const tabs=[
+  '<div class="si-controls"><div class="si-segments" role="group" aria-label="Filtrer le stock">',
+  seg('all','Tous ('+products.length+')'),
+  seg('low','À commander'+(alerts?' ('+alerts+')':'')),
+  seg('in','Disponibles'),
+  '</div><button type="button" class="si-export" data-action="exportstocksummary">Exporter CSV</button></div>'
+ ].join('');
+ return c.heading('INVENTAIRE','Produits en stock',
+  'Consultez les quantités et définissez une alerte seulement si nécessaire.',
+  c.btn('Nouvelle entrée','newentry','plus'))+
+  '<section class="si-inventory" aria-label="Inventaire des produits">'+summary+toolbar+tabs+
+  '<div class="si-list" aria-label="Références en stock">'+
+  '<div class="si-columns" aria-hidden="true"><span>Produit</span><span>Disponible</span><span>Alerte</span><span></span></div>'+
+  (rows||'<div class="si-empty">Aucun produit ne correspond à ces filtres.</div>')+'</div>'+
+  '<footer class="si-footer">'+visible.length+' référence'+(visible.length>1?'s':'')+
+  ' affichée'+(visible.length>1?'s':'')+'</footer></section>';
 }
 function history(c){
  const ev=[...c.db.events].filter(x=>x.type==='in'||x.type==='out').sort((a,b)=>b.at-a.at);
