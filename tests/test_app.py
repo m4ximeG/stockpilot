@@ -23,6 +23,34 @@ class StockPilotTests(unittest.TestCase):
         self.headers = {'X-Requested-With': 'StockPilot'}
         self.assertEqual(self.client.post('/api/admin/reset', json={}, headers=self.headers).status_code, 200)
 
+    def test_mobile_app_resources_are_public_and_do_not_cache_stock(self):
+        import json
+        manifest = self.client.get('/static/app.webmanifest')
+        self.assertEqual(manifest.status_code, 200)
+        data = json.loads(manifest.data)
+        self.assertEqual(data['display'], 'standalone')
+        self.assertEqual(data['start_url'], '/')
+        self.assertEqual([i['sizes'] for i in data['icons']], ['192x192', '512x512'])
+
+        worker = self.client.get('/sw.js')
+        self.assertEqual(worker.status_code, 200)
+        self.assertIn(b'javascript', worker.content_type.encode())
+        self.assertEqual(worker.headers.get('Service-Worker-Allowed'), '/')
+        self.assertIn(b"event.request.mode==='navigate'", worker.data)
+        self.assertNotIn(b"caches.open('/api", worker.data)
+
+        for route in ['/apple-touch-icon.png', '/app-icon-192.png', '/app-icon-512.png']:
+            icon = self.client.get(route)
+            self.assertEqual(icon.status_code, 200, route)
+            self.assertEqual(icon.data[:8], b'\\x89PNG\\r\\n\\x1a\\n', route)
+            self.assertTrue(icon.content_type.startswith('image/png'), route)
+        self.assertEqual(self.client.get('/app-icon-999.png').status_code, 404)
+
+        home = self.client.get('/')
+        self.assertEqual(home.status_code, 200)
+        self.assertIn(b'app.webmanifest', home.data)
+        self.assertIn(b'mobile-app.css', home.data)
+
     def test_initial_stock_and_occupancy(self):
         state = self.client.get('/api/state').json
         self.assertEqual(len(state['catalog']), 13)
