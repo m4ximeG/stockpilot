@@ -298,7 +298,7 @@ test('Application iPhone / Android : manifeste et protections des données',()=>
  assert.match(html,/rel="manifest" href="\/static\/app\.webmanifest"/);
  assert.match(html,/apple-touch-icon/);
  assert.match(html,/navigator\.serviceWorker\.register\('\/sw\.js'\)/);
- assert.match(html,/\/static\/mobile-app\.css\?v=2/);
+ assert.match(html,/\/static\/mobile-app\.css\?v=3/);
  assert.match(app,/@app\.get\('\/sw\.js'\)/);
  assert.match(app,/@app\.get\('\/apple-touch-icon\.png'\)/);
  assert.doesNotMatch(worker,/cache\.addAll\(\[['"][\/]api/);
@@ -314,4 +314,50 @@ test('Installation guidée depuis les paramètres mobiles',()=>{
  assert.match(code,/data-action="installapp"/);
  assert.match(code,/sp-mobile-install/);
  assert.match(css,/\.sp-mobile-install\{display:none!important\}/);
+});
+
+test('Inventaire : quantités par référence et seuils de réapprovisionnement',()=>{
+ const ctx={...context,
+  db:{...db,items:[item,{...item,id:'STK-000011'}],catalog:[{...product,min_stock:3}]},
+  tableStockFilter:'all'
+ };
+ const html=basic.inventory(ctx);
+ assert.match(html,/sp-stock-overview/);
+ assert.match(html,/sp-stock-list/);
+ assert.match(html,/sp-stock-low/);
+ assert.match(html,/À réapprovisionner/);
+ assert.match(html,/data-action="stockthreshold"/);
+ assert.match(html,/value="3"/);
+ assert.match(html,/Voir les 2 unités/);
+ assert.match(html,/data-action="exportstocksummary"/);
+ assert.match(html,/data-action="newentryproduct"/);
+ assert.equal((html.match(/class="sp-stock-row/g)||[]).length,1);
+ const empty=basic.inventory({...ctx,db:{...ctx.db,items:[]}});
+ assert.match(empty,/Rupture de stock/);
+ const employee=basic.inventory({...ctx,me:{role:'employee'}});
+ assert.doesNotMatch(employee,/data-action="stockthreshold"/);
+ assert.match(employee,/Seuil : 3 articles/);
+});
+test('iPhone : interface verticale et rebond désactivé sans casser le défilement',()=>{
+ const css=fs.readFileSync('static/mobile-app.css','utf8');
+ const html=fs.readFileSync('static/index.html','utf8');
+ assert.match(css,/overscroll-behavior-y:none!important/);
+ assert.match(css,/\.sp-stock-list\{display:grid/);
+ assert.match(css,/\.sp-stock-search/);
+ assert.match(css,/@media\(max-width:860px\)/);
+ assert.match(html,/function disableViewportRubberBand\(\)/);
+ assert.match(html,/\{passive:false\}/);
+ assert.match(html,/case'stockthreshold'/);
+ assert.match(html,/case'stockfilter'/);
+});
+test('Étiquettes DYMO : PDF à l’échelle choisie depuis les paramètres',()=>{
+ const html=fs.readFileSync('static/index.html','utf8');
+ const app=fs.readFileSync('app.py','utf8');
+ const settings=basic.settings({...context,labelSize:'57x32'});
+ assert.match(app,/application\/pdf/);
+ assert.match(app,/from reportlab\.pdfgen import canvas/);
+ assert.match(app,/formats = \{'54x25': \(54, 25\), '57x32': \(57, 32\)\}/);
+ assert.match(settings,/id="label-size"/);
+ assert.match(settings,/option value="57x32" selected/);
+ assert.match(html,/stockPilotLabelSize\(\)/);
 });
