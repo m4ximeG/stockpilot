@@ -29,12 +29,23 @@ StockPilot s'installe directement depuis **https://stockpilot.m4xim.eu**. L'appl
 
 **Important** : la publication d'une application native iOS sur l'App Store requiert l'Apple Developer Program payant. La PWA ci-dessus est la solution iPhone gratuite et installable, sans App Store. Le déploiement Docker habituel met à jour l'application sur les deux systèmes.
 
+## Inventaire et notifications de stock (3 novembre 2026)
+
+- La page **Produits en stock** présente les quantités par référence, sans bouton de nouvelle entrée ni navigation supplémentaire.
+- Cliquer/toucher un produit ouvre une **fenêtre** listant tous les articles encore enregistrés pour cette référence : identifiants `STK-000000`, états, codes-barres et bouton **Réimprimer** pour chaque étiquette DYMO.
+- Les **seuils d'alerte sont facultatifs**. Ils sont configurés dans la fenêtre produit **sur PC par un administrateur**. Sur iPhone, cette configuration est masquée et l'utilisateur consulte simplement les quantités et les alertes.
+- Une notification Web Push est envoyée **uniquement lors du premier passage à la quantité minimum** lors d'une sortie de stock, ou lors de l'activation d'un nouveau seuil déjà atteint. Les sorties suivantes ne répètent pas la même alerte tant que le stock n'est pas repassé au-dessus du seuil.
+- Sur iPhone, installer StockPilot sur l'écran d'accueil (iOS 16.4+) et ouvrir **l'application installée**, puis dans Produits en stock toucher **Activer** dans « Alertes sur votre téléphone ». Accepter la demande iOS. Un **push de test** est envoyé au compte connecté après l'enregistrement. Les notifications peuvent être désactivées depuis le même bouton.
+- Sur Android Chrome en PWA, le même mécanisme Web Push est utilisé ; l'APK Android de test peut ne pas proposer de push si son moteur WebView ne prend pas en charge la Push API.
+- **Le Web Push est gratuit** (standard du navigateur, aucun compte Apple développeur, ni Firebase requis). Il demande HTTPS, une connexion sortante vers les services Apple/Google et des notifications autorisées sur le téléphone.
+- Les abonnements par utilisateur sont stockés dans SQLite, et la **clé privée VAPID** créée automatiquement dans `/data/stockpilot-vapid-private.pem`. Sauvegarder et conserver le volume persistant `/data` ; ne jamais publier ce fichier. Le service worker ne met pas en cache les informations de stock ni les identifiants.
+
 ## Fonctionnement
 
 1. **Entrée** : écrire le nom d'un produit. Le site suggère les références déjà connues. Si aucune référence ne correspond, il la crée pendant l'enregistrement. Le numéro de série est facultatif ; l'état est « Neuf », « Retour SAV » ou « Réparation ».
 2. **Étiquetage** : chaque unité reçoit un identifiant `STK-000001`, un **code-barres Code 128** et un **QR code** dans un **PDF vectoriel d'une seule page**, exactement dimensionné pour la DYMO LabelWriter 450 : **54 × 25 mm (11352)** par défaut ou **57 × 32 mm (11354)**, à sélectionner dans Configuration. Pas de page A4 autour.
 3. **Sortie** : scanner l'étiquette avec une douchette USB/Bluetooth ou une caméra compatible, ou saisir l'identifiant. Vérifier le produit, puis confirmer sa sortie. L'article disparaît du stock disponible.
-4. **Suivi** : la page **Produits en stock** regroupe les unités par référence et affiche la **quantité utilisable** (les articles en SAV ou réparation sont signalés à part). La direction peut fixer un seuil de stock minimum pour déclencher l'indication **À réapprovisionner**. Les filtres « À commander » et les exports CSV présentent les quantités par référence. L'historique conserve les mouvements par unité.
+4. **Suivi** : l'inventaire affiche les quantités utilisables, les articles SAV/réparation sont signalés séparément. Un clic ouvre la fiche de la référence et ses étiquettes STK. Les seuils facultatifs se configurent uniquement sur PC dans la fiche, tandis que les utilisateurs de l'application installée sur iPhone peuvent recevoir une notification de réapprovisionnement. Le filtre « À commander » reste dans l'inventaire. L'export CSV est disponible sur PC uniquement.
 
 La connexion à plusieurs comptes permet de conserver le nom de l'opérateur sur chaque mouvement. Les données sont centralisées dans une base SQLite persistante sur le NAS. Aucun faux stock n'est injecté en production.
 
