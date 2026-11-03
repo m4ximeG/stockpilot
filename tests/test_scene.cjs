@@ -483,3 +483,14 @@ test('Notifications : inscription consentie, pas de seuil à configurer sur iPho
  assert.match(css,/\.si-export\{display:none!important\}/);
  assert.match(more,/spMobileMenuArrive/);
 });
+
+test('Docker embarque les modules nécessaires au démarrage de Gunicorn',()=>{
+ const docker=fs.readFileSync('Dockerfile','utf8');
+ const app=fs.readFileSync('app.py','utf8');
+ assert.match(app,/^import push_service$/m);
+ assert.match(docker,/COPY app\.py push_service\.py \.\//);
+ assert.match(docker,/python -c "import app; assert app\.app\.test_client\(\)\.get\('\/healthz'\)\.status_code == 200"/);
+ assert.match(docker,/USER stockpilot/);
+ assert.match(docker,/VOLUME \["\/data"\]/);
+ assert.ok(fs.existsSync('push_service.py'));
+});
