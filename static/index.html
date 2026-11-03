@@ -202,7 +202,7 @@ function renderExit(){return SPBasic.exit({db,heading,btn,ico,scanResult,itemByI
 function renderProducts(){return SPBasic.inventory({db,me,heading,btn,tableFilter,tableType,tableStockFilter,product});}
 function renderHistory(){return SPBasic.history({db,heading,btn,product});}
 function renderSettingsLegacy(){return SPBasic.settings({db,me,heading});}
-function renderSettings(){return SPBasic.settings({db,me,heading});}
+function renderSettings(){return SPBasic.settings({db,me,heading,labelSize:stockPilotLabelSize()});}
 function renderModal(){
  if(!modal)return '';
  if(modal.type==='details')return SPBasic.detailModal({modal,itemById,product,ico});
@@ -225,10 +225,14 @@ function renderApp(){
  const target=$('#app');
  if(target)target.innerHTML=layout();
 }
+function stockPilotLabelSize(){
+ try{const value=window.localStorage.getItem('stockpilot-label-size');return ['54x25','57x32'].includes(value)?value:'54x25'}
+ catch(e){return '54x25'}
+}
 function printLabel(id){
  const item=itemById(id)||lastAdded;
  if(!item)return toast('Article introuvable',true);
- const popup=window.open('/label/'+encodeURIComponent(item.id),'_blank');
+ const popup=window.open('/label/'+encodeURIComponent(item.id)+'?size='+encodeURIComponent(stockPilotLabelSize()),'_blank');
  if(!popup)toast('Autorisez les fenêtres contextuelles pour imprimer',true);
 }
 async function removeItem(id){
@@ -399,7 +403,11 @@ case'stockthreshold':(async()=>{
 })();break;
 case'camera':startCamera();break;case'installapp':installMobileApp();break;case'selectscan':scanResult=itemById(id);renderContent();break;case'confirmout':case'outfrommodal':openModal({type:'confirmout',id});break;case'remove':removeItem(id);break;case'details':openModal({type:'details',id});break;case'closemodal':closeModal();break;case'entryslot':selectedProduct=db.catalog.find(p=>p.zone===a.dataset.slot[0])?.id||db.catalog[0]?.id||null;chosenSlot=a.dataset.slot;lastAdded=null;nav('entry');SPV3.selectSlot(a.dataset.slot);renderContent();break;case'zone':selectedSlot=`${a.dataset.zone}-1`;renderContent();break;case'pickslot':setSlot(a.dataset.slot);break;case'export':exportStock();break;case'exporthistory':exportHistory();break;case'clearstock':openModal({type:'clearstock'});break;case'reset':openModal({type:'reset'});break;case'doreset':(async()=>{try{await api('/api/admin/reset','POST',{});formSerial='';lastAdded=null;scanResult=null;selectedSlot='A-1';modal=null;await refreshState(true);nav('dashboard');toast('Stock fictif réinitialisé')}catch(e){toast(e.message,true)}})();break;case'movemodal':openModal({type:'move',id});break;case'confirmmove':(async()=>{try{await api('/api/items/'+encodeURIComponent(id)+'/move','POST',{slot:$('#move-slot')?.value});modal=null;await refreshState(true);renderApp();toast('Article déplacé')}catch(e){toast(e.message,true)}})();break;case'editproduct':openModal({type:'editproduct',id});break;case'listusers':(async()=>{try{users=(await api('/api/users')).users;openModal({type:'users'})}catch(e){toast(e.message,true)}})();break;case'toggleuser':(async()=>{const u=users.find(x=>String(x.id)===String(id));if(!u)return;try{await api('/api/users/'+id,'PATCH',{enabled:!u.enabled});users=(await api('/api/users')).users;openModal({type:'users'});toast('Compte mis à jour')}catch(e){toast(e.message,true)}})();break;case'backup':window.open('/api/backup','_blank');break;}});
 window.addEventListener('submit',async e=>{const f=e.target;if(!['catalog-form','user-form','password-form','edit-product-form'].includes(f.id))return;e.preventDefault();const data=Object.fromEntries(new FormData(f).entries());try{if(f.id==='catalog-form'){await api('/api/products','POST',data);toast('Référence ajoutée')}else if(f.id==='user-form'){await api('/api/users','POST',data);toast('Compte employé créé')}else if(f.id==='edit-product-form'){data.active=!!f.querySelector('[name=active]').checked;await api('/api/products/'+encodeURIComponent(f.dataset.id),'PATCH',data);modal=null;toast('Produit modifié')}else{await api('/api/me/password','POST',data);toast('Mot de passe modifié')}f.reset();await refreshState(true);renderApp()}catch(err){toast(err.message,true)}});
-window.addEventListener('change',e=>{if(SPV3.onChange(e,{refreshState,renderContent,toast}))return;if(e.target.id==='product-select'){selectedProduct=e.target.value;chosenSlot=null;renderContent()}else if(e.target.id==='condition-in'){formCondition=e.target.value}else if(e.target.id==='slot-in'){chosenSlot=e.target.value;selectedSlot=chosenSlot;renderContent()}else if(e.target.id==='filter-zone'){tableZone=e.target.value;renderContent()}else if(e.target.id==='filter-type'){tableType=e.target.value;renderContent()}});
+window.addEventListener('change',e=>{if(SPV3.onChange(e,{refreshState,renderContent,toast}))return;if(e.target.id==='label-size'){
+ try{window.localStorage.setItem('stockpilot-label-size',e.target.value)}catch(err){}
+ toast('Format DYMO enregistré : '+e.target.value.replace('x',' × ')+' mm.');
+ return;
+}if(e.target.id==='product-select'){selectedProduct=e.target.value;chosenSlot=null;renderContent()}else if(e.target.id==='condition-in'){formCondition=e.target.value}else if(e.target.id==='slot-in'){chosenSlot=e.target.value;selectedSlot=chosenSlot;renderContent()}else if(e.target.id==='filter-zone'){tableZone=e.target.value;renderContent()}else if(e.target.id==='filter-type'){tableType=e.target.value;renderContent()}});
 window.addEventListener('input',e=>{if(SPV3.onInput(e,db))return;if(e.target.id==='serial-in'){formSerial=e.target.value}else if(e.target.id==='filter-products'){tableFilter=e.target.value;let st=e.target.selectionStart;renderContent();const inp=$('#filter-products');if(inp){inp.focus();inp.setSelectionRange(st,st)}}});
 window.addEventListener('keydown',e=>{if(e.key==='Escape'&&modal)closeModal();else if(e.key==='Enter'&&e.target.id?.startsWith('sp-min-')){e.preventDefault();document.querySelector('[data-action="stockthreshold"][data-id="'+CSS.escape(e.target.id.slice(7))+'"]')?.click()}else if(e.key==='Enter'&&e.target.id==='scan-code'){e.preventDefault();lookup(e.target.value)}else if(e.key==='Enter'&&e.target.id==='global-search'){e.preventDefault();searchGlobal(e.target.value)}else if((e.key==='Enter'||e.key===' ')&&e.target.matches('[data-slot]')){e.preventDefault();setSlot(e.target.dataset.slot)}});
 window.addEventListener('pagehide',stopCamera);
