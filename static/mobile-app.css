@@ -144,9 +144,9 @@
 .sp-stock-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;color:#cddde9;font-size:11px}
 
 /* Suppression du rebond de bord / pull-to-refresh sur la zone applicative. */
-html,body{overscroll-behavior-x:none!important;overscroll-behavior-y:none!important}
+html,body{overscroll-behavior-y:none!important}
 body .app,body .main{overscroll-behavior-y:none!important}
-#content,.sp-stock-page{overscroll-behavior:contain}
+#content,.sp-stock-page{overscroll-behavior-y:none}
 
 /* iPhone portrait : navigation et formulaires en pleine largeur, sans défilement horizontal. */
 @media(max-width:860px){
