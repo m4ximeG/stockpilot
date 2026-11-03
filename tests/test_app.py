@@ -42,7 +42,7 @@ class StockPilotTests(unittest.TestCase):
         for route in ['/apple-touch-icon.png', '/app-icon-192.png', '/app-icon-512.png']:
             icon = self.client.get(route)
             self.assertEqual(icon.status_code, 200, route)
-            self.assertEqual(icon.data[:8], b'\\x89PNG\\r\\n\\x1a\\n', route)
+            self.assertEqual(icon.data[:8], bytes.fromhex('89504e470d0a1a0a'), route)
             self.assertTrue(icon.content_type.startswith('image/png'), route)
         self.assertEqual(self.client.get('/app-icon-999.png').status_code, 404)
 
