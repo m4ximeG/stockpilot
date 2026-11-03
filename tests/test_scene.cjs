@@ -84,7 +84,7 @@ test('Aurora est chargé et reproduit la structure sans supprimer les fonctions'
  const html=fs.readFileSync('static/index.html','utf8');
  const css=fs.readFileSync('static/aurora.css','utf8');
  assert.match(html,/aurora\.css\?v=aurora-20261102-2/);
- assert.match(html,/barcode-only\.js\?v=inventory-20261103-1/);
+ assert.match(html,/barcode-only\.js\?v=inventory-20261103-2/);
  assert.match(css,/\.aurora-dashboard/);
  assert.match(css,/\.aur-rail-main/);
  assert.match(css,/\.aur-metrics/);
@@ -298,7 +298,7 @@ test('Application iPhone / Android : manifeste et protections des données',()=>
  assert.deepEqual(manifest.icons.map(i=>i.sizes),['192x192','512x512']);
  assert.match(html,/rel="manifest" href="\/static\/app\.webmanifest"/);
  assert.match(html,/apple-touch-icon/);
- assert.match(html,/navigator\.serviceWorker\.register\('\/sw\.js'\)/);
+ assert.match(html,/navigator\.serviceWorker\.register\('\/sw\.js\?version=2'\)/);
  assert.match(html,/\/static\/mobile-app\.css\?v=4/);
  assert.match(app,/@app\.get\('\/sw\.js'\)/);
  assert.match(app,/@app\.get\('\/apple-touch-icon\.png'\)/);
@@ -317,38 +317,40 @@ test('Installation guidée depuis les paramètres mobiles',()=>{
  assert.match(css,/\.sp-mobile-install\{display:none!important\}/);
 });
 
-test('Inventaire par référence : quantités compactes et alertes vraiment facultatives',()=>{
- const ctx={...context,db:{...db,items:[item,{...item,id:'STK-000011'}],catalog:[{...product,min_stock:3}]},
-  tableStockFilter:'all'};
+test('Inventaire : popup produit au lieu de menu déroulant, seuil facultatif en PC',()=>{
+ const ctx={...context,db:{...db,items:[item,{...item,id:'STK-000011'}],catalog:[{...product,min_stock:3}]},tableStockFilter:'all'};
  const html=basic.inventory(ctx);
  assert.match(html,/si-inventory/);
- assert.match(html,/si-summary/);
- assert.match(html,/si-list/);
  assert.match(html,/si-is-alert/);
  assert.match(html,/Stock faible · à commander/);
  assert.match(html,/Minimum : 3/);
- assert.match(html,/id="si-alert-terra1" type="checkbox" checked/);
- assert.match(html,/id="si-min-terra1"/);
- assert.match(html,/data-action="stockthreshold"/);
- assert.match(html,/Unités et étiquettes <span>2/);
+ assert.match(html,/data-action="stockproduct"/);
+ assert.doesNotMatch(html,/data-action="newentryproduct"/);
+ assert.doesNotMatch(html,/data-action="newentry"/);
+ assert.doesNotMatch(html,/<details/);
+ assert.match(html,/data-action="pushsubscribe"/);
  assert.match(html,/data-action="exportstocksummary"/);
- assert.match(html,/data-action="newentryproduct"/);
- assert.equal((html.match(/class="si-record /g)||[]).length,1,'Une seule ligne par référence');
- assert.doesNotMatch(html,/sp-stock-overview|sp-stock-row/);
- const noAlert={...ctx,db:{...ctx.db,items:[],catalog:[{...product,min_stock:0}]}};
- const untracked=basic.inventory(noAlert);
- assert.match(untracked,/Sans alerte/);
- assert.match(untracked,/0<\/b>/);
- assert.doesNotMatch(untracked,/si-is-alert|Rupture · à commander|Stock faible · à commander/);
- assert.match(basic.inventory({...noAlert,tableStockFilter:'low'}),/Aucun produit ne correspond/);
- const emptyTracked=basic.inventory({...ctx,db:{...ctx.db,items:[]}});
- assert.match(emptyTracked,/Rupture · à commander/);
+ assert.equal((html.match(/class="si-record /g)||[]).length,1);
+ const p=ctx.db.catalog[0];
+ const modal=basic.stockProductModal({...ctx,modal:{id:p.id},product:id=>id===p.id?p:null});
+ assert.match(modal,/role="dialog" aria-modal="true"/);
+ assert.match(modal,/STK-000010/);
+ assert.match(modal,/STK-000011/);
+ assert.match(modal,/barcode.svg/);
+ assert.equal((modal.match(/data-action="print"/g)||[]).length,2);
+ assert.match(modal,/data-action="stockthreshold"/);
+ assert.match(modal,/si-desktop-alert/);
+ const zero=basic.inventory({...ctx,db:{...ctx.db,items:[],catalog:[{...p,min_stock:0}]}});
+ assert.match(zero,/Sans alerte/);
+ assert.doesNotMatch(zero,/Rupture · à commander/);
+ assert.match(basic.inventory({...ctx,tableStockFilter:'low'}),/Alerte/);
+ const noAlerts=basic.inventory({...ctx,db:{...ctx.db,items:[],catalog:[{...p,min_stock:0}]},tableStockFilter:'low'});
+ assert.match(noAlerts,/Aucun produit ne correspond/);
  const sav=basic.inventory({...ctx,db:{...ctx.db,items:[{...item,condition:'Retour SAV'}]}});
  assert.match(sav,/1 en SAV \/ réparation/);
- assert.match(sav,/Rupture · à commander/);
- const employee=basic.inventory({...ctx,me:{role:'employee'}});
- assert.doesNotMatch(employee,/data-action="stockthreshold"/);
- assert.match(employee,/Alerte activée à 3 unités/);
+ const userModal=basic.stockProductModal({...ctx,me:{role:'employee'},modal:{id:p.id},product:id=>id===p.id?p:null});
+ assert.doesNotMatch(userModal,/data-action="stockthreshold"/);
+ assert.match(userModal,/STK-000010/);
 });
 test('iPhone : interface verticale et rebond désactivé sans casser le défilement',()=>{
  const css=fs.readFileSync('static/mobile-app.css','utf8');
@@ -379,7 +381,7 @@ test('Étiquettes DYMO : PDF à l’échelle choisie depuis les paramètres',()=
 test('iPhone : fond unique stable dans la composition, sans parallax Safari',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
  const css=fs.readFileSync('static/mobile-layout.css','utf8');
- assert.match(html,/\/static\/mobile-layout\.css\?v=2/);
+ assert.match(html,/\/static\/mobile-layout\.css\?v=3/);
  assert.match(css,/body::before\s*\{/);
  assert.match(css,/position:fixed; top:0; left:0/);
  assert.match(css,/height:100lvh/);
@@ -423,7 +425,7 @@ test('Barre de navigation iPhone toujours visible hors accueil malgré polish.cs
  assert.match(mobile,/body:not\(\.aurora-on\) \.mobilebottom,\s*body\.aurora-on \.mobilebottom\s*\{[^}]*display:grid!important/);
  assert.match(mobile,/visibility:visible!important/);
  assert.match(html,/<nav class="mobilebottom" aria-label="Navigation mobile"/);
- assert.match(html,/\/static\/mobile-layout\.css\?v=2/);
+ assert.match(html,/\/static\/mobile-layout\.css\?v=3/);
  const polishPosition=html.indexOf('/static/polish.css');
  const mobilePosition=html.indexOf('/static/mobile-layout.css');
  assert.ok(mobilePosition>polishPosition,'Les règles mobiles doivent venir après polish.css');
@@ -435,7 +437,7 @@ test('Animation inventaire : une apparition homogène, sans cascade sur chaque l
  assert.match(html,/const selectors='\.basic-entry-form,\.basic-entry-help,\.basic-table-card,\.settingscard,\.formcard,\.card';/);
  assert.doesNotMatch(html,/\.sp-stock-overview>div,\.sp-stock-row/);
  assert.match(css,/#content\.sp-route-in \.si-inventory\s*\{[\s\S]*?animation:aurSlideR/);
- assert.match(html,/\/static\/inventory-ui\.css\?v=2/);
+ assert.match(html,/\/static\/inventory-ui\.css\?v=4/);
  const start=html.indexOf('/static/mobile-layout.css'),last=html.indexOf('/static/inventory-ui.css');
  assert.ok(last>start);
 });
@@ -459,8 +461,25 @@ test('Réception depuis le stock : produit existant déjà sélectionné',()=>{
 });
 test('Assets inventaire récents : Safari ne garde pas les anciens styles et scripts',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
- assert.match(html,/\/static\/barcode-only\.js\?v=inventory-20261103-1/);
+ assert.match(html,/\/static\/barcode-only\.js\?v=inventory-20261103-2/);
  assert.match(html,/\/static\/reception\.js\?v=12/);
- assert.match(html,/\/static\/inventory-ui\.css\?v=2/);
- assert.match(html,/\/static\/mobile-layout\.css\?v=2/);
+ assert.match(html,/\/static\/inventory-ui\.css\?v=4/);
+ assert.match(html,/\/static\/mobile-layout\.css\?v=3/);
+});
+
+test('Notifications : inscription consentie, pas de seuil à configurer sur iPhone',()=>{
+ const js=fs.readFileSync('static/index.html','utf8');
+ const sw=fs.readFileSync('static/sw.js','utf8');
+ const css=fs.readFileSync('static/inventory-ui.css','utf8');
+ const more=fs.readFileSync('static/mobile-layout.css','utf8');
+ assert.match(js,/case'pushsubscribe':togglePushSubscription\(a\)/);
+ assert.match(js,/Notification.requestPermission\(\)/);
+ assert.match(js,/pushManager.subscribe/);
+ assert.match(sw,/self.addEventListener\('push'/);
+ assert.match(sw,/self.registration.showNotification/);
+ assert.match(sw,/self.addEventListener\('notificationclick'/);
+ assert.match(css,/@media\(max-width:860px\)/);
+ assert.match(css,/\.si-desktop-alert\{display:none!important\}/);
+ assert.match(css,/\.si-export\{display:none!important\}/);
+ assert.match(more,/spMobileMenuArrive/);
 });
