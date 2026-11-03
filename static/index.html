@@ -501,29 +501,62 @@ function decodePushKey(encoded){
  const raw=atob(encoded.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-encoded.length%4)%4));
  return Uint8Array.from(raw,character=>character.charCodeAt(0));
 }
+const PUSH_PREFERENCE_KEY='stockpilot-notifications-enabled';
+function rememberPushPreference(enabled){
+ try{window.localStorage.setItem(PUSH_PREFERENCE_KEY,enabled?'1':'0')}catch(e){}
+}
+function wantsPushNotifications(){
+ try{return window.localStorage.getItem(PUSH_PREFERENCE_KEY)==='1'}catch(e){return false}
+}
+let pushRecoveryRunning=false;
+async function restorePushOnAppLaunch(){
+ if(pushRecoveryRunning||!pushAvailable()||Notification.permission!=='granted')return;
+ pushRecoveryRunning=true;
+ try{
+  const registration=await navigator.serviceWorker.ready;
+  let sub=await registration.pushManager.getSubscription();
+  if(!sub&&wantsPushNotifications()){
+   // Préférence déjà donnée par l'utilisateur. Ne jamais redemander la permission.
+   const keyData=await api('/api/push/public-key');
+   sub=await registration.pushManager.subscribe({
+    userVisibleOnly:true,applicationServerKey:decodePushKey(keyData.publicKey)
+   });
+  }
+  if(sub){
+   // Répare un éventuel abonnement serveur manquant après une mise à jour, sans
+   // demander de réinstaller l'app ni réactiver les notifications.
+   await api('/api/push/subscriptions','POST',sub.toJSON());
+   rememberPushPreference(true);
+  }
+ }catch(e){
+  console.warn('StockPilot: récupération des notifications à vérifier');
+ }finally{
+  pushRecoveryRunning=false;
+  updatePushButton();
+ }
+}
 async function updatePushButton(){
  const btn=document.querySelector('[data-action="pushsubscribe"]');
  const stockBanner=document.querySelector('.si-mobile-push');
  if(!btn)return;
- // Le panneau d'activation n'est montré qu'après vérification de l'état du téléphone.
+ // Aucune réapparition du bandeau pendant la vérification de l'abonnement.
  if(stockBanner)stockBanner.hidden=true;
  if(!pushAvailable()){
-  btn.disabled=true;
-  btn.textContent='Indisponible';
-  return;
+  btn.disabled=true;btn.textContent='Indisponible';return;
  }
  try{
-  const reg=await navigator.serviceWorker.getRegistration('/');
-  const subscription=reg?await reg.pushManager.getSubscription():null;
-  const active=!!subscription&&Notification.permission==='granted';
+  const reg=await navigator.serviceWorker.ready;
+  const sub=await reg.pushManager.getSubscription();
   const current=document.querySelector('[data-action="pushsubscribe"]');
-  if(!current)return; // La page a pu changer pendant la vérification asynchrone.
+  if(!current)return;
+  const active=!!sub&&Notification.permission==='granted';
   current.textContent=active?'Désactiver':'Activer';
   current.dataset.subscribed=active?'yes':'no';
   current.disabled=false;
+  if(active)rememberPushPreference(true);
   const visibleBanner=document.querySelector('.si-mobile-push');
   if(visibleBanner)visibleBanner.hidden=active;
- }catch(error){
+ }catch(e){
   const current=document.querySelector('[data-action="pushsubscribe"]');
   if(current){current.textContent='Réessayer';current.disabled=false}
   const visibleBanner=document.querySelector('.si-mobile-push');
@@ -544,6 +577,7 @@ async function togglePushSubscription(button){
     await api('/api/push/subscriptions','DELETE',{endpoint:sub.endpoint});
     await sub.unsubscribe();
    }
+   rememberPushPreference(false);
    toast('Notifications désactivées sur cet appareil.');
    updatePushButton();
   }catch(e){toast(e.message||'Impossible de désactiver les notifications.',true)}
@@ -562,6 +596,7 @@ async function togglePushSubscription(button){
    userVisibleOnly:true,applicationServerKey:decodePushKey(keyData.publicKey)
   });
   await api('/api/push/subscriptions','POST',sub.toJSON());
+  rememberPushPreference(true);
   toast('Notifications de stock activées sur cet appareil.');
   // Contrôle réel : la notification de test va uniquement au compte connecté.
   const result=await api('/api/push/test','POST',{});
@@ -651,7 +686,10 @@ setInterval(syncStockAcrossDevices,1200);
 window.addEventListener('focus',syncStockAcrossDevices);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncStockAcrossDevices()});
 if('serviceWorker' in navigator && location.protocol==='https:'){
- window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js?version=2').catch(()=>{}));
+ window.addEventListener('load',async()=>{
+  try{await navigator.serviceWorker.register('/sw.js?version=2');await restorePushOnAppLaunch()}
+  catch(e){console.warn('StockPilot: service worker indisponible')}
+});
 }
 })();
 </script>
