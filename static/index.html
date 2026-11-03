@@ -26,8 +26,8 @@
 
 
 
-<script src="/static/barcode-only.js?v=mobile-20261103-3"></script>
-<script src="/static/reception.js?v=12"></script>
+<script src="/static/barcode-only.js?v=categories-20261103-1"></script>
+<script src="/static/reception.js?v=13"></script>
 <link rel="stylesheet" href="/static/barcode-only.css?v=aurora-20261102-2" />
 
 <link rel="stylesheet" href="/static/aurora.css?v=aurora-20261102-2" />
@@ -254,6 +254,7 @@ function renderSettings(){return SPBasic.settings({db,me,heading,labelSize:stock
 function renderModal(){
  if(!modal)return '';
  if(modal.type==='stockproduct')return SPBasic.stockProductModal({modal,db,me,product});
+ if(modal.type==='unitpreparation')return SPBasic.unitPreparationModal({modal,db,me,product});
  if(modal.type==='details')return SPBasic.detailModal({modal,itemById,product,ico});
  if(modal.type==='editproduct')return SPBasic.editModal({modal,product});
  if(modal.type==='confirmout'){
@@ -607,7 +608,19 @@ async function togglePushSubscription(button){
 function searchGlobal(v){searchTerm=v;page='products';tableFilter=v;renderApp();const f=$('#filter-products');if(f){f.focus();f.setSelectionRange(f.value.length,f.value.length)}}
 // Global delegated controls
 window.addEventListener('click',ev=>{if(SPV3.onClick(ev,{db,api,refreshState,renderContent,toast,printLabel,page,setSlot}))return;const n=ev.target.closest('[data-nav]');if(n){nav(n.dataset.nav);return}const slot=ev.target.closest('[data-slot]');if(slot){setSlot(slot.dataset.slot);return}const a=ev.target.closest('[data-action]');if(!a)return;const act=a.dataset.action,id=a.dataset.id;if(act==='backdrop'){if(ev.target===a)closeModal();return}switch(act){case'save-shelf':(async()=>{if(me.role!=='admin')return;const slot=a.dataset.slot;try{await api('/api/shelves/'+encodeURIComponent(slot),'PATCH',{size:$('#shelf-size')?.value||'unknown',note:$('#shelf-note')?.value||''});await refreshState(true);renderContent();toast('Niveau '+slot+' mis à jour')}catch(e){toast(e.message,true)}})();break;case'clearstock':openModal({type:'clearstock'});break;case'doclearstock':(async()=>{if($('#clear-confirm')?.value!=='VIDER LE STOCK')return toast('Confirmation incorrecte',true);try{await api('/api/admin/clear-stock','POST',{confirmation:'VIDER LE STOCK'});lastAdded=null;scanResult=null;modal=null;selectedProduct=null;await refreshState(true);nav('dashboard');toast('Stock vidé. Sauvegarde créée sur le NAS.')}catch(e){toast(e.message,true)}})();break;case'save-rule':(async()=>{if(me.role!=='admin')return;const slot=$('#rule-'+id)?.value??'';try{await api('/api/products/'+encodeURIComponent(id),'PATCH',{preferred_slot:slot});await refreshState(true);renderContent();toast(slot?'Emplacement conseillé enregistré':'Suggestion de rangement effacée')}catch(e){toast(e.message,true)}})();break;case'setlocationmode':(async()=>{if(me.role!=='admin')return;try{const mode=a.dataset.mode;await api('/api/settings/location-mode','POST',{mode});locationMode=mode;await refreshState(true);renderApp();toast('Mode de rangement mis à jour')}catch(e){toast(e.message,true)}})();break;case'mobilemore':toggleMobileMore();break;case'closemobilemore':toggleMobileMore(false);break;case'menu':mobileNav=true;renderApp();break;case'closemenu':mobileNav=false;renderApp();break;case'newentry':goEntry();break;case'goexit':goExit();break;case'gomap':nav('map');break;case'saveentry':recordEntry();break;case'print':printLabel(id);break;case'lookup':lookup($('#scan-code')?.value);break;case'stockfilter':tableStockFilter=['all','low','in'].includes(a.dataset.status)?a.dataset.status:'all';renderContent();break;
-case'stockproduct':openModal({type:'stockproduct',id});break;case'pushsubscribe':togglePushSubscription(a);break;
+case'stockproduct':openModal({type:'stockproduct',id});break;
+case'editunit':{
+ const unit=itemById(id);
+ if(unit)openModal({type:'unitpreparation',id,productId:unit.pid});
+ else toast('Article introuvable dans le stock.',true);
+ break;
+}
+case'returnproduct':{
+ const pid=modal?.productId||(modal?.id&&itemById(modal.id)?.pid);
+ if(pid)openModal({type:'stockproduct',id:pid});else closeModal();
+ break;
+}
+case'pushsubscribe':togglePushSubscription(a);break;
 case'exportstocksummary':exportStockSummary();break;
 case'stockthreshold':(async()=>{
  if(me.role!=='admin')return toast('Réservé aux administrateurs.',true);
@@ -627,7 +640,27 @@ case'stockthreshold':(async()=>{
  }catch(e){toast(e.message,true)}
 })();break;
 case'camera':startCamera();break;case'installapp':installMobileApp();break;case'selectscan':scanResult=itemById(id);renderContent();break;case'confirmout':case'outfrommodal':openModal({type:'confirmout',id});break;case'remove':removeItem(id);break;case'details':openModal({type:'details',id});break;case'closemodal':closeModal();break;case'entryslot':selectedProduct=db.catalog.find(p=>p.zone===a.dataset.slot[0])?.id||db.catalog[0]?.id||null;chosenSlot=a.dataset.slot;lastAdded=null;nav('entry');SPV3.selectSlot(a.dataset.slot);renderContent();break;case'zone':selectedSlot=`${a.dataset.zone}-1`;renderContent();break;case'pickslot':setSlot(a.dataset.slot);break;case'export':exportStock();break;case'exporthistory':exportHistory();break;case'clearstock':openModal({type:'clearstock'});break;case'reset':openModal({type:'reset'});break;case'doreset':(async()=>{try{await api('/api/admin/reset','POST',{});formSerial='';lastAdded=null;scanResult=null;selectedSlot='A-1';modal=null;await refreshState(true);nav('dashboard');toast('Stock fictif réinitialisé')}catch(e){toast(e.message,true)}})();break;case'movemodal':openModal({type:'move',id});break;case'confirmmove':(async()=>{try{await api('/api/items/'+encodeURIComponent(id)+'/move','POST',{slot:$('#move-slot')?.value});modal=null;await refreshState(true);renderApp();toast('Article déplacé')}catch(e){toast(e.message,true)}})();break;case'editproduct':openModal({type:'editproduct',id});break;case'listusers':(async()=>{try{users=(await api('/api/users')).users;openModal({type:'users'})}catch(e){toast(e.message,true)}})();break;case'toggleuser':(async()=>{const u=users.find(x=>String(x.id)===String(id));if(!u)return;try{await api('/api/users/'+id,'PATCH',{enabled:!u.enabled});users=(await api('/api/users')).users;openModal({type:'users'});toast('Compte mis à jour')}catch(e){toast(e.message,true)}})();break;case'backup':window.open('/api/backup','_blank');break;}});
-window.addEventListener('submit',async e=>{const f=e.target;if(!['catalog-form','user-form','password-form','mobile-password-form','edit-product-form'].includes(f.id))return;e.preventDefault();const data=Object.fromEntries(new FormData(f).entries());try{if(f.id==='catalog-form'){await api('/api/products','POST',data);toast('Référence ajoutée')}else if(f.id==='user-form'){await api('/api/users','POST',data);toast('Compte employé créé')}else if(f.id==='edit-product-form'){data.active=!!f.querySelector('[name=active]').checked;await api('/api/products/'+encodeURIComponent(f.dataset.id),'PATCH',data);modal=null;toast('Produit modifié')}else{await api('/api/me/password','POST',data);toast('Mot de passe modifié')}f.reset();await refreshState(true);renderApp()}catch(err){toast(err.message,true)}});
+window.addEventListener('submit',async e=>{const f=e.target;if(!['catalog-form','user-form','password-form','mobile-password-form','edit-product-form','sp-unit-edit-form'].includes(f.id))return;
+e.preventDefault();
+const data=Object.fromEntries(new FormData(f).entries());
+try{
+if(f.id==='sp-unit-edit-form'){
+ const unit=itemById(f.dataset.id);
+ if(!unit){toast('Article retiré du stock. Impossible de modifier sa fiche.',true);return}
+ const specs={};
+ for(const [key,value] of Object.entries(data)){
+  if(key.startsWith('spec_')){specs[key.slice(5)]=value;delete data[key]}
+ }
+ await api('/api/items/'+encodeURIComponent(unit.id)+'/preparation','PATCH',{
+  serial:data.serial||'',specs,prep_status:data.prep_status||unit.prepStatus||'not_required'
+ });
+ const pid=unit.pid;
+ await refreshState(true);
+ openModal({type:'stockproduct',id:pid});
+ toast('Fiche de l’article enregistrée.');
+ return;
+}
+if(f.id==='catalog-form'){await api('/api/products','POST',data);toast('Référence ajoutée')}else if(f.id==='user-form'){await api('/api/users','POST',data);toast('Compte employé créé')}else if(f.id==='edit-product-form'){data.active=!!f.querySelector('[name=active]').checked;await api('/api/products/'+encodeURIComponent(f.dataset.id),'PATCH',data);modal=null;toast('Produit modifié')}else{await api('/api/me/password','POST',data);toast('Mot de passe modifié')}f.reset();await refreshState(true);renderApp()}catch(err){toast(err.message,true)}});
 window.addEventListener('change',e=>{if(SPV3.onChange(e,{refreshState,renderContent,toast}))return;if(e.target.id==='label-size'){
  try{window.localStorage.setItem('stockpilot-label-size',e.target.value)}catch(err){}
  toast('Format DYMO enregistré : '+e.target.value.replace('x',' × ')+' mm.');
