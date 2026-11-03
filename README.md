@@ -29,6 +29,15 @@ StockPilot s'installe directement depuis **https://stockpilot.m4xim.eu**. L'appl
 
 **Important** : la publication d'une application native iOS sur l'App Store requiert l'Apple Developer Program payant. La PWA ci-dessus est la solution iPhone gratuite et installable, sans App Store. Le déploiement Docker habituel met à jour l'application sur les deux systèmes.
 
+## Synchronisation multi-appareils (3 novembre 2026)
+
+- Tout changement d'inventaire, de quantité, d'état, de référence, de mouvement ou de configuration est détecté via **un compteur SQLite transactionnel** partagé par les processus Docker. Ce compteur est augmenté automatiquement par des triggers SQL, dans la même transaction que les données.
+- PC, iPhone et Android contrôlent la révision toutes les **1,2 seconde lorsque la page est visible** et immédiatement au retour sur l'application. Si la révision n'a pas changé, aucun stock complet n'est téléchargé.
+- Quand une révision change, le navigateur charge un **instantané cohérent** depuis `/api/state`. Il met à jour uniquement les compteurs et listes visibles de l'accueil, des stocks, de l'historique ou du scanner. Pas de rechargement de page, pas de nouvelle animation, pas de retour en haut.
+- **Saisie protégée** : la réception en cours, les champs de recherche, le scan, les fenêtres modales, les filtres et les formulaires de configuration ne sont pas réinitialisés par une modification d'un autre appareil. Une fenêtre ouverte reste en place et affiche les données actualisées à la réouverture.
+- Le système ne nécessite pas de Redis, WebSocket, service payant ou serveur tiers. Il fonctionne avec le SQLite existant et les sessions actuelles. La synchronisation prend généralement **environ 1 à 2 secondes** sur un appareil connecté, et se rattrape dès le retour au premier plan.
+- L'activation des notifications sur iPhone est retenue localement et **l'abonnement Web Push est à nouveau enregistré côté serveur** au lancement, sans redemander l'autorisation. Un utilisateur peut toujours les désactiver dans les paramètres.
+
 ## Inventaire et notifications de stock (3 novembre 2026)
 
 - La page **Produits en stock** présente les quantités par référence, sans bouton de nouvelle entrée ni navigation supplémentaire.
