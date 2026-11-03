@@ -641,3 +641,72 @@ test('Notifications iPhone : préférence persistante et réparation du serveur 
  assert.match(html,/if\(!sub&&wantsPushNotifications\(\)\)/);
  assert.match(html,/await restorePushOnAppLaunch\(\)/);
 });
+
+test('Réception : choix de catégorie et fiche ordinateur sans détail obligatoire',()=>{
+ receive.reset();
+ let html=receive.entry(context);
+ assert.match(html,/id="rx-category"/);
+ for(const category of ['Matériel','Ordinateur portable','Ordinateur fixe','Écran','Imprimante','Réseau','Périphérique','Téléphone \/ tablette','Composant','Autre']){
+  assert.ok(html.includes('<option value="'+category+'"'),category);
+ }
+ assert.doesNotMatch(html,/id="rx-spec-ram_gb"/);
+ const updates=[];
+ const change={target:{id:'rx-category',value:'Ordinateur portable'}};
+ assert.equal(receive.onChange(change,{renderContent:()=>updates.push(1)}),true);
+ assert.equal(updates.length,1);
+ html=receive.entry(context);
+ assert.match(html,/id="rx-spec-cpu"/);
+ assert.match(html,/id="rx-spec-cores"/);
+ assert.match(html,/id="rx-spec-ram_gb"/);
+ assert.match(html,/id="rx-spec-storage"/);
+ assert.match(html,/id="rx-spec-os"/);
+ assert.match(html,/data-rx="prep" data-value="pending"/);
+ assert.match(html,/En attente/);
+ receive.onInput({target:{id:'rx-spec-ram_gb',value:'16'}},db);
+ html=receive.entry(context);
+ assert.match(html,/id="rx-spec-ram_gb"[^>]*value="16"/);
+ receive.onChange({target:{id:'rx-category',value:'Matériel'}},{renderContent:()=>{}});
+ html=receive.entry(context);
+ assert.doesNotMatch(html,/id="rx-spec-ram_gb"/);
+ assert.doesNotMatch(html,/data-rx="prep"/);
+ receive.reset();
+});
+test('Fiche de stock : code STK, prépa par unité et popup sans navigation inutile',()=>{
+ const computer={...product,cat:'Ordinateur portable'};
+ const pcItem={...item,prepStatus:'pending',specs:{ram_gb:16,cores:6,cpu:'Intel Core i5'}};
+ const ctx={...context,db:{...db,catalog:[computer],items:[pcItem]},
+  modal:{id:computer.id},product:id=>id===computer.id?computer:null};
+ const html=basic.stockProductModal(ctx);
+ assert.match(html,/STK-000010/);
+ assert.match(html,/En attente de préparation/);
+ assert.match(html,/RAM \(Go\) : 16/);
+ assert.match(html,/data-action="editunit"/);
+ assert.match(html,/data-action="print"/);
+ const edit=basic.unitPreparationModal({...ctx,modal:{id:pcItem.id}});
+ assert.match(edit,/id="sp-unit-edit-form"/);
+ assert.match(edit,/name="prep_status" value="pending" checked/);
+ assert.match(edit,/name="spec_cores"/);
+ assert.match(edit,/value="16"/);
+ assert.match(edit,/name="serial"/);
+ const material={...product,cat:'Matériel'};
+ const misc=basic.unitPreparationModal({...ctx,db:{...ctx.db,catalog:[material]},modal:{id:pcItem.id}});
+ assert.doesNotMatch(misc,/name="prep_status"/);
+ assert.doesNotMatch(misc,/name="spec_cores"/);
+});
+test('Les fichiers de catégories sont embarqués avec le site et responsables sur mobile',()=>{
+ const index=fs.readFileSync('static/index.html','utf8');
+ const style=fs.readFileSync('static/product-types.css','utf8');
+ const app=fs.readFileSync('app.py','utf8');
+ assert.match(index,/\/static\/product-types\.css\?v=1/);
+ assert.match(index,/\/static\/reception\.js\?v=13/);
+ assert.match(index,/unitPreparationModal/);
+ assert.match(index,/case'editunit'/);
+ assert.match(index,/sp-unit-edit-form/);
+ assert.match(style,/\.rx-category-select/);
+ assert.match(style,/@media\(max-width:860px\)/);
+ assert.match(style,/\.sp-unit-spec-grid/);
+ assert.match(app,/CREATE TABLE IF NOT EXISTS sync_revision/);
+ assert.match(app,/ALTER TABLE items ADD COLUMN prep_status/);
+ assert.match(app,/ALTER TABLE items ADD COLUMN specs_json/);
+ assert.match(app,/@app\.patch\('\/api\/items\/<item_id>\/preparation'\)/);
+});
