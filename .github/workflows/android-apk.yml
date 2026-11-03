@@ -1,0 +1,54 @@
+name: StockPilot Android — APK
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'android-app/**'
+      - '.github/workflows/android-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    name: Compiler et publier l'APK de test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Installer le SDK 35
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Gradle 8.11.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Compiler l'application Android
+        run: gradle -p android-app :app:assembleDebug --no-daemon
+
+      - name: Sauvegarder l'APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: StockPilot-Android-APK
+          path: android-app/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Publier un lien de téléchargement stable
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view android-latest >/dev/null 2>&1; then
+            gh release create android-latest --title "StockPilot Android — APK de test" --notes "Application de test Android gratuite, connectée au StockPilot du NAS. Installez le fichier APK uniquement si vous faites confiance à ce dépôt."
+          fi
+          gh release upload android-latest "android-app/app/build/outputs/apk/debug/app-debug.apk#StockPilot-Android.apk" --clobber
