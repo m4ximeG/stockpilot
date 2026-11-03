@@ -67,14 +67,68 @@ function dashboard(c){
  '<button data-nav="products">'+c.ico('package',18)+' Inventaire <span>→</span></button></div></section>';
 }
 function inventory(c){
- const filter=(c.tableFilter||'').toLocaleLowerCase('fr');
- const rows=c.db.items.filter(i=>{const p=c.product(i.pid),v=[name(p),i.id,i.serial||'',p?.ref||'',p?.cat||''].join(' ').toLocaleLowerCase('fr');return v.includes(filter)&&(c.tableType==='all'||c.tableType===p?.cat)}).sort((a,b)=>b.inAt-a.inAt);
+ const filter=(c.tableFilter||'').trim().toLocaleLowerCase('fr'),statusFilter=c.tableStockFilter||'all';
  const categories=[...new Set(c.db.catalog.map(p=>p.cat).filter(Boolean))].sort();
- return c.heading('INVENTAIRE','Produits en stock','Recherchez vos articles et réimprimez les étiquettes si nécessaire.',c.btn('Nouvelle entrée','newentry','plus'))+
- '<section class="card basic-table-card"><div class="cardhead"><div><h2>Inventaire actuel</h2><p>'+rows.length+' article(s) disponible(s).</p></div><button class="more" data-action="export">Exporter CSV</button></div>'+
- '<div class="basic-filters"><input id="filter-products" value="'+escape(c.tableFilter)+'" placeholder="Rechercher un produit, une référence, un numéro de série…" autocomplete="off"/><select id="filter-type"><option value="all">Toutes les catégories</option>'+categories.map(cat=>'<option value="'+escape(cat)+'"'+(c.tableType===cat?' selected':'')+'>'+escape(cat)+'</option>').join('')+'</select></div>'+
- '<div class="table-wrap"><table class="slim-table basic-table"><thead><tr><th>Produit</th><th>Identifiant</th><th>N° de série</th><th>État</th><th>Entrée le</th><th></th></tr></thead><tbody>'+
- (rows.length?rows.map(i=>{const p=c.product(i.pid);return '<tr class="clickrow" data-action="details" data-id="'+escape(i.id)+'"><td><strong>'+escape(name(p))+'</strong><small>'+escape(p?.ref||'')+'</small></td><td class="basic-id">'+escape(i.id)+'</td><td>'+escape(i.serial||'—')+'</td><td>'+escape(i.condition||'Neuf')+'</td><td>'+stamp(i.inAt)+'</td><td><button class="linkbtn" data-action="details" data-id="'+escape(i.id)+'">Voir →</button></td></tr>'}).join(''):'<tr><td colspan="6" class="basic-table-empty">Aucun article en stock pour cette recherche.</td></tr>')+'</tbody></table></div></section>';
+ const unitMap=new Map();
+ for(const u of c.db.items){if(!unitMap.has(u.pid))unitMap.set(u.pid,[]);unitMap.get(u.pid).push(u)}
+ const all=c.db.catalog.map(p=>{
+  const units=unitMap.get(p.id)||[],qty=units.length,min=Math.max(0,Number(p.min_stock)||0);
+  return {p,units,qty,min,status:qty===0?'empty':min>0&&qty<=min?'low':'ok'};
+ });
+ const total=all.reduce((a,x)=>a+x.qty,0);
+ const lowCount=all.filter(x=>x.status!=='ok'&&x.p.active!==0).length;
+ const visible=all.filter(x=>{
+  if(c.tableType!=='all'&&c.tableType!==x.p.cat)return false;
+  if(statusFilter==='low'&&x.status==='ok')return false;
+  if(statusFilter==='in'&&x.qty===0)return false;
+  if(!filter)return true;
+  return [name(x.p),x.p.ref,x.p.cat,...x.units.flatMap(i=>[i.id,i.serial||''])].join(' ').toLocaleLowerCase('fr').includes(filter);
+ }).sort((a,b)=>({empty:0,low:1,ok:2}[a.status]-{empty:0,low:1,ok:2}[b.status])||name(a.p).localeCompare(name(b.p),'fr'));
+ const chip=(value,label)=>'<button type="button" class="sp-stock-chip '+(statusFilter===value?'is-active':'')+
+  '" data-action="stockfilter" data-status="'+value+'" aria-pressed="'+(statusFilter===value)+'">'+label+'</button>';
+ const summary='<div class="sp-stock-overview" aria-label="Résumé des stocks">'+
+  '<div><span>Articles disponibles</span><strong>'+total+'</strong></div>'+
+  '<div><span>Références</span><strong>'+all.length+'</strong></div>'+
+  '<div class="sp-stock-overview-alert"><span>À réapprovisionner</span><strong>'+lowCount+'</strong></div></div>';
+ const rows=visible.map(x=>{
+  const p=x.p,min=x.min,status=x.status,qty=x.qty;
+  const statusClass=status==='empty'?'sp-stock-empty':status==='low'?'sp-stock-low':'sp-stock-ok';
+  const stateLabel=status==='empty'?'Rupture de stock':status==='low'?'À réapprovisionner':'En stock';
+  const threshold=c.me?.role==='admin'?
+   '<div class="sp-stock-threshold"><label for="sp-min-'+escape(p.id)+'">Seuil d’alerte</label>'+
+   '<input id="sp-min-'+escape(p.id)+'" type="number" min="0" max="99999" step="1" inputmode="numeric" value="'+min+'" aria-label="Seuil pour '+escape(name(p))+'">'+
+   '<button type="button" data-action="stockthreshold" data-id="'+escape(p.id)+'" class="sp-stock-save">Enregistrer</button></div>':
+   '<div class="sp-stock-threshold-read">Seuil : '+(min>0?min+' articles':'non défini')+'</div>';
+  const individual=qty?
+   '<details class="sp-stock-units"><summary>Voir les '+qty+' unité'+(qty>1?'s':'')+' et leurs étiquettes</summary>'+
+   '<div class="sp-stock-units-list">'+x.units.slice().sort((a,b)=>b.inAt-a.inAt).map(i=>
+    '<div class="sp-stock-unit"><div><strong>'+escape(i.id)+'</strong><small>'+
+    escape(i.serial||'Sans numéro de série')+' · '+escape(i.condition||'Neuf')+'</small></div>'+
+    '<div class="sp-stock-unit-actions"><button type="button" data-action="details" data-id="'+escape(i.id)+'">Détails</button>'+
+    '<button type="button" data-action="print" data-id="'+escape(i.id)+'">Étiquette</button></div></div>').join('')+
+   '</div></details>':'';
+  return '<article class="sp-stock-row '+statusClass+'">'+
+   '<div class="sp-stock-main"><div class="sp-stock-name"><h3>'+escape(name(p))+'</h3>'+
+   '<div class="sp-stock-ref">'+escape(p.ref||'Sans référence')+(p.cat?' · '+escape(p.cat):'')+
+   (p.active===0?' · Référence désactivée':'')+'</div>'+
+   '<span class="sp-stock-status">'+stateLabel+'</span></div>'+
+   '<div class="sp-stock-count"><strong>'+qty+'</strong><span>en stock</span></div></div>'+
+   '<div class="sp-stock-bottom">'+threshold+
+   '<button type="button" class="sp-stock-entry" data-action="newentryproduct" data-id="'+escape(p.id)+'">+ Réceptionner</button></div>'+
+   individual+'</article>';
+ }).join('');
+ return c.heading('INVENTAIRE','Produits en stock','Quantités par référence, alertes de réapprovisionnement et détail des unités.',c.btn('Nouvelle entrée','newentry','plus'))+
+  '<section class="sp-stock-page">'+summary+
+  '<div class="sp-stock-toolbar"><div class="sp-stock-chips">'+
+  chip('all','Tous les produits')+chip('low','À commander')+chip('in','Disponibles')+'</div>'+
+  '<div class="sp-stock-search"><input id="filter-products" type="search" value="'+escape(c.tableFilter||'')+
+  '" placeholder="Rechercher un produit ou une référence…" autocomplete="off" aria-label="Rechercher dans le stock"/>'+
+  '<select id="filter-type" aria-label="Filtrer par catégorie"><option value="all">Toutes les catégories</option>'+
+  categories.map(cat=>'<option value="'+escape(cat)+'"'+(c.tableType===cat?' selected':'')+'>'+escape(cat)+'</option>').join('')+
+  '</select></div></div>'+
+  '<div class="sp-stock-list">'+(rows||'<div class="sp-stock-none">Aucune référence ne correspond à ces filtres.</div>')+'</div>'+
+  '<div class="sp-stock-footer"><span>'+visible.length+' référence'+(visible.length>1?'s':'')+' affichée'+(visible.length>1?'s':'')+'</span>'+
+  '<button type="button" data-action="exportstocksummary">Exporter les quantités (CSV)</button></div></section>';
 }
 function history(c){
  const ev=[...c.db.events].filter(x=>x.type==='in'||x.type==='out').sort((a,b)=>b.at-a.at);
@@ -83,7 +137,7 @@ function history(c){
 }
 function settings(c){
  const userCard='<section class="card settingscard"><h2>Mon compte</h2><p>Connecté : <strong>'+escape(c.me.username)+'</strong> · '+(c.me.role==='admin'?'Administrateur':'Employé')+'</p><form id="password-form"><div class="field"><label>Mot de passe actuel</label><input name="old_password" type="password" autocomplete="current-password" required></div><div class="field"><label>Nouveau mot de passe (12 caractères minimum)</label><input name="new_password" type="password" autocomplete="new-password" minlength="12" required></div><button class="btn primary" type="submit">Modifier mon mot de passe</button></form><p style="margin-top:18px"><a href="/logout">Se déconnecter</a></p></section>';
- const catalog='<section class="card settingscard"><h2>Références produits</h2><p>Les références peuvent aussi être créées directement lors d’une entrée en stock.</p><form id="catalog-form" class="catalog-form"><div class="twofields"><div class="field"><label>Marque *</label><input name="brand" maxlength="60" required placeholder="Ex. TERRA"></div><div class="field"><label>Modèle *</label><input name="model" maxlength="100" required placeholder="Ex. Mobile 1517"></div></div><div class="twofields"><div class="field"><label>Catégorie</label><select name="cat"><option>PC portable</option><option>PC fixe</option><option>Écran</option><option>Accessoire</option><option>Autre</option></select></div><div class="field"><label>Référence interne *</label><input name="ref" maxlength="80" required placeholder="Ex. TE-MOB1517"></div></div><button class="btn primary" type="submit">Ajouter la référence</button></form><div class="basic-catalog">'+c.db.catalog.map(p=>'<div class="basic-catalog-row"><div><strong>'+escape(name(p))+'</strong><small>'+escape(p.ref)+(p.active?'':' · Désactivée')+'</small></div><button class="btn" type="button" data-action="editproduct" data-id="'+escape(p.id)+'">Modifier</button></div>').join('')+'</div></section>';
+ const catalog='<section class="card settingscard"><h2>Références produits</h2><p>Les références peuvent aussi être créées directement lors d’une entrée en stock.</p><form id="catalog-form" class="catalog-form"><div class="twofields"><div class="field"><label>Marque *</label><input name="brand" maxlength="60" required placeholder="Ex. TERRA"></div><div class="field"><label>Modèle *</label><input name="model" maxlength="100" required placeholder="Ex. Mobile 1517"></div></div><div class="twofields"><div class="field"><label>Catégorie</label><select name="cat"><option>PC portable</option><option>PC fixe</option><option>Écran</option><option>Accessoire</option><option>Autre</option></select></div><div class="field"><label>Référence interne *</label><input name="ref" maxlength="80" required placeholder="Ex. TE-MOB1517"></div></div><div class="field"><label>Seuil d’alerte (0 = désactivé)</label><input name="min_stock" type="number" min="0" max="99999" step="1" inputmode="numeric" value="0" required></div><button class="btn primary" type="submit">Ajouter la référence</button></form><div class="basic-catalog">'+c.db.catalog.map(p=>'<div class="basic-catalog-row"><div><strong>'+escape(name(p))+'</strong><small>'+escape(p.ref)+(p.active?'':' · Désactivée')+'</small></div><button class="btn" type="button" data-action="editproduct" data-id="'+escape(p.id)+'">Modifier</button></div>').join('')+'</div></section>';
  const access='<section class="card settingscard"><h2>Accès employés</h2><p>Chaque opération est associée au compte qui l’a réalisée.</p><form id="user-form"><div class="field"><label>Identifiant</label><input name="username" maxlength="50" required placeholder="Ex. accueil1"></div><div class="field"><label>Mot de passe initial</label><input name="password" type="password" minlength="12" required></div><div class="field"><label>Rôle</label><select name="role"><option value="employee">Employé</option><option value="admin">Administrateur</option></select></div><button class="btn primary" type="submit">Créer un compte</button></form><div class="basic-management"><button class="btn" data-action="listusers">Gérer les utilisateurs</button><button class="btn" data-action="backup">Télécharger une sauvegarde</button></div><p>La base de données reste enregistrée dans le volume Docker du NAS.</p></section>';
  const installCard='<section class="card settingscard sp-mobile-install"><h2>Application mobile</h2><p>Installez StockPilot sur votre téléphone : les comptes, le stock et le scanner restent reliés au même serveur.</p><button class="btn primary" type="button" data-action="installapp">Installer StockPilot</button><p class="sp-install-steps"><strong>iPhone :</strong> ouvrez le site dans Safari, touchez Partager puis « Sur l’écran d’accueil ».<br><strong>Android :</strong> ouvrez le site dans Chrome, menu ⋮ puis « Installer l’application ».</p></section>';
  const cleanup='<section class="card settingscard basic-danger"><h2>Réinitialisation du stock</h2><p>Cette action efface l’inventaire, le catalogue et l’historique. Une sauvegarde est créée avant toute suppression. Ne l’utilisez pas pour simplement retirer un produit.</p><button type="button" class="btn negative" data-action="clearstock">Vider totalement le stock</button></section>';
@@ -103,7 +157,7 @@ function detailModal(c){
 }
 function editModal(c){
  const p=c.product(c.modal?.id);if(!p)return '';
- return '<div class="overlay" data-action="backdrop"><div class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Modifier une référence</h2><button class="closebtn" data-action="closemodal">×</button></div><form id="edit-product-form" data-id="'+escape(p.id)+'"><div class="modal-body"><div class="field"><label>Marque</label><input name="brand" required value="'+escape(p.brand)+'"></div><div class="field"><label>Modèle</label><input name="model" required value="'+escape(p.model)+'"></div><div class="field"><label>Catégorie</label><input name="cat" required value="'+escape(p.cat)+'"></div><div class="field"><label>Référence</label><input name="ref" required value="'+escape(p.ref)+'"></div><label><input type="checkbox" name="active" '+(p.active?'checked':'')+'> Référence active</label></div><div class="modal-foot"><button class="btn" type="button" data-action="closemodal">Annuler</button><button class="btn primary" type="submit">Enregistrer</button></div></form></div></div>';
+ return '<div class="overlay" data-action="backdrop"><div class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Modifier une référence</h2><button class="closebtn" data-action="closemodal">×</button></div><form id="edit-product-form" data-id="'+escape(p.id)+'"><div class="modal-body"><div class="field"><label>Marque</label><input name="brand" required value="'+escape(p.brand)+'"></div><div class="field"><label>Modèle</label><input name="model" required value="'+escape(p.model)+'"></div><div class="field"><label>Catégorie</label><input name="cat" required value="'+escape(p.cat)+'"></div><div class="field"><label>Référence</label><input name="ref" required value="'+escape(p.ref)+'"></div><div class="field"><label>Seuil d’alerte (0 = désactivé)</label><input name="min_stock" type="number" min="0" max="99999" step="1" inputmode="numeric" required value="'+(Number(p.min_stock)||0)+'"></div><label><input type="checkbox" name="active" '+(p.active?'checked':'')+'> Référence active</label></div><div class="modal-foot"><button class="btn" type="button" data-action="closemodal">Annuler</button><button class="btn primary" type="submit">Enregistrer</button></div></form></div></div>';
 }
 window.SPBasic={dashboard,inventory,history,settings,exit,detailModal,editModal};
 })();
