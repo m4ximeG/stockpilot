@@ -129,6 +129,13 @@ def initialize():
         # Seuil de réapprovisionnement par référence : migration additive et sans perte.
         if 'min_stock' not in existing_columns:
             con.execute("ALTER TABLE products ADD COLUMN min_stock INTEGER NOT NULL DEFAULT 0 CHECK(min_stock >= 0)")
+        # Informations propres à chaque appareil (pas à la référence partagée).
+        item_columns = {row['name'] for row in con.execute('PRAGMA table_info(items)')}
+        if 'prep_status' not in item_columns:
+            con.execute("ALTER TABLE items ADD COLUMN prep_status TEXT NOT NULL DEFAULT 'not_required'")
+        if 'specs_json' not in item_columns:
+            con.execute("ALTER TABLE items ADD COLUMN specs_json TEXT NOT NULL DEFAULT '{}'")
+
         con.executemany("INSERT OR IGNORE INTO shelf_levels(slot,size,note) VALUES(?,'unknown','')", [(slot,) for slot in SLOTS])
         con.execute("INSERT OR IGNORE INTO meta(key,value) VALUES('location_mode','optional')")
         if not con.execute('SELECT 1 FROM users LIMIT 1').fetchone():
@@ -285,6 +292,78 @@ def read_stock_threshold(value):
 def row_dict(row):
     return dict(row)
 
+# Types de matériel et champs facultatifs, propres à une unité physique.
+ITEM_CATEGORIES = {
+    'Matériel': (), 'Ordinateur portable': ('cpu', 'cores', 'ram_gb', 'storage', 'os', 'gpu'),
+    'Ordinateur fixe': ('cpu', 'cores', 'ram_gb', 'storage', 'os', 'gpu'),
+    'Écran': ('size_inches', 'resolution', 'connection'),
+    'Imprimante': ('technology', 'connection'),
+    'Réseau': ('mac', 'ip', 'connection'),
+    'Périphérique': ('connection',), 'Téléphone / tablette': ('ram_gb', 'storage', 'os'),
+    'Composant': ('model_detail',), 'Autre': ()
+}
+PC_CATEGORIES = {'Ordinateur portable', 'Ordinateur fixe'}
+CATEGORY_ALIASES = {
+    'pc portable': 'Ordinateur portable', 'pc fixe': 'Ordinateur fixe',
+    'ordinateur': 'Ordinateur fixe', 'ordinateur portable': 'Ordinateur portable',
+    'ordinateur fixe': 'Ordinateur fixe', 'laptop': 'Ordinateur portable',
+    'moniteur': 'Écran', 'telephonie': 'Téléphone / tablette',
+    'téléphone': 'Téléphone / tablette', 'tablette': 'Téléphone / tablette',
+}
+
+def category_key(category):
+    text = (category or 'Matériel').strip()
+    if text in ITEM_CATEGORIES:
+        return text
+    return CATEGORY_ALIASES.get(text.casefold(), 'Matériel')
+
+def parse_item_specifications(raw, category):
+    if raw is None:
+        raw = {}
+    if not isinstance(raw, dict):
+        raise ValueError('Les caractéristiques doivent être un objet.')
+    allowed = set(ITEM_CATEGORIES[category_key(category)])
+    if set(raw) - allowed:
+        raise ValueError('Caractéristique non autorisée pour cette catégorie.')
+    specs = {}
+    for key, value in raw.items():
+        if value is None or value == '':
+            continue
+        if key in ('cores', 'ram_gb'):
+            if isinstance(value, bool) or not str(value).strip().isdigit():
+                raise ValueError('Mémoire et cœurs : nombres entiers positifs requis.')
+            number = int(str(value).strip())
+            if not (1 <= number <= (2048 if key == 'ram_gb' else 512)):
+                raise ValueError('Mémoire ou nombre de cœurs hors limite.')
+            specs[key] = number
+        else:
+            if not isinstance(value, str) or len(value.strip()) > 120:
+                raise ValueError('Caractéristique invalide (120 caractères maximum).')
+            if value.strip():
+                specs[key] = value.strip()
+    return specs
+
+def read_prep_status(value, category, fallback=None):
+    category = category_key(category)
+    if category not in PC_CATEGORIES:
+        if value not in (None, '', 'not_required'):
+            raise ValueError('La préparation concerne uniquement les ordinateurs.')
+        return 'not_required'
+    if value in (None, ''):
+        return fallback if fallback is not None else 'pending'
+    if value not in ('pending', 'in_progress', 'ready', 'not_required'):
+        raise ValueError('Statut de préparation invalide.')
+    return value
+
+def serialize_specs(specs):
+    return json.dumps(specs, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+
+def item_dict(row):
+    return dict(id=row['id'], pid=row['pid'], slot=row['slot'],
+                serial=row['serial'] or '', condition=row['condition'], inAt=row['in_at'],
+                prepStatus=row['prep_status'], specs=json.loads(row['specs_json'] or '{}'))
+
+
 
 LOGIN_HTML = '''<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101a2d"><title>StockPilot — Connexion</title><link rel="manifest" href="/static/app.webmanifest"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="StockPilot">
 <style>*,*:before,*:after{box-sizing:border-box}body{margin:0;background:#f1f5fb;color:#15223b;font:15px system-ui,-apple-system,Segoe UI,Arial,sans-serif;min-height:100vh;display:grid;place-items:center;padding:20px;background-image:radial-gradient(circle at 20% 10%,#e2ecff 0,transparent 40%),radial-gradient(circle at 90% 80%,#dce6f7 0,transparent 30%)}.wrap{width:min(100%,450px);background:#fff;padding:40px;border-radius:24px;box-shadow:0 22px 80px #243a5c20;border:1px solid #e3eaf5}.brand{display:flex;align-items:center;gap:12px;font-size:24px;font-weight:800}.mark{display:grid;place-items:center;width:42px;height:42px;border-radius:12px;background:#2262e4;color:#fff}.sub{color:#687a93;font-size:14px;line-height:1.6;margin:14px 0 32px}label{display:block;font-size:13px;font-weight:700;margin:17px 0 8px}input{height:48px;padding:0 14px;border:1px solid #d9e1ed;border-radius:11px;width:100%;font:inherit;outline:0}input:focus{border-color:#2870ef;box-shadow:0 0 0 3px #2970ef18}button{margin-top:26px;background:#2469e9;border:0;color:white;border-radius:11px;width:100%;height:48px;font:inherit;font-weight:700;cursor:pointer}p.err{background:#fff1f1;border:1px solid #fecaca;color:#b42318;padding:12px;border-radius:10px}.foot{color:#8b98ab;font-size:12px;text-align:center;margin-top:30px}.wrap{border-radius:12px;box-shadow:0 8px 30px #27394210;border-color:#dfe6e7}.brand{color:#223b48;letter-spacing:-.6px}.mark{background:#2f4f5d;border-radius:8px}body{background:#f5f6f5;background-image:none;color:#233840}input{border-radius:7px}input:focus{border-color:#74949a;box-shadow:0 0 0 3px #2f647115}button{background:#294a57;border-radius:7px}button:hover{background:#3e626f}.foot{color:#87969c}
@@ -425,7 +504,7 @@ def state():
     db.execute('BEGIN')
     try:
         products = [row_dict(x) for x in db.execute('SELECT id,brand,model,cat,zone,kind,ref,active,preferred_slot,min_stock FROM products ORDER BY brand,model')]
-        items = [dict(id=x['id'],pid=x['pid'],slot=x['slot'],serial=x['serial'] or '',condition=x['condition'],inAt=x['in_at']) for x in db.execute('SELECT * FROM items WHERE out_at IS NULL ORDER BY in_at')]
+        items = [item_dict(x) for x in db.execute('SELECT * FROM items WHERE out_at IS NULL ORDER BY in_at')]
         events = [dict(id='e'+str(x['id']),type=x['type'],itemId=x['item_id'],pid=x['pid'],slot=x['slot'],at=x['at'],actor=x['actor'],detail=x['detail']) for x in db.execute('SELECT * FROM events ORDER BY id DESC LIMIT 1500')]
         shelves = [dict(slot=r['slot'],size=r['size'],note=r['note']) for r in db.execute('SELECT slot,size,note FROM shelf_levels ORDER BY slot')]
         counter = int(db.execute("SELECT value FROM meta WHERE key='next_item'").fetchone()[0])
@@ -504,6 +583,9 @@ def receive_free_text():
         data=json_body()
         name=clean_text(data.get('name',''), 'Nom du produit', 120, True)
         serial=clean_text(data.get('serial',''), 'Numéro de série', 100)
+        requested_category = clean_text(data.get('category', 'Matériel'), 'Catégorie', 60)
+        if requested_category not in ITEM_CATEGORIES:
+            return bad('Catégorie de produit inconnue.')
         # Mode inventaire simple : aucune localisation n'est demandée.
         slot = ''
         condition=clean_text(data.get('condition','Neuf'), 'État',30,True)
@@ -513,16 +595,19 @@ def receive_free_text():
         db.execute('BEGIN IMMEDIATE')
         created=False
         if product_id:
-            product=db.execute('SELECT id FROM products WHERE id=? AND active=1',(product_id,)).fetchone()
+            product=db.execute('SELECT id,cat FROM products WHERE id=? AND active=1',(product_id,)).fetchone()
             if not product:
                 db.rollback()
                 return bad('Référence sélectionnée indisponible.')
             pid=product['id']
+            requested_category=category_key(product['cat'])
         else:
             # Reconnait automatiquement une référence portant exactement ce nom.
-            product=db.execute("""SELECT id FROM products WHERE active=1
+            product=db.execute("""SELECT id,cat FROM products WHERE active=1
                 AND (lower(trim(brand || ' ' || model))=lower(?) OR lower(trim(model))=lower(?))
                 ORDER BY id LIMIT 1""",(name,name)).fetchone()
+            if product and category_key(product['cat']) != requested_category:
+                product = None
             if product:
                 pid=product['id']
             else:
@@ -530,9 +615,11 @@ def receive_free_text():
                 ref='REF-'+secrets.token_hex(5).upper()
                 # Aucun renseignement de marque obligatoire au comptoir.
                 db.execute("""INSERT INTO products(id,brand,model,cat,zone,kind,ref,preferred_slot)
-                    VALUES(?, '', ?, 'Matériel', ?, 'package', ?, ?)""",
-                    (pid,name,slot[0] if slot else 'A',ref,slot))
+                    VALUES(?, '', ?, ?, ?, 'package', ?, ?)""",
+                    (pid,name,requested_category,slot[0] if slot else 'A',ref,slot))
                 created=True
+        specs=parse_item_specifications(data.get('specs', {}),requested_category)
+        preparation=read_prep_status(data.get('prep_status'), requested_category)
         next_row=db.execute("SELECT value FROM meta WHERE key='next_item'").fetchone()
         num=int(next_row['value']) if next_row else 1
         # Compteur monotone : ne réutilise jamais un identifiant historique.
@@ -540,14 +627,15 @@ def receive_free_text():
             num+=1
         item_id=f'STK-{num:06d}'
         when=int(time.time()*1000)
-        db.execute("""INSERT INTO items(id,pid,slot,serial,condition,in_at,in_by)
-                    VALUES(?,?,?,?,?,?,?)""",(item_id,pid,slot,serial or None,condition,when,g.user['username']))
+        db.execute("""INSERT INTO items(id,pid,slot,serial,condition,in_at,in_by,prep_status,specs_json)
+                    VALUES(?,?,?,?,?,?,?,?,?)""",(item_id,pid,slot,serial or None,condition,when,g.user['username'],preparation,serialize_specs(specs)))
         db.execute("""INSERT INTO events(type,item_id,pid,slot,at,actor)
                     VALUES('in',?,?,?,?,?)""",(item_id,pid,slot,when,g.user['username']))
         db.execute("INSERT INTO meta(key,value) VALUES('next_item',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(str(num+1),))
         db.commit()
         return jsonify(item=dict(id=item_id,pid=pid,slot=slot,serial=serial,
-                   condition=condition,inAt=when),createdProduct=created),201
+                   condition=condition,inAt=when,prepStatus=preparation,specs=specs),
+                   createdProduct=created),201
     except sqlite3.IntegrityError:
         db.rollback()
         return bad('Numéro de série déjà présent ou référence en conflit.',409)
@@ -569,25 +657,75 @@ def entry_item():
             return bad('État invalide.')
         db = g.db
         db.execute('BEGIN IMMEDIATE')
-        p = db.execute('SELECT id FROM products WHERE id=? AND active=1', (pid,)).fetchone()
+        p = db.execute('SELECT id,cat FROM products WHERE id=? AND active=1', (pid,)).fetchone()
         if not p:
             db.rollback()
             return bad('Référence introuvable ou désactivée.')
+        category=category_key(p['cat'])
+        specs=parse_item_specifications(data.get('specs', {}),category)
+        preparation=read_prep_status(data.get('prep_status'),category)
         n = int(db.execute("SELECT value FROM meta WHERE key='next_item'").fetchone()[0])
         item_id = f'STK-{n:06d}'
         when = int(time.time()*1000)
-        db.execute('INSERT INTO items(id,pid,slot,serial,condition,in_at,in_by) VALUES(?,?,?,?,?,?,?)',
-                   (item_id,pid,slot,serial or None,condition,when,g.user['username']))
+        db.execute('INSERT INTO items(id,pid,slot,serial,condition,in_at,in_by,prep_status,specs_json) VALUES(?,?,?,?,?,?,?,?,?)',
+                   (item_id,pid,slot,serial or None,condition,when,g.user['username'],preparation,serialize_specs(specs)))
         db.execute('INSERT INTO events(type,item_id,pid,slot,at,actor) VALUES(?,?,?,?,?,?)',
                    ('in',item_id,pid,slot,when,g.user['username']))
         db.execute("UPDATE meta SET value=? WHERE key='next_item'", (str(n+1),))
         db.commit()
-        return jsonify(item=dict(id=item_id,pid=pid,slot=slot,serial=serial,condition=condition,inAt=when)), 201
+        return jsonify(item=dict(id=item_id,pid=pid,slot=slot,serial=serial,condition=condition,inAt=when,prepStatus=preparation,specs=specs)), 201
     except sqlite3.IntegrityError:
         g.db.rollback()
         return bad('Ce numéro de série est déjà enregistré dans le stock.', 409)
     except ValueError as e:
         return bad(str(e))
+
+
+@app.patch('/api/items/<item_id>/preparation')
+@protected()
+def update_item_preparation(item_id):
+    """Fiche technique et état de préparation d'une unité, complétés après réception."""
+    try:
+        data = json_body()
+        db = g.db
+        db.execute('BEGIN IMMEDIATE')
+        item = db.execute('''SELECT items.*,products.cat FROM items
+                             JOIN products ON products.id=items.pid
+                             WHERE items.id=? AND items.out_at IS NULL''',(item_id,)).fetchone()
+        if not item:
+            db.rollback()
+            return bad('Article introuvable dans le stock.',404)
+        category=category_key(item['cat'])
+        old_specs=json.loads(item['specs_json'] or '{}')
+        if 'specs' in data:
+            # Mise à jour partielle : les champs déjà renseignés restent sauvegardés.
+            patch=data['specs']
+            if not isinstance(patch,dict):
+                raise ValueError('Caractéristiques invalides.')
+            merged=dict(old_specs)
+            for key,value in patch.items():
+                if value in ('',None):
+                    merged.pop(key,None)
+                else:
+                    merged[key]=value
+            new_specs=parse_item_specifications(merged,category)
+        else:
+            new_specs=old_specs
+        preparation=read_prep_status(data.get('prep_status'),category,item['prep_status'])
+        serial=item['serial'] or ''
+        if 'serial' in data:
+            serial=clean_text(data['serial'],'Numéro de série',100)
+        db.execute('''UPDATE items SET serial=?,prep_status=?,specs_json=?
+                      WHERE id=? AND out_at IS NULL''',
+                   (serial or None,preparation,serialize_specs(new_specs),item_id))
+        db.commit()
+        return jsonify(ok=True,item=dict(id=item_id,serial=serial,prepStatus=preparation,specs=new_specs))
+    except sqlite3.IntegrityError:
+        g.db.rollback()
+        return bad('Ce numéro de série est déjà attribué à un autre article.',409)
+    except ValueError as error:
+        g.db.rollback()
+        return bad(str(error))
 
 
 @app.post('/api/items/<item_id>/out')
