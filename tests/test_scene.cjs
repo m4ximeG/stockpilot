@@ -226,7 +226,7 @@ test('Les liens du rail possèdent des icônes explicites et une déconnexion id
  assert.ok(html.includes("['settings','Paramètres','settings-gear']"));
  assert.ok(html.includes('href="/logout" class="sp-logout" title="Se déconnecter" aria-label="Se déconnecter"'));
  assert.ok(html.includes("ico('log-out',24)"));
- assert.ok(html.includes('/static/harmony.css?v=4'));
+ assert.ok(html.includes('/static/harmony.css?v=5'));
  assert.ok(css.includes('.sidebar .sidebottom > a.sp-logout::after{content:none!important'));
  assert.ok(css.includes('content:attr(aria-label)'));
  assert.ok(css.includes('aria-label="Scanner une sortie"'));
@@ -249,4 +249,14 @@ test('Les suggestions de références évitent le vieux fond vert',()=>{
  assert.match(css,/body:not\(\.aurora-on\) \.basic-suggestions:not\(:empty\)/);
  assert.match(css,/\.basic-suggestion small/);
  assert.match(css,/\.basic-create small/);
+});
+
+test('Les fenêtres et suggestions ont la palette bleu-gris du fond orageux, sans vert',()=>{
+ const css=fs.readFileSync('static/harmony.css','utf8');
+ const modal=css.match(/\/\* SP contrast fix[\s\S]*?\.overlay \.modal\{([^}]*)\}/);
+ assert.ok(modal,'style commun des fenêtres');
+ assert.match(modal[1],/rgba\(55,64,86,\.985\)/);
+ assert.match(modal[1],/rgba\(37,46,67,\.99\)/);
+ assert.match(css,/body:not\(\.aurora-on\) \.basic-suggestions:not\(:empty\)\{\s*background:rgba\(47,56,77,\.97\)/);
+ assert.match(css,/body:not\(\.aurora-on\) \.basic-suggestion>b\{\s*color:#d0dcff!important/);
 });
