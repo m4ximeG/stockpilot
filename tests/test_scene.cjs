@@ -226,7 +226,7 @@ test('Les liens du rail possèdent des icônes explicites et une déconnexion id
  assert.ok(html.includes("['settings','Paramètres','settings-gear']"));
  assert.ok(html.includes('href="/logout" class="sp-logout" title="Se déconnecter" aria-label="Se déconnecter"'));
  assert.ok(html.includes("ico('log-out',24)"));
- assert.ok(html.includes('/static/harmony.css?v=5'));
+ assert.ok(html.includes('/static/harmony.css?v=6'));
  assert.ok(css.includes('.sidebar .sidebottom > a.sp-logout::after{content:none!important'));
  assert.ok(css.includes('content:attr(aria-label)'));
  assert.ok(css.includes('aria-label="Scanner une sortie"'));
@@ -259,4 +259,29 @@ test('Les fenêtres et suggestions ont la palette bleu-gris du fond orageux, san
  assert.match(modal[1],/rgba\(37,46,67,\.99\)/);
  assert.match(css,/body:not\(\.aurora-on\) \.basic-suggestions:not\(:empty\)\{\s*background:rgba\(47,56,77,\.97\)/);
  assert.match(css,/body:not\(\.aurora-on\) \.basic-suggestion>b\{\s*color:#d0dcff!important/);
+});
+
+test('Scanner mobile : aucune sélection du dernier article et bouton caméra unique',()=>{
+ const html=fs.readFileSync('static/index.html','utf8');
+ const js=fs.readFileSync('static/barcode-only.js','utf8');
+ const out=basic.exit(context);
+ assert.doesNotMatch(out,/data-action="sample"|Sélectionner le dernier article/);
+ assert.match(out,/data-action="camera"/);
+ assert.doesNotMatch(html,/case'sample':/);
+ assert.match(html,/case'camera':startCamera\(\)/);
+ assert.match(html,/function stopCamera\(\)/);
+ assert.match(html,/window\.addEventListener\('pagehide',stopCamera\)/);
+});
+test('Scanner caméra : QR Code et Code 128 sur iOS/Android',()=>{
+ const html=fs.readFileSync('static/index.html','utf8');
+ const css=fs.readFileSync('static/harmony.css','utf8');
+ assert.match(html,/html5-qrcode\/2\.3\.8\/html5-qrcode\.min\.js/);
+ assert.match(html,/Html5QrcodeSupportedFormats/);
+ assert.match(html,/format\.QR_CODE,format\.CODE_128,format\.CODE_39/);
+ assert.match(html,/\{facingMode:'environment'\}/);
+ assert.match(html,/await stopCamera\(\)/);
+ assert.match(html,/if\(page==='exit'\)lookup\(id\)/);
+ assert.match(html,/ensureScannerLibrary\(\)/);
+ assert.match(css,/#scan-panel\.sp-camera-active/);
+ assert.match(css,/#sp-camera-reader video/);
 });
