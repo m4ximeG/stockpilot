@@ -163,3 +163,11 @@
  .si-footer{padding:12px 14px}
 }
 @media(prefers-reduced-motion:reduce){.si-chevron,.si-record-summary{transition:none!important}}
+
+/* Une seule entrée de page : aucun délai décalé par ligne ni flash des cartes. */
+#content.sp-route-in .si-inventory{
+ animation:aurSlideR .62s cubic-bezier(.16,1,.3,1) .10s both;
+}
+@media(prefers-reduced-motion:reduce){
+ #content.sp-route-in .si-inventory{animation:none!important}
+}
