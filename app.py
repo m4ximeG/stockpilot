@@ -11,6 +11,7 @@ from functools import wraps
 from pathlib import Path
 
 import qrcode
+import push_service
 from flask import Flask, Response, abort, g, jsonify, redirect, render_template_string, request, send_file, send_from_directory, session, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -95,6 +96,12 @@ def initialize():
           at INTEGER NOT NULL, actor TEXT NOT NULL, detail TEXT DEFAULT ''
         );
         CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS push_subscriptions (
+          endpoint TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id),
+          p256dh TEXT NOT NULL, auth TEXT NOT NULL, created_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS push_subscriptions_user_idx ON push_subscriptions(user_id);
+
         CREATE TABLE IF NOT EXISTS shelf_levels (
           slot TEXT PRIMARY KEY, size TEXT NOT NULL DEFAULT 'unknown',
           note TEXT NOT NULL DEFAULT ''
@@ -408,6 +415,51 @@ def state():
     return jsonify(items=items,events=events,counter=counter,catalog=products,shelves=shelves,me=dict(id=g.user['id'],username=g.user['username'],role=g.user['role']),allowReset=ALLOW_RESET and DEMO_SEED,locationMode='optional')
 
 
+@app.get('/api/push/public-key')
+@protected()
+def push_public_key():
+    return jsonify(publicKey=push_service.public_key(DATA_DIR))
+
+
+@app.post('/api/push/subscriptions')
+@protected()
+def push_subscribe():
+    try:
+        sub = json_body()
+        push_service.save_subscription(g.db, g.user['id'], sub)
+        return jsonify(ok=True)
+    except ValueError as exc:
+        return bad(str(exc))
+
+
+@app.delete('/api/push/subscriptions')
+@protected()
+def push_unsubscribe():
+    try:
+        endpoint = json_body().get('endpoint')
+        push_service.delete_subscription(g.db, g.user['id'], endpoint)
+        return jsonify(ok=True)
+    except ValueError as exc:
+        return bad(str(exc))
+
+
+@app.post('/api/push/test')
+@protected()
+def push_test():
+    # Test only the requesting user, never all employees.
+    try:
+        count = push_service.send_to_user_devices(g.db, DATA_DIR, {
+            'title': 'StockPilot · Notifications activées',
+            'body': 'Votre téléphone pourra recevoir les alertes de réapprovisionnement.',
+            'tag': 'stockpilot-test',
+            'url': '/?page=products',
+        }, g.user['id'])
+    except Exception:
+        app.logger.exception('Échec de test Web Push')
+        return bad('Service de notifications indisponible.', 503)
+    return jsonify(ok=count > 0, devices=count)
+
+
 @app.post('/api/receive')
 @protected()
 def receive_free_text():
@@ -517,6 +569,18 @@ def exit_item(item_id):
     db.execute('INSERT INTO events(type,item_id,pid,slot,at,actor) VALUES(?,?,?,?,?,?)',
                ('out',item_id,item['pid'],item['slot'],now,g.user['username']))
     db.commit()
+    # Notification uniquement lors du franchissement du seuil, pas à chaque scan.
+    try:
+        p = db.execute('SELECT id,brand,model,min_stock,active FROM products WHERE id=?',
+                       (item['pid'],)).fetchone()
+        if p and p['active'] and p['min_stock'] > 0 and item['condition'] not in ('Retour SAV','Réparation'):
+            count = db.execute("""SELECT COUNT(*) FROM items WHERE pid=? AND out_at IS NULL
+                                  AND condition NOT IN ('Retour SAV','Réparation')""",
+                               (item['pid'],)).fetchone()[0]
+            if count <= p['min_stock'] < count + 1:
+                push_service.send_stock_warning(db, DATA_DIR, p, count, p['min_stock'])
+    except Exception:
+        app.logger.exception('Échec de notification de seuil')
     return jsonify(ok=True)
 
 
@@ -780,6 +844,18 @@ def edit_product(product_id):
             return bad('Aucun changement.')
         fields_sql = ','.join(f'{k}=?' for k in fields)
         g.db.execute(f'UPDATE products SET {fields_sql} WHERE id=?', [*fields.values(),product_id])
+        # Activation d'un nouveau seuil déjà atteint : signalement unique.
+        try:
+            new_min = fields.get('min_stock')
+            old_min = int(p['min_stock'])
+            if new_min is not None and new_min > 0 and p['active']:
+                qty = g.db.execute("""SELECT COUNT(*) FROM items WHERE pid=? AND out_at IS NULL
+                                      AND condition NOT IN ('Retour SAV','Réparation')""",
+                                   (product_id,)).fetchone()[0]
+                if qty <= new_min and (old_min == 0 or qty > old_min):
+                    push_service.send_stock_warning(g.db, DATA_DIR, p, qty, new_min)
+        except Exception:
+            app.logger.exception('Échec de notification de configuration')
         return jsonify(ok=True)
     except sqlite3.IntegrityError:
         return bad('Référence déjà utilisée.', 409)
