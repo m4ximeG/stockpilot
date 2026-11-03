@@ -3,6 +3,10 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+# Ne jamais publier une image ancienne après une version plus récente.
+concurrency:
+  group: stockpilot-publish-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
   packages: write
