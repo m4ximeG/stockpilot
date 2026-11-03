@@ -383,7 +383,7 @@ test('Étiquettes DYMO : PDF à l’échelle choisie depuis les paramètres',()=
 test('iPhone : fond unique stable dans la composition, sans parallax Safari',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
  const css=fs.readFileSync('static/mobile-layout.css','utf8');
- assert.match(html,/\/static\/mobile-layout\.css\?v=4/);
+ assert.match(html,/\/static\/mobile-layout\.css\?v=5/);
  assert.match(css,/body::before\s*\{/);
  assert.match(css,/position:fixed; top:0; left:0/);
  assert.match(css,/height:100lvh/);
@@ -427,7 +427,7 @@ test('Barre de navigation iPhone toujours visible hors accueil malgré polish.cs
  assert.match(mobile,/body:not\(\.aurora-on\) \.mobilebottom,\s*body\.aurora-on \.mobilebottom\s*\{[^}]*display:grid!important/);
  assert.match(mobile,/visibility:visible!important/);
  assert.match(html,/<nav class="mobilebottom" aria-label="Navigation mobile"/);
- assert.match(html,/\/static\/mobile-layout\.css\?v=4/);
+ assert.match(html,/\/static\/mobile-layout\.css\?v=5/);
  const polishPosition=html.indexOf('/static/polish.css');
  const mobilePosition=html.indexOf('/static/mobile-layout.css');
  assert.ok(mobilePosition>polishPosition,'Les règles mobiles doivent venir après polish.css');
@@ -466,7 +466,7 @@ test('Assets inventaire récents : Safari ne garde pas les anciens styles et scr
  assert.match(html,/\/static\/barcode-only\.js\?v=mobile-20261103-3/);
  assert.match(html,/\/static\/reception\.js\?v=12/);
  assert.match(html,/\/static\/inventory-ui\.css\?v=4/);
- assert.match(html,/\/static\/mobile-layout\.css\?v=4/);
+ assert.match(html,/\/static\/mobile-layout\.css\?v=5/);
 });
 
 test('Notifications : inscription consentie, pas de seuil à configurer sur iPhone',()=>{
