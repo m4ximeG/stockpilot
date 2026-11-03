@@ -421,17 +421,22 @@ def healthz():
 @protected()
 def state():
     db = g.db
-    products = [row_dict(x) for x in db.execute('SELECT id,brand,model,cat,zone,kind,ref,active,preferred_slot,min_stock FROM products ORDER BY brand,model')]
-    items = [dict(id=x['id'],pid=x['pid'],slot=x['slot'],serial=x['serial'] or '',condition=x['condition'],inAt=x['in_at']) for x in db.execute('SELECT * FROM items WHERE out_at IS NULL ORDER BY in_at')]
-    events = [dict(id='e'+str(x['id']),type=x['type'],itemId=x['item_id'],pid=x['pid'],slot=x['slot'],at=x['at'],actor=x['actor'],detail=x['detail']) for x in db.execute('SELECT * FROM events ORDER BY id DESC LIMIT 1500')]
-    shelves = [dict(slot=r['slot'],size=r['size'],note=r['note']) for r in db.execute('SELECT slot,size,note FROM shelf_levels ORDER BY slot')]
-    counter = int(db.execute("SELECT value FROM meta WHERE key='next_item'").fetchone()[0])
-    location_mode = db.execute("SELECT value FROM meta WHERE key='location_mode'").fetchone()
-    revision = db.execute('SELECT revision FROM sync_revision WHERE id=1').fetchone()[0]
-    response = jsonify(items=items,events=events,counter=counter,catalog=products,shelves=shelves,me=dict(id=g.user['id'],username=g.user['username'],role=g.user['role']),allowReset=ALLOW_RESET and DEMO_SEED,locationMode='optional',revision=revision)
-    response.headers['Cache-Control'] = 'private, no-store'
-    return response
+    # Un instantané cohérent : les requêtes de la même réponse voient la même version.
+    db.execute('BEGIN')
+    try:
+        products = [row_dict(x) for x in db.execute('SELECT id,brand,model,cat,zone,kind,ref,active,preferred_slot,min_stock FROM products ORDER BY brand,model')]
+        items = [dict(id=x['id'],pid=x['pid'],slot=x['slot'],serial=x['serial'] or '',condition=x['condition'],inAt=x['in_at']) for x in db.execute('SELECT * FROM items WHERE out_at IS NULL ORDER BY in_at')]
+        events = [dict(id='e'+str(x['id']),type=x['type'],itemId=x['item_id'],pid=x['pid'],slot=x['slot'],at=x['at'],actor=x['actor'],detail=x['detail']) for x in db.execute('SELECT * FROM events ORDER BY id DESC LIMIT 1500')]
+        shelves = [dict(slot=r['slot'],size=r['size'],note=r['note']) for r in db.execute('SELECT slot,size,note FROM shelf_levels ORDER BY slot')]
+        counter = int(db.execute("SELECT value FROM meta WHERE key='next_item'").fetchone()[0])
+        location_mode = db.execute("SELECT value FROM meta WHERE key='location_mode'").fetchone()
+        revision = db.execute('SELECT revision FROM sync_revision WHERE id=1').fetchone()[0]
+        response = jsonify(items=items,events=events,counter=counter,catalog=products,shelves=shelves,me=dict(id=g.user['id'],username=g.user['username'],role=g.user['role']),allowReset=ALLOW_RESET and DEMO_SEED,locationMode='optional',revision=revision)
+        response.headers['Cache-Control'] = 'private, no-store'
+        return response
 
+    finally:
+        db.execute('ROLLBACK')
 
 @app.get('/api/sync/revision')
 @protected()
