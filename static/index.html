@@ -2,8 +2,13 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#071b22" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="StockPilot" />
+<link rel="manifest" href="/static/app.webmanifest" />
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 <link rel="icon" type="image/svg+xml" href="/static/stockpilot-mark.svg?v=1" />
 <meta name="description" content="StockPilot, application de suivi de stock par codes-barres et QR codes, avec entrées et sorties." />
 <title>StockPilot — Gestion du stock</title>
@@ -29,6 +34,7 @@
 <link rel="stylesheet" href="/static/polish.css?v=2" />
 <link rel="stylesheet" href="/static/harmony.css?v=6" />
 <link rel="stylesheet" href="/static/liquid-route.css?v=6" />
+<link rel="stylesheet" href="/static/mobile-app.css?v=1" />
 
 
 
@@ -357,6 +363,9 @@ document.querySelector('#app').innerHTML='<div style="display:grid;place-items:c
 if('scrollRestoration' in history)history.scrollRestoration='manual';
 refreshState().then(()=>window.scrollTo(0,0));
 setInterval(()=>{if(!document.hidden&&!modal&&page!=='entry'&&page!=='exit')refreshState(true)},20000);
+if('serviceWorker' in navigator && location.protocol==='https:'){
+ window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));
+}
 })();
 </script>
 </body>
