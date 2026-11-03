@@ -124,7 +124,7 @@ function nav(p){
   while(title.firstChild)line.appendChild(title.firstChild);
   title.appendChild(line);
  });
- const selectors='.basic-entry-form,.basic-entry-help,.basic-table-card,.settingscard,.formcard,.card';
+ const selectors='.basic-entry-form,.basic-entry-help,.basic-table-card,.settingscard,.formcard,.card,.sp-stock-overview>div,.sp-stock-row';
  const panels=[...stage.querySelectorAll(selectors)].filter(panel=>
   !panel.parentElement?.closest(selectors)
  );
