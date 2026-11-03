@@ -213,7 +213,9 @@ test('L’actualisation périodique de l’accueil conserve les éléments anim�
  assert.ok(html.includes("syncInlineText('.aur-chart-label"));
  assert.ok(html.includes("currentPath.setAttribute('d',d)"));
  assert.ok(!html.includes("if(!silent||['dashboard'"));
- assert.ok(html.includes("setInterval(()=>{if(!document.hidden"));
+ assert.ok(html.includes("setInterval(syncStockAcrossDevices,1200)"));
+ assert.ok(html.includes("function patchLiveStockView()"));
+ assert.ok(html.includes("patch('.si-summary')"));
 });
 test('Les liens du rail possèdent des icônes explicites et une déconnexion identifiable',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
@@ -598,7 +600,7 @@ test('Synchronisation : vérifie une révision puis met à jour sans recréer le
  ctx.SPV3=fakeWindow.SPV3;
  vm.runInNewContext(scripts[0],ctx,{filename:'static/index.html'});
  await new Promise(resolve=>setTimeout(resolve,35));
- assert.equal(changes,1);
+ assert.equal(changes,2,'Écran de chargement initial puis premier rendu');
  assert.equal(intervals.length,1);
  assert.equal(intervals[0].delay,1200);
  assert.match(app.markup,/Stock central/);
