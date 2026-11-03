@@ -34,7 +34,7 @@
 <link rel="stylesheet" href="/static/polish.css?v=2" />
 <link rel="stylesheet" href="/static/harmony.css?v=6" />
 <link rel="stylesheet" href="/static/liquid-route.css?v=6" />
-<link rel="stylesheet" href="/static/mobile-app.css?v=2" />
+<link rel="stylesheet" href="/static/mobile-app.css?v=3" />
 
 
 
@@ -390,7 +390,7 @@ case'stockthreshold':(async()=>{
  if(me.role!=='admin')return toast('Réservé aux administrateurs.',true);
  const input=document.getElementById('sp-min-'+id);
  const value=input?.value.trim()??'';
- if(!/^\\d+$/.test(value)||Number(value)>99999)return toast('Saisissez un seuil entier de 0 à 99999.',true);
+ if(!/^\d+$/.test(value)||Number(value)>99999)return toast('Saisissez un seuil entier de 0 à 99999.',true);
  try{
   await api('/api/products/'+encodeURIComponent(id),'PATCH',{min_stock:Number(value)});
   await refreshState(true);
@@ -404,6 +404,38 @@ window.addEventListener('input',e=>{if(SPV3.onInput(e,db))return;if(e.target.id=
 window.addEventListener('keydown',e=>{if(e.key==='Escape'&&modal)closeModal();else if(e.key==='Enter'&&e.target.id?.startsWith('sp-min-')){e.preventDefault();document.querySelector('[data-action="stockthreshold"][data-id="'+CSS.escape(e.target.id.slice(7))+'"]')?.click()}else if(e.key==='Enter'&&e.target.id==='scan-code'){e.preventDefault();lookup(e.target.value)}else if(e.key==='Enter'&&e.target.id==='global-search'){e.preventDefault();searchGlobal(e.target.value)}else if((e.key==='Enter'||e.key===' ')&&e.target.matches('[data-slot]')){e.preventDefault();setSlot(e.target.dataset.slot)}});
 window.addEventListener('pagehide',stopCamera);
 document.querySelector('#app').innerHTML='<div style="display:grid;place-items:center;min-height:100vh;color:#53657f;font-family:system-ui">Chargement du stock partagé…</div>';
+// Safari iPhone : bloquer uniquement le dépassement aux extrémités sans casser le défilement.
+(function disableViewportRubberBand(){
+ let previousY=null,previousX=null;
+ document.addEventListener('touchstart',event=>{
+  if(event.touches.length!==1){previousY=null;return}
+  previousY=event.touches[0].clientY;
+  previousX=event.touches[0].clientX;
+ },{passive:true});
+ document.addEventListener('touchmove',event=>{
+  if(event.touches.length!==1||previousY===null||!event.cancelable)return;
+  const y=event.touches[0].clientY,x=event.touches[0].clientX;
+  const delta=y-previousY,deltaX=x-previousX;
+  previousY=y;previousX=x;
+  if(Math.abs(delta)<=1||Math.abs(deltaX)>Math.abs(delta))return;
+  // Un panneau qui peut encore défiler ne doit jamais être bloqué.
+  let node=event.target;
+  while(node&&node!==document.body&&node!==document.documentElement){
+   if(node.nodeType===1){
+    const style=window.getComputedStyle(node);
+    if(/auto|scroll/.test(style.overflowY)&&node.scrollHeight>node.clientHeight+1){
+     if((delta>0&&node.scrollTop>0)||(delta<0&&node.scrollTop+node.clientHeight<node.scrollHeight-1))return;
+    }
+   }
+   node=node.parentElement;
+  }
+  const root=document.scrollingElement||document.documentElement;
+  const top=window.scrollY||root.scrollTop||0;
+  const max=Math.max(0,root.scrollHeight-window.innerHeight);
+  if((delta>0&&top<=0)||(delta<0&&top>=max-1))event.preventDefault();
+ },{passive:false});
+})();
+
 if('scrollRestoration' in history)history.scrollRestoration='manual';
 refreshState().then(()=>window.scrollTo(0,0));
 setInterval(()=>{if(!document.hidden&&!modal&&page!=='entry'&&page!=='exit')refreshState(true)},20000);
