@@ -29,6 +29,18 @@ StockPilot s'installe directement depuis **https://stockpilot.m4xim.eu**. L'appl
 
 **Important** : la publication d'une application native iOS sur l'App Store requiert l'Apple Developer Program payant. La PWA ci-dessus est la solution iPhone gratuite et installable, sans App Store. Le déploiement Docker habituel met à jour l'application sur les deux systèmes.
 
+## Réception par type et préparation des ordinateurs (3 novembre 2026)
+
+Dans **Entrée en stock**, choisissez un type d'article avant son nom : **Matériel, Ordinateur portable, Ordinateur fixe, Écran, Imprimante, Réseau, Périphérique, Téléphone / tablette, Composant ou Autre**. La réception n'exige que le nom et le type ; les caractéristiques supplémentaires sont facultatives.
+
+- **Matériel** et **Autre** : pas de fiche technique imposée.
+- **Ordinateurs portables et fixes** : processeur, nombre de cœurs, RAM (Go), stockage, système d'exploitation et carte graphique. Ces informations peuvent être laissées vides lorsque le PC est encore dans son carton.
+- **Autres catégories** : affichage de quelques champs adaptés (ex. taille/résolution pour écran, connexion/technologie pour imprimante, IP/MAC pour réseau).
+- Chaque PC reçu obtient un **statut de préparation indépendant** : *En attente* par défaut, *En préparation* ou *Préparation terminée*. Les autres articles ne sont pas soumis à ce circuit.
+- Dans **Produits en stock**, le filtre **À préparer** montre les références comportant des ordinateurs en attente ou en cours de préparation. Chaque référence mène à sa popup et chaque code **STK-...** possède un bouton **Préparation / fiche** pour compléter les caractéristiques, le numéro de série et l'état d'avancement, sans réimprimer l'étiquette ni recréer l'article.
+- Les champs techniques et les statuts sont enregistrés par **unité individuelle** dans SQLite (`items.specs_json` et `items.prep_status`). Migration additive : aucune suppression des anciennes références, quantités ou étiquettes. Les anciens PC existants ne sont pas arbitrairement marqués comme prêts ; leur préparation est initialement *non suivie* jusqu'à modification.
+- Chaque modification est vue par la synchronisation multi-appareils existante. L'identifiant unique STK et les sorties de stock ne changent pas.
+
 ## Synchronisation multi-appareils (3 novembre 2026)
 
 - Tout changement d'inventaire, de quantité, d'état, de référence, de mouvement ou de configuration est détecté via **un compteur SQLite transactionnel** partagé par les processus Docker. Ce compteur est augmenté automatiquement par des triggers SQL, dans la même transaction que les données.
