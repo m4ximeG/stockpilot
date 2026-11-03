@@ -72,7 +72,31 @@ if(/(?:^\\?|&)page=products(?:&|$)/.test(String(window.location?.search||'')))pa
 function save(){} // Les données sont toujours écrites par le serveur et jamais dans localStorage.
 async function api(path,method='GET',data=null){const opts={method,credentials:'same-origin',headers:{'X-Requested-With':'StockPilot'}};if(data!==null){opts.headers['Content-Type']='application/json';opts.body=JSON.stringify(data)}let r;try{r=await fetch(path,opts)}catch(e){throw new Error('Serveur inaccessible. Vérifiez le réseau.')}if(r.status===401){window.location='/login';throw new Error('Session expirée')}const contentType=r.headers.get('content-type')||'';const result=contentType.includes('json')?await r.json():{};if(!r.ok)throw new Error(result.error||'Erreur du serveur');return result}
 let me={username:'...',role:'employee'},allowReset=false,users=[],locationMode='optional';
-async function refreshState(silent=false){try{const data=await api('/api/state');db={items:data.items,events:data.events,catalog:data.catalog,shelves:data.shelves||[],warehousePhoto:!!data.warehousePhoto,counter:data.counter};me=data.me;allowReset=data.allowReset;locationMode=data.locationMode||'optional';if(!db.catalog.some(p=>p.id===selectedProduct&&p.active))selectedProduct=db.catalog.find(p=>p.active)?.id||null;if(!silent)renderApp();else if(page==='dashboard')syncDashboardData();else if(['products','map','history','settings'].includes(page))renderApp();return true}catch(e){if(!silent){document.querySelector('#app').innerHTML='<main style="font:16px Arial;padding:40px;max-width:550px;margin:12vh auto"><h1>Connexion au serveur impossible</h1><p>'+esc(e.message)+'</p><button onclick="location.reload()">Réessayer</button></main>'}else toast(e.message,true);return false}}
+let stockRevision=-1,liveSyncBusy=false,liveSyncActive=true,liveSyncLastCheck=0;
+function receiveStockSnapshot(data){
+ if(typeof data.revision==='number' && stockRevision>=0 && data.revision<stockRevision)return false;
+ db={items:data.items,events:data.events,catalog:data.catalog,shelves:data.shelves||[],
+  warehousePhoto:!!data.warehousePhoto,counter:data.counter};
+ me=data.me;allowReset=data.allowReset;locationMode=data.locationMode||'optional';
+ if(typeof data.revision==='number')stockRevision=data.revision;
+ if(!db.catalog.some(p=>p.id===selectedProduct&&p.active))selectedProduct=db.catalog.find(p=>p.active)?.id||null;
+ return true;
+}
+async function refreshState(silent=false){
+ try{
+  const data=await api('/api/state');
+  if(!receiveStockSnapshot(data))return true;
+  if(!silent)renderApp();
+  else if(page==='dashboard')syncDashboardData();
+  else if(!modal && ['products','history','settings'].includes(page))patchLiveStockView();
+  return true;
+ }catch(e){
+  if(!silent){
+   document.querySelector('#app').innerHTML='<main style="font:16px Arial;padding:40px;max-width:550px;margin:12vh auto"><h1>Connexion au serveur impossible</h1><p>'+esc(e.message)+'</p><button onclick="location.reload()">Réessayer</button></main>';
+  }else console.warn('StockPilot: actualisation du stock temporairement impossible');
+  return false;
+ }
+}
 function product(pid){return db.catalog.find(p=>p.id===pid)}function itemAt(slot){return db.items.find(i=>i.slot===slot)}function itemById(id){return db.items.find(i=>i.id.toUpperCase()===String(id).trim().toUpperCase())}function zoneOf(slot){return ZONES.find(z=>z.id===slot?.[0])}
 function firstFree(zone){return null}
 function toast(msg,error=false){let div=document.createElement('div');div.className='toast'+(error?' error':'');div.innerHTML=ico(error?'info':'check',16)+`<span>${esc(msg)}</span>`;$('#toasts').appendChild(div);setTimeout(()=>div.remove(),4000)}
@@ -124,6 +148,7 @@ function nav(p){
  document.querySelector('.sidebar')?.classList.remove('open');
  document.querySelector('.sidebackdrop')?.remove();
  document.querySelector('.overlay')?.remove();
+ if(page==='products'||page==='settings')updatePushButton();
  window.scrollTo(0,0);
  if(reduced)return;
  activeBtns.forEach(btn=>btn.classList.add('sp-nav-arrive'));
@@ -250,6 +275,54 @@ function renderApp(){
  const target=$('#app');
  if(target)target.innerHTML=layout();
  if(page==='products'||page==='settings')updatePushButton();
+}
+// Synchronisation silencieuse : ne remplace jamais #content ni #app.
+ // Les formulaires, la recherche, les fenêtres et l'animation de navigation restent montés.
+function patchLiveStockView(){
+ if(modal)return; // On ne touche pas à une fenêtre en cours d'utilisation.
+ if(page==='dashboard'){syncDashboardData();return}
+ if(!['products','history','exit','settings'].includes(page))return;
+ const current=document.getElementById('content');
+ if(!current)return;
+ const temp=document.createElement('div');
+ temp.innerHTML=renderPage();
+ const patch=(selector)=>{
+  const oldNode=current.querySelector(selector),newNode=temp.querySelector(selector);
+  if(oldNode&&newNode && oldNode.innerHTML!==newNode.innerHTML)oldNode.innerHTML=newNode.innerHTML;
+ };
+ if(page==='products'){
+  // Les champs de recherche, choix de catégorie et onglets restent intacts.
+  patch('.si-summary');
+  patch('.si-list');
+  patch('.si-footer');
+ }else if(page==='history'){
+  // Aucun retour en haut, aucune réanimation : seuls les mouvements changent.
+  patch('.basic-table-card .slim-table tbody');
+  patch('.sp-mobile-history .sp-mh-summary');
+  patch('.sp-mobile-history .sp-mh-list');
+ }else if(page==='exit'){
+  // Le champ en cours de scan et la sélection du produit ne sont pas modifiés.
+  patch('.basic-manual-list');
+ }else if(page==='settings'){
+  // La création de comptes et les champs de mots de passe restent inchangés.
+  patch('.basic-catalog');
+ }
+ const navCount=document.querySelector('.sidebar [data-nav="products"] .count');
+ if(navCount)navCount.textContent=String(db.items.length);
+}
+async function syncStockAcrossDevices(){
+ if(liveSyncBusy||!liveSyncActive||document.hidden||stockRevision<0)return;
+ liveSyncBusy=true;
+ try{
+  const next=await api('/api/sync/revision');
+  if(typeof next.revision==='number'&&next.revision>stockRevision){
+   const snapshot=await api('/api/state');
+   if(receiveStockSnapshot(snapshot))patchLiveStockView();
+  }
+ }catch(e){
+  // Perte de réseau provisoire : garder le formulaire et réessayer au cycle suivant.
+  console.warn('StockPilot: synchronisation momentanément indisponible');
+ }finally{liveSyncBusy=false;liveSyncLastCheck=Date.now()}
 }
 function stockPilotLabelSize(){
  try{const value=window.localStorage.getItem('stockpilot-label-size');return ['54x25','57x32'].includes(value)?value:'54x25'}
@@ -572,7 +645,11 @@ document.querySelector('#app').innerHTML='<div style="display:grid;place-items:c
 
 if('scrollRestoration' in history)history.scrollRestoration='manual';
 refreshState().then(()=>window.scrollTo(0,0));
-setInterval(()=>{if(!document.hidden&&!modal&&page!=='entry'&&page!=='exit')refreshState(true)},20000);
+// Tous les appareils contrôlent une révision SQLite légère environ chaque seconde.
+// Pas de rafraîchissement visuel si rien n'a changé, et aucun reset de formulaire.
+setInterval(syncStockAcrossDevices,1200);
+window.addEventListener('focus',syncStockAcrossDevices);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncStockAcrossDevices()});
 if('serviceWorker' in navigator && location.protocol==='https:'){
  window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js?version=2').catch(()=>{}));
 }
