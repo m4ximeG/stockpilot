@@ -106,7 +106,7 @@ body.aurora-on{background-color:#071b22!important}
 /* SP contrast fix — modal and product suggestions
  * Glass surfaces match the rest of StockPilot; no changes to animations. */
 .overlay .modal{
-  background:linear-gradient(165deg,rgba(35,55,68,.98),rgba(24,42,55,.985))!important;
+  background:linear-gradient(160deg,rgba(55,64,86,.985) 0%,rgba(44,52,75,.985) 58%,rgba(37,46,67,.99) 100%)!important;
   border:1px solid rgba(241,249,255,.24)!important;
   box-shadow:0 28px 78px rgba(3,12,22,.38)!important;
   color:#f6fbff!important;
@@ -188,7 +188,7 @@ body.aurora-on{background-color:#071b22!important}
 
 /* Product name suggestions use the same blue-grey glass palette as the cards. */
 body:not(.aurora-on) .basic-suggestions:not(:empty){
-  background:rgba(35,51,66,.96)!important;
+  background:rgba(47,56,77,.97)!important;
   border:1px solid rgba(239,248,255,.36)!important;
   box-shadow:0 12px 30px rgba(4,15,26,.28)!important;
   backdrop-filter:blur(18px);
@@ -220,5 +220,5 @@ body:not(.aurora-on) .basic-create small{
   color:#c5d8e5!important;
 }
 body:not(.aurora-on) .basic-suggestion>b{
-  color:#a9edcd!important;
+  color:#d0dcff!important;
 }
