@@ -26,7 +26,7 @@
 
 
 
-<script src="/static/barcode-only.js?v=inventory-20261103-1"></script>
+<script src="/static/barcode-only.js?v=inventory-20261103-2"></script>
 <script src="/static/reception.js?v=12"></script>
 <link rel="stylesheet" href="/static/barcode-only.css?v=aurora-20261102-2" />
 
@@ -35,8 +35,8 @@
 <link rel="stylesheet" href="/static/harmony.css?v=6" />
 <link rel="stylesheet" href="/static/liquid-route.css?v=6" />
 <link rel="stylesheet" href="/static/mobile-app.css?v=4" />
-<link rel="stylesheet" href="/static/mobile-layout.css?v=2" />
-<link rel="stylesheet" href="/static/inventory-ui.css?v=3" />
+<link rel="stylesheet" href="/static/mobile-layout.css?v=3" />
+<link rel="stylesheet" href="/static/inventory-ui.css?v=4" />
 
 
 
@@ -68,6 +68,7 @@ const fmtDate=ts=>new Date(ts).toLocaleDateString('fr-FR',{day:'2-digit',month:'
 const fmtTime=ts=>new Date(ts).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
 function load(){return {items:[],events:[],catalog:[],shelves:[],warehousePhoto:false,counter:1}}
 let db=load(),page='dashboard',selectedSlot='A-1',selectedProduct=null,chosenSlot=null,formSerial='',formCondition='Neuf',lastAdded=null,scanResult=null,searchTerm='',tableFilter='',tableZone='all',tableType='all',tableStockFilter='all',modal=null,cameraStream=null,scanning=false,activeCameraRun=0,mobileNav=false;
+if(/(?:^\\?|&)page=products(?:&|$)/.test(String(window.location?.search||'')))page='products';
 function save(){} // Les données sont toujours écrites par le serveur et jamais dans localStorage.
 async function api(path,method='GET',data=null){const opts={method,credentials:'same-origin',headers:{'X-Requested-With':'StockPilot'}};if(data!==null){opts.headers['Content-Type']='application/json';opts.body=JSON.stringify(data)}let r;try{r=await fetch(path,opts)}catch(e){throw new Error('Serveur inaccessible. Vérifiez le réseau.')}if(r.status===401){window.location='/login';throw new Error('Session expirée')}const contentType=r.headers.get('content-type')||'';const result=contentType.includes('json')?await r.json():{};if(!r.ok)throw new Error(result.error||'Erreur du serveur');return result}
 let me={username:'...',role:'employee'},allowReset=false,users=[],locationMode='optional';
@@ -107,7 +108,7 @@ function nav(p){
   entryPresetPid=null;
   if(preset)SPV3.prefill(preset);
  }
- page=p;modal=null;mobileNav=false;
+ page=p;modal=null;document.body.classList.remove('si-modal-open');mobileNav=false;
  document.body.classList.toggle('aurora-on',page==='dashboard');
  const content=$('#content');
  if(content)content.innerHTML=renderPage();
@@ -247,6 +248,7 @@ function renderContent(){
 function renderApp(){
  const target=$('#app');
  if(target)target.innerHTML=layout();
+ if(page==='products')updatePushButton();
 }
 function stockPilotLabelSize(){
  try{const value=window.localStorage.getItem('stockpilot-label-size');return ['54x25','57x32'].includes(value)?value:'54x25'}
@@ -316,7 +318,9 @@ function exportStockSummary(){
  toast('Quantités exportées');
 }
 function exportHistory(){downloadCSV('stockpilot-historique.csv',[['Date','Type','Produit','Identifiant','Opérateur'],...db.events.filter(e=>e.type==='in'||e.type==='out').map(e=>[new Date(e.at).toLocaleString('fr-FR'),e.type==='in'?'Entrée':'Sortie',displayName(product(e.pid)),e.itemId,e.actor])]);toast('Journal CSV téléchargé')}
-function openModal(m){modal=m;renderApp()}function closeModal(){modal=null;renderApp()}
+function openModal(m){modal=m;document.body.classList.toggle('si-modal-open',m?.type==='stockproduct');renderApp();
+ if(m?.type==='stockproduct')document.querySelector('.si-product-modal')?.focus()}
+function closeModal(){modal=null;document.body.classList.remove('si-modal-open');renderApp()}
 // Lecteur commun Safari iPhone / Android / ordinateur : QR Code, Code 128 et Code 39.
 // Chargement à la demande : aucune dépendance au CDN sur les autres pages.
 let cameraReader=null, scannerLibraryPending=null;
@@ -412,10 +416,77 @@ function installMobileApp(){
  toast(ios?'Sur iPhone : Safari → Partager → Sur l’écran d’accueil.':
   'Dans le menu de Chrome, choisissez « Installer l’application » ou « Ajouter à l’écran d’accueil ».');
 }
+// Les notifications iPhone fonctionnent uniquement depuis la PWA installée, avec accord explicite.
+function isStockPilotStandalone(){
+ return navigator.standalone===true||!!window.matchMedia?.('(display-mode: standalone)').matches;
+}
+function pushAvailable(){
+ return 'serviceWorker' in navigator && 'PushManager' in window && typeof Notification!=='undefined';
+}
+function decodePushKey(encoded){
+ const raw=atob(encoded.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-encoded.length%4)%4));
+ return Uint8Array.from(raw,character=>character.charCodeAt(0));
+}
+async function updatePushButton(){
+ const btn=document.querySelector('[data-action="pushsubscribe"]');
+ if(!btn)return;
+ if(!pushAvailable()){
+  btn.disabled=true;btn.textContent='Indisponible';return;
+ }
+ try{
+  const reg=await navigator.serviceWorker.getRegistration('/');
+  const sub=reg?await reg.pushManager.getSubscription():null;
+  const button=document.querySelector('[data-action="pushsubscribe"]');
+  if(!button)return;
+  const active=!!sub&&Notification.permission==='granted';
+  button.textContent=active?'Désactiver':'Activer';
+  button.dataset.subscribed=active?'yes':'no';
+  button.disabled=false;
+ }catch(e){btn.textContent='Activer'}
+}
+async function togglePushSubscription(button){
+ if(!pushAvailable())return toast('Notifications non prises en charge par ce navigateur.',true);
+ if(/iPhone|iPad|iPod/i.test(navigator.userAgent||'')&&!isStockPilotStandalone()){
+  toast('Sur iPhone : ajoute StockPilot à l’écran d’accueil, puis ouvre son icône pour activer les notifications.',true);
+  return;
+ }
+ if(button.dataset.subscribed==='yes'){
+  try{
+   const reg=await navigator.serviceWorker.ready;
+   const sub=await reg.pushManager.getSubscription();
+   if(sub){
+    await api('/api/push/subscriptions','DELETE',{endpoint:sub.endpoint});
+    await sub.unsubscribe();
+   }
+   toast('Notifications désactivées sur cet appareil.');
+   updatePushButton();
+  }catch(e){toast(e.message||'Impossible de désactiver les notifications.',true)}
+  return;
+ }
+ // Permission appelée immédiatement dans le geste de l'utilisateur, exigé par iOS.
+ const permissionRequest=Notification.requestPermission();
+ try{
+  const permission=await permissionRequest;
+  if(permission!=='granted'){toast('Autorisez les notifications dans les réglages de votre iPhone.',true);return}
+  button.disabled=true;button.textContent='Activation…';
+  const keyData=await api('/api/push/public-key');
+  const registration=await navigator.serviceWorker.ready;
+  let sub=await registration.pushManager.getSubscription();
+  if(!sub)sub=await registration.pushManager.subscribe({
+   userVisibleOnly:true,applicationServerKey:decodePushKey(keyData.publicKey)
+  });
+  await api('/api/push/subscriptions','POST',sub.toJSON());
+  toast('Notifications de stock activées sur cet appareil.');
+  // Contrôle réel : la notification de test va uniquement au compte connecté.
+  const result=await api('/api/push/test','POST',{});
+  if(!result.ok)toast('Abonnement enregistré, mais la notification de test n’a pas pu être envoyée.',true);
+ }catch(e){toast(e.message||'Impossible d’activer les notifications.',true)}
+ finally{updatePushButton()}
+}
 function searchGlobal(v){searchTerm=v;page='products';tableFilter=v;renderApp();const f=$('#filter-products');if(f){f.focus();f.setSelectionRange(f.value.length,f.value.length)}}
 // Global delegated controls
 window.addEventListener('click',ev=>{if(SPV3.onClick(ev,{db,api,refreshState,renderContent,toast,printLabel,page,setSlot}))return;const n=ev.target.closest('[data-nav]');if(n){nav(n.dataset.nav);return}const slot=ev.target.closest('[data-slot]');if(slot){setSlot(slot.dataset.slot);return}const a=ev.target.closest('[data-action]');if(!a)return;const act=a.dataset.action,id=a.dataset.id;if(act==='backdrop'){if(ev.target===a)closeModal();return}switch(act){case'save-shelf':(async()=>{if(me.role!=='admin')return;const slot=a.dataset.slot;try{await api('/api/shelves/'+encodeURIComponent(slot),'PATCH',{size:$('#shelf-size')?.value||'unknown',note:$('#shelf-note')?.value||''});await refreshState(true);renderContent();toast('Niveau '+slot+' mis à jour')}catch(e){toast(e.message,true)}})();break;case'clearstock':openModal({type:'clearstock'});break;case'doclearstock':(async()=>{if($('#clear-confirm')?.value!=='VIDER LE STOCK')return toast('Confirmation incorrecte',true);try{await api('/api/admin/clear-stock','POST',{confirmation:'VIDER LE STOCK'});lastAdded=null;scanResult=null;modal=null;selectedProduct=null;await refreshState(true);nav('dashboard');toast('Stock vidé. Sauvegarde créée sur le NAS.')}catch(e){toast(e.message,true)}})();break;case'save-rule':(async()=>{if(me.role!=='admin')return;const slot=$('#rule-'+id)?.value??'';try{await api('/api/products/'+encodeURIComponent(id),'PATCH',{preferred_slot:slot});await refreshState(true);renderContent();toast(slot?'Emplacement conseillé enregistré':'Suggestion de rangement effacée')}catch(e){toast(e.message,true)}})();break;case'setlocationmode':(async()=>{if(me.role!=='admin')return;try{const mode=a.dataset.mode;await api('/api/settings/location-mode','POST',{mode});locationMode=mode;await refreshState(true);renderApp();toast('Mode de rangement mis à jour')}catch(e){toast(e.message,true)}})();break;case'mobilemore':toggleMobileMore();break;case'closemobilemore':toggleMobileMore(false);break;case'menu':mobileNav=true;renderApp();break;case'closemenu':mobileNav=false;renderApp();break;case'newentry':goEntry();break;case'goexit':goExit();break;case'gomap':nav('map');break;case'saveentry':recordEntry();break;case'print':printLabel(id);break;case'lookup':lookup($('#scan-code')?.value);break;case'stockfilter':tableStockFilter=['all','low','in'].includes(a.dataset.status)?a.dataset.status:'all';renderContent();break;
-case'stockproduct':openModal({type:'stockproduct',id});break;
+case'stockproduct':openModal({type:'stockproduct',id});break;case'pushsubscribe':togglePushSubscription(a);break;
 case'exportstocksummary':exportStockSummary();break;
 case'stockthreshold':(async()=>{
  if(me.role!=='admin')return toast('Réservé aux administrateurs.',true);
@@ -490,7 +561,7 @@ if('scrollRestoration' in history)history.scrollRestoration='manual';
 refreshState().then(()=>window.scrollTo(0,0));
 setInterval(()=>{if(!document.hidden&&!modal&&page!=='entry'&&page!=='exit')refreshState(true)},20000);
 if('serviceWorker' in navigator && location.protocol==='https:'){
- window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));
+ window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js?version=2').catch(()=>{}));
 }
 })();
 </script>
