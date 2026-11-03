@@ -23,6 +23,59 @@ class StockPilotTests(unittest.TestCase):
         self.headers = {'X-Requested-With': 'StockPilot'}
         self.assertEqual(self.client.post('/api/admin/reset', json={}, headers=self.headers).status_code, 200)
 
+    def test_realtime_sync_revision_is_transactional_and_shared(self):
+        # Les anciens terminaux voient les écritures d'un autre client sans redémarrage.
+        first = self.client.get('/api/sync/revision')
+        self.assertEqual(first.status_code, 200, first.text)
+        self.assertEqual(first.headers.get('Cache-Control'), 'private, no-store')
+        rev1 = first.json['revision']
+        self.assertEqual(self.client.get('/api/state').json['revision'], rev1)
+
+        second = stock.app.test_client()
+        login = second.post('/login', data={
+            'username': 'admin', 'password': 'UnMotDePasseTestTresLong#42'
+        })
+        self.assertEqual(login.status_code, 302)
+        created = second.post('/api/products', headers=self.headers, json={
+            'brand': 'TERRA', 'model': 'Temps réel', 'ref': 'SYNC-TEST-001',
+            'cat': 'PC portable', 'min_stock': 0
+        })
+        self.assertEqual(created.status_code, 201, created.text)
+        rev2 = self.client.get('/api/sync/revision').json['revision']
+        self.assertGreater(rev2, rev1)
+        snapshot = self.client.get('/api/state')
+        self.assertEqual(snapshot.json['revision'], rev2)
+        self.assertTrue(any(p['ref'] == 'SYNC-TEST-001' for p in snapshot.json['catalog']))
+
+        product_id = created.json['id']
+        receive = second.post('/api/items', headers=self.headers, json={
+            'pid': product_id, 'condition': 'Neuf'
+        })
+        self.assertEqual(receive.status_code, 201, receive.text)
+        rev3 = self.client.get('/api/sync/revision').json['revision']
+        self.assertGreater(rev3, rev2)
+        self.assertTrue(any(item['id'] == receive.json['item']['id']
+                            for item in self.client.get('/api/state').json['items']))
+        removed = second.post(f"/api/items/{receive.json['item']['id']}/out",
+                              headers=self.headers, json={})
+        self.assertEqual(removed.status_code, 200, removed.text)
+        rev4 = self.client.get('/api/sync/revision').json['revision']
+        self.assertGreater(rev4, rev3)
+        self.assertFalse(any(item['id'] == receive.json['item']['id']
+                             for item in self.client.get('/api/state').json['items']))
+        anonymous = stock.app.test_client()
+        self.assertIn(anonymous.get('/api/sync/revision').status_code, (401, 403, 302))
+
+    def test_failed_sqlite_transaction_does_not_emit_false_revision(self):
+        before = self.client.get('/api/sync/revision').json['revision']
+        with stock.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            db.execute('INSERT INTO events(type,item_id,pid,slot,at,actor) '
+                       "VALUES('in','STK-TEMP','temporary','',123,'test')")
+            db.execute('ROLLBACK')
+        after = self.client.get('/api/sync/revision').json['revision']
+        self.assertEqual(before, after)
+
     def test_push_api_permissions_validations_and_private_subscriptions(self):
         import base64
         import push_service
