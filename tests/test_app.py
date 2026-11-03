@@ -23,6 +23,71 @@ class StockPilotTests(unittest.TestCase):
         self.headers = {'X-Requested-With': 'StockPilot'}
         self.assertEqual(self.client.post('/api/admin/reset', json={}, headers=self.headers).status_code, 200)
 
+    def test_push_api_permissions_validations_and_private_subscriptions(self):
+        import base64
+        import push_service
+        key = self.client.get('/api/push/public-key')
+        self.assertEqual(key.status_code, 200, key.text)
+        self.assertTrue(len(key.json['publicKey']) >= 80)
+        def enc(size):
+            return base64.urlsafe_b64encode(bytes([7] * size)).decode().rstrip('=')
+        payload = {
+            'endpoint': 'https://web.push.apple.com/v1/demo123',
+            'keys': {'p256dh': enc(65), 'auth': enc(16)}
+        }
+        self.assertEqual(self.client.post('/api/push/subscriptions', json=payload, headers=self.headers).status_code, 200)
+        with stock.connect() as db:
+            row = db.execute('SELECT user_id FROM push_subscriptions WHERE endpoint=?', (payload['endpoint'],)).fetchone()
+            self.assertIsNotNone(row)
+            self.assertEqual(row[0], 1)
+        invalid = {**payload, 'endpoint': 'https://127.0.0.1/admin'}
+        self.assertEqual(self.client.post('/api/push/subscriptions', json=invalid, headers=self.headers).status_code, 400)
+        invalid = {**payload, 'endpoint': 'http://web.push.apple.com/v1/demo123'}
+        self.assertEqual(self.client.post('/api/push/subscriptions', json=invalid, headers=self.headers).status_code, 400)
+        self.assertEqual(self.client.post('/api/push/subscriptions', json=payload).status_code, 403)
+        from unittest.mock import patch
+        with patch.object(push_service, 'send_to_user_devices', return_value=1) as send:
+            response = self.client.post('/api/push/test', json={}, headers=self.headers)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json['devices'], 1)
+            self.assertEqual(send.call_args.args[-1], 1)
+        self.assertEqual(self.client.delete('/api/push/subscriptions',
+                                            json={'endpoint': payload['endpoint']},
+                                            headers=self.headers).status_code, 200)
+        with stock.connect() as db:
+            self.assertIsNone(db.execute('SELECT 1 FROM push_subscriptions WHERE endpoint=?',
+                                         (payload['endpoint'],)).fetchone())
+
+    def test_low_stock_push_fires_only_on_threshold_crossing(self):
+        from unittest.mock import patch
+        import push_service
+        product = self.client.post('/api/products', json={
+            'brand': 'TERRA', 'model': 'Test Push', 'cat': 'PC portable',
+            'ref': 'TEST-PUSH', 'min_stock': 2
+        }, headers=self.headers)
+        self.assertEqual(product.status_code, 201)
+        pid = product.json['id']
+        ids=[]
+        for _ in range(4):
+            response=self.client.post('/api/items', json={'pid': pid, 'condition': 'Neuf'},
+                                      headers=self.headers)
+            self.assertEqual(response.status_code, 201)
+            ids.append(response.json['item']['id'])
+        with patch.object(push_service,'send_stock_warning',return_value=1) as send:
+            self.assertEqual(self.client.post(f'/api/items/{ids[0]}/out',
+                                              json={},headers=self.headers).status_code,200)
+            self.assertEqual(send.call_count,0)
+            self.assertEqual(self.client.post(f'/api/items/{ids[1]}/out',
+                                              json={},headers=self.headers).status_code,200)
+            self.assertEqual(send.call_count,1)
+            self.assertEqual(send.call_args.args[-2:], (2, 2))
+            self.assertEqual(self.client.post(f'/api/items/{ids[2]}/out',
+                                              json={},headers=self.headers).status_code,200)
+            self.assertEqual(send.call_count,1)
+        # Une configuration facultative non activée ne déclenche rien.
+        self.assertEqual(self.client.patch(f'/api/products/{pid}',json={'min_stock':0},
+                                           headers=self.headers).status_code,200)
+
     def test_mobile_app_resources_are_public_and_do_not_cache_stock(self):
         import json
         manifest = self.client.get('/static/app.webmanifest')
