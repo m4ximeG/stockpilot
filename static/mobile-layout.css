@@ -301,3 +301,134 @@
 @media(prefers-reduced-motion:reduce){
  .sp-mobile-menu:not([hidden]),.sp-mobile-scrim:not([hidden]){animation:none!important}
 }
+
+/* ===== StockPilot iPhone · expérience mobile allégée (03.11) =====
+   Aucun impact sur la version bureau : styles limités à <= 860px.
+   Historique : journal chronologique. Paramètres : options réellement utiles.
+   Entrée : aide supprimée uniquement sur mobile. */
+.sp-mobile-history,.sp-mobile-settings{display:none}
+@media screen and (max-width:860px){
+  /* L'aide "Comment ça marche" ne concerne plus l'application mobile. */
+  body:not(.aurora-on) .basic-entry-help{display:none!important}
+  body:not(.aurora-on) .basic-entry-grid{display:grid!important;grid-template-columns:minmax(0,1fr)!important}
+  .si-mobile-push[hidden]{display:none!important}
+
+  /* Historique : priorité à la lecture d'un mouvement, pas à un tableau de champs. */
+  .sp-history-page > .basic-table-card{display:none!important}
+  .sp-history-page .pagehead .head-actions,
+  .sp-history-page .pagehead > .btn{display:none!important}
+  .sp-history-page .pagehead{margin-bottom:16px!important}
+  .sp-history-page .pagehead h1{font-size:clamp(26px,7.1vw,34px)!important;line-height:1.15!important}
+  .sp-history-page .pagehead p{display:none!important}
+  .sp-mobile-history{
+    display:block!important;width:100%;max-width:100%;min-width:0;
+    border:1px solid rgba(235,245,255,.24);border-radius:17px;
+    background:rgba(44,57,80,.85);
+    -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
+    color:#f7fbff;overflow:hidden;
+  }
+  .sp-mh-summary{
+    padding:15px 17px;border-bottom:1px solid rgba(234,246,255,.16);
+    font-size:12px;color:#d3e0ee;line-height:1.5
+  }
+  .sp-mh-summary strong{color:#fff;font-weight:750;font-size:16px;margin-right:4px}
+  .sp-mh-list{padding:0 15px 12px}
+  .sp-mh-day{
+    font-size:11px!important;line-height:1.35!important;
+    font-weight:730!important;color:#c8d8e8!important;
+    letter-spacing:.035em;text-transform:capitalize;
+    margin:0!important;padding:18px 2px 10px!important;
+  }
+  .sp-mh-event{
+    display:flex;gap:12px;align-items:flex-start;position:relative;
+    padding:13px 2px 15px;border-bottom:1px solid rgba(238,248,255,.13);
+    background:transparent!important;min-height:72px;
+  }
+  .sp-mh-event:last-child{border-bottom:0}
+  .sp-mh-track{
+    flex:none;width:8px;height:8px;margin:6px 1px 0;
+    border-radius:50%;background:#8ed9bb;
+  }
+  .sp-mh-out .sp-mh-track{background:#f3aab2}
+  .sp-mh-main{flex:1;min-width:0}
+  .sp-mh-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+  .sp-mh-top strong{
+    flex:1;min-width:0;color:#fff!important;
+    font-size:13px;font-weight:690;line-height:1.4;overflow-wrap:anywhere
+  }
+  .sp-mh-action{
+    flex:none;display:inline-block;padding:5px 9px;border-radius:7px;
+    font-size:10px;font-weight:720;line-height:1.1;white-space:nowrap
+  }
+  .sp-mh-in{color:#d2f8e5;background:rgba(89,174,139,.22)}
+  .sp-mh-out{color:#ffd5db;background:rgba(177,96,113,.23)}
+  .sp-mh-details{display:flex;align-items:center;flex-wrap:wrap;gap:5px 10px;margin-top:6px;
+    color:#bdcedd;font-size:10px;line-height:1.4}
+  .sp-mh-details code{
+    font:650 11px/1.35 ui-monospace,SFMono-Regular,Consolas,monospace;
+    color:#e8f2fa;background:transparent
+  }
+  .sp-mh-details span:not(:last-child)::before{content:"·";margin-right:10px;color:#738da5}
+  .sp-mh-actor{overflow-wrap:anywhere}
+  .sp-mh-empty{padding:30px 20px;text-align:center;color:#c9d8e7;font-size:13px}
+
+  /* Configuration : une page d'usage, pas un panneau d'administration complet. */
+  .sp-settings-page > .settings-board{display:none!important}
+  .sp-settings-page .pagehead{margin-bottom:18px!important}
+  .sp-settings-page .pagehead h1{font-size:clamp(27px,7.5vw,34px)!important}
+  .sp-settings-page .pagehead p{display:none!important}
+  .sp-mobile-settings{display:grid!important;gap:12px;max-width:100%;min-width:0}
+  .sp-ms-card{
+    padding:16px;border:1px solid rgba(241,249,255,.24);
+    border-radius:16px;background:rgba(47,62,85,.85);
+    -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
+    color:#f5f9ff
+  }
+  .sp-ms-profile{display:flex;align-items:center;gap:12px}
+  .sp-ms-avatar{display:grid;place-items:center;flex:none;width:43px;height:43px;
+    border-radius:13px;border:1px solid rgba(246,252,255,.2);
+    background:rgba(244,250,255,.18);color:#fff;font-size:14px;font-weight:750}
+  .sp-ms-profile-name{display:flex;flex-direction:column;gap:4px;flex:1;min-width:0}
+  .sp-ms-profile-name strong{font-size:14px;color:#fff!important;font-weight:720;overflow-wrap:anywhere}
+  .sp-ms-profile-name small{font-size:11px;color:#cad9e7}
+  .sp-ms-connected{color:#c7ecdb;font-size:10px;font-weight:650;white-space:nowrap}
+  .sp-ms-section-title{display:flex;gap:14px;align-items:center;justify-content:space-between}
+  .sp-ms-section-title > div{min-width:0;flex:1}
+  .sp-ms-section-title strong{font-size:14px;font-weight:720;color:#fff!important}
+  .sp-ms-section-title p{margin:5px 0 0!important;color:#cfdeea!important;
+    font-size:11px!important;line-height:1.5!important}
+  .sp-ms-push-button{
+    flex:none;min-height:40px;padding:7px 13px;
+    border-radius:10px;background:#edf5fa;color:#1e3a4a;
+    border:1px solid #edf5fa;font:700 11px/1.2 system-ui,sans-serif
+  }
+  .sp-ms-push-button:disabled{opacity:.6}
+  .sp-ms-password{padding:0!important}
+  .sp-ms-password > summary{
+    display:flex;align-items:center;justify-content:space-between;
+    list-style:none;cursor:pointer;min-height:60px;padding:16px;
+    color:#f6faff;font-size:14px;font-weight:710
+  }
+  .sp-ms-password > summary::-webkit-details-marker{display:none}
+  .sp-ms-password > summary::marker{content:""}
+  .sp-ms-chevron{width:9px;height:9px;margin-right:6px;transform:rotate(45deg);
+    border-right:1.8px solid #dce9f4;border-bottom:1.8px solid #dce9f4;
+    transition:transform .2s}
+  .sp-ms-password[open] .sp-ms-chevron{transform:rotate(225deg)}
+  .sp-ms-password-form{display:grid;gap:16px;padding:0 16px 17px}
+  .sp-ms-password-form label{display:grid;gap:8px;font-size:12px;font-weight:650;color:#e7f0f9}
+  .sp-ms-password-form input{
+    min-width:0;width:100%;height:45px;
+    border-radius:10px;background:rgba(7,21,39,.33)!important;
+    border:1px solid rgba(239,249,255,.33)!important;color:#fff!important;
+    padding:10px 12px;font-size:16px!important
+  }
+  .sp-ms-password-form button{min-height:46px;width:100%;border-radius:10px}
+  .sp-ms-footnote{
+    padding:4px 8px 0;margin:0!important;font-size:11px!important;
+    color:#b8cbdc!important;line-height:1.6!important
+  }
+}
+@media(prefers-reduced-motion:reduce){
+ .sp-ms-chevron{transition:none!important}
+}
