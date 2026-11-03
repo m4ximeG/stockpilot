@@ -104,6 +104,9 @@ def initialize():
         existing_columns = {row['name'] for row in con.execute('PRAGMA table_info(products)')}
         if 'preferred_slot' not in existing_columns:
             con.execute("ALTER TABLE products ADD COLUMN preferred_slot TEXT NOT NULL DEFAULT ''")
+        # Seuil de réapprovisionnement par référence : migration additive et sans perte.
+        if 'min_stock' not in existing_columns:
+            con.execute("ALTER TABLE products ADD COLUMN min_stock INTEGER NOT NULL DEFAULT 0 CHECK(min_stock >= 0)")
         con.executemany("INSERT OR IGNORE INTO shelf_levels(slot,size,note) VALUES(?,'unknown','')", [(slot,) for slot in SLOTS])
         con.execute("INSERT OR IGNORE INTO meta(key,value) VALUES('location_mode','optional')")
         if not con.execute('SELECT 1 FROM users LIMIT 1').fetchone():
@@ -242,6 +245,19 @@ def json_body():
     if not isinstance(data, dict):
         raise ValueError('Format JSON invalide.')
     return data
+
+
+def read_stock_threshold(value):
+    """Quantité minimale entière, non négative et bornée."""
+    if isinstance(value, bool) or value is None:
+        raise ValueError('Seuil de stock invalide (entier de 0 à 99999).')
+    if isinstance(value, str):
+        if not value.strip().isdigit():
+            raise ValueError('Seuil de stock invalide (entier de 0 à 99999).')
+        value = int(value.strip())
+    if not isinstance(value, int) or not 0 <= value <= 99999:
+        raise ValueError('Seuil de stock invalide (entier de 0 à 99999).')
+    return value
 
 
 def row_dict(row):
@@ -383,7 +399,7 @@ def healthz():
 @protected()
 def state():
     db = g.db
-    products = [row_dict(x) for x in db.execute('SELECT id,brand,model,cat,zone,kind,ref,active,preferred_slot FROM products ORDER BY brand,model')]
+    products = [row_dict(x) for x in db.execute('SELECT id,brand,model,cat,zone,kind,ref,active,preferred_slot,min_stock FROM products ORDER BY brand,model')]
     items = [dict(id=x['id'],pid=x['pid'],slot=x['slot'],serial=x['serial'] or '',condition=x['condition'],inAt=x['in_at']) for x in db.execute('SELECT * FROM items WHERE out_at IS NULL ORDER BY in_at')]
     events = [dict(id='e'+str(x['id']),type=x['type'],itemId=x['item_id'],pid=x['pid'],slot=x['slot'],at=x['at'],actor=x['actor'],detail=x['detail']) for x in db.execute('SELECT * FROM events ORDER BY id DESC LIMIT 1500')]
     shelves = [dict(slot=r['slot'],size=r['size'],note=r['note']) for r in db.execute('SELECT slot,size,note FROM shelf_levels ORDER BY slot')]
@@ -685,9 +701,10 @@ def add_product():
         if zone not in ZONE_CODES:
             return bad('Zone inconnue.')
         kind = {'PC portable':'laptop','PC fixe':'harddrive','Écran':'monitor'}.get(cat,'package')
+        min_stock = read_stock_threshold(data.get('min_stock', 0))
         product_id = 'p_' + secrets.token_hex(6)
-        g.db.execute('INSERT INTO products(id,brand,model,cat,zone,kind,ref,preferred_slot) VALUES(?,?,?,?,?,?,?,?)',
-                     (product_id,brand,model,cat,zone,kind,ref,preferred_slot))
+        g.db.execute('INSERT INTO products(id,brand,model,cat,zone,kind,ref,preferred_slot,min_stock) VALUES(?,?,?,?,?,?,?,?,?)',
+                     (product_id,brand,model,cat,zone,kind,ref,preferred_slot,min_stock))
         return jsonify(id=product_id), 201
     except sqlite3.IntegrityError:
         return bad('Cette référence existe déjà.', 409)
@@ -716,6 +733,8 @@ def edit_product(product_id):
             fields['preferred_slot'] = preferred_slot
         if 'active' in data:
             fields['active'] = 1 if data['active'] is True else 0
+        if 'min_stock' in data:
+            fields['min_stock'] = read_stock_threshold(data['min_stock'])
         if not fields:
             return bad('Aucun changement.')
         fields_sql = ','.join(f'{k}=?' for k in fields)
