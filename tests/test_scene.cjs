@@ -370,7 +370,7 @@ test('Étiquettes DYMO : PDF à l’échelle choisie depuis les paramètres',()=
 test('iPhone : fond unique stable dans la composition, sans parallax Safari',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
  const css=fs.readFileSync('static/mobile-layout.css','utf8');
- assert.match(html,/\/static\/mobile-layout\.css\?v=1/);
+ assert.match(html,/\/static\/mobile-layout\.css\?v=2/);
  assert.match(css,/body::before\s*\{/);
  assert.match(css,/position:fixed; top:0; left:0/);
  assert.match(css,/height:100lvh/);
@@ -403,4 +403,19 @@ test('iPhone : accueil en flux vertical et champs sans zoom',()=>{
  assert.match(css,/\.basic-entry-grid,\.settings-board,\.flowgrid\s*\{[\s\S]*?grid-template-columns:minmax\(0,1fr\)!important/);
  assert.match(css,/\.field textarea,[\s\S]*?font-size:16px!important/);
  assert.match(css,/env\(safe-area-inset-bottom,0px\)/);
+});
+
+test('Barre de navigation iPhone toujours visible hors accueil malgré polish.css',()=>{
+ const fs=require('node:fs');
+ const oldCss=fs.readFileSync('static/polish.css','utf8');
+ const mobile=fs.readFileSync('static/mobile-layout.css','utf8');
+ const html=fs.readFileSync('static/index.html','utf8');
+ assert.match(oldCss,/body:not\(\.aurora-on\) \.mobilebottom\{display:none!important\}/);
+ assert.match(mobile,/body:not\(\.aurora-on\) \.mobilebottom,\s*body\.aurora-on \.mobilebottom\s*\{[^}]*display:grid!important/);
+ assert.match(mobile,/visibility:visible!important/);
+ assert.match(html,/<nav class="mobilebottom" aria-label="Navigation mobile"/);
+ assert.match(html,/\/static\/mobile-layout\.css\?v=2/);
+ const polishPosition=html.indexOf('/static/polish.css');
+ const mobilePosition=html.indexOf('/static/mobile-layout.css');
+ assert.ok(mobilePosition>polishPosition,'Les règles mobiles doivent venir après polish.css');
 });
