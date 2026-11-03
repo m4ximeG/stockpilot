@@ -72,8 +72,8 @@ function inventory(c){
  const unitMap=new Map();
  for(const u of c.db.items){if(!unitMap.has(u.pid))unitMap.set(u.pid,[]);unitMap.get(u.pid).push(u)}
  const all=c.db.catalog.map(p=>{
-  const units=unitMap.get(p.id)||[],qty=units.length,min=Math.max(0,Number(p.min_stock)||0);
-  return {p,units,qty,min,status:qty===0?'empty':min>0&&qty<=min?'low':'ok'};
+  const units=unitMap.get(p.id)||[],qty=units.filter(i=>!/(sav|répar|repar)/i.test(i.condition||'Neuf')).length,min=Math.max(0,Number(p.min_stock)||0);
+  return {p,units,qty,pending:units.length-qty,min,status:qty===0?'empty':min>0&&qty<=min?'low':'ok'};
  });
  const total=all.reduce((a,x)=>a+x.qty,0);
  const lowCount=all.filter(x=>x.status!=='ok'&&x.p.active!==0).length;
@@ -99,8 +99,8 @@ function inventory(c){
    '<input id="sp-min-'+escape(p.id)+'" type="number" min="0" max="99999" step="1" inputmode="numeric" value="'+min+'" aria-label="Seuil pour '+escape(name(p))+'">'+
    '<button type="button" data-action="stockthreshold" data-id="'+escape(p.id)+'" class="sp-stock-save">Enregistrer</button></div>':
    '<div class="sp-stock-threshold-read">Seuil : '+(min>0?min+' articles':'non défini')+'</div>';
-  const individual=qty?
-   '<details class="sp-stock-units"><summary>Voir les '+qty+' unité'+(qty>1?'s':'')+' et leurs étiquettes</summary>'+
+  const individual=x.units.length?
+   '<details class="sp-stock-units"><summary>Voir les '+x.units.length+' unité'+(x.units.length>1?'s':'')+' et leurs étiquettes</summary>'+
    '<div class="sp-stock-units-list">'+x.units.slice().sort((a,b)=>b.inAt-a.inAt).map(i=>
     '<div class="sp-stock-unit"><div><strong>'+escape(i.id)+'</strong><small>'+
     escape(i.serial||'Sans numéro de série')+' · '+escape(i.condition||'Neuf')+'</small></div>'+
@@ -110,7 +110,7 @@ function inventory(c){
   return '<article class="sp-stock-row '+statusClass+'">'+
    '<div class="sp-stock-main"><div class="sp-stock-name"><h3>'+escape(name(p))+'</h3>'+
    '<div class="sp-stock-ref">'+escape(p.ref||'Sans référence')+(p.cat?' · '+escape(p.cat):'')+
-   (p.active===0?' · Référence désactivée':'')+'</div>'+
+   (p.active===0?' · Référence désactivée':'')+(x.pending?' · '+x.pending+' en SAV / réparation':'')+'</div>'+
    '<span class="sp-stock-status">'+stateLabel+'</span></div>'+
    '<div class="sp-stock-count"><strong>'+qty+'</strong><span>en stock</span></div></div>'+
    '<div class="sp-stock-bottom">'+threshold+
