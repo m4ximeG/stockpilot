@@ -145,12 +145,23 @@ function stockProductModal(c){
  const qty=units.filter(i=>!/(sav|répar|repar)/i.test(i.condition||'Neuf')).length;
  const threshold=Math.max(0,Number(p.min_stock)||0);
  const title=escape(name(p));
+ const pcCategory=['Ordinateur portable','Ordinateur fixe','PC portable','PC fixe'].includes(p.cat);
+ const prepLabel={pending:'En attente de préparation',in_progress:'En préparation',ready:'Préparation terminée',not_required:'Préparation non suivie'};
+ const specsLabels={cpu:'Processeur',cores:'Cœurs',ram_gb:'RAM (Go)',storage:'Stockage',os:'Système',
+   gpu:'Carte graphique',size_inches:'Taille',resolution:'Résolution',connection:'Connexion',
+   technology:'Technologie',mac:'MAC',ip:'IP',model_detail:'Précisions'};
  const itemRows=units.map(i=>{
   const state=escape(i.condition||'Neuf');
+  const specs=Object.entries(i.specs||{}).map(([k,v])=>escape(specsLabels[k]||k)+' : '+escape(v)).join(' · ');
+  const prep=pcCategory?'<span class="si-prep-badge si-prep-'+escape(i.prepStatus||'not_required')+'">'+
+   escape(prepLabel[i.prepStatus||'not_required'])+'</span>':'';
   return '<article class="si-modal-unit"><div class="si-modal-unit-code">'+
-   '<strong>'+escape(i.id)+'</strong><small>'+escape(i.serial||'Sans numéro de série')+' · '+state+'</small></div>'+
+   '<strong>'+escape(i.id)+'</strong><small>'+escape(i.serial||'Sans numéro de série')+' · '+state+'</small>'+
+   prep+(specs?'<small class="si-specs-summary">'+specs+'</small>':'')+'</div>'+
    '<img loading="lazy" src="/api/items/'+encodeURIComponent(i.id)+'/barcode.svg" alt="Code-barres '+escape(i.id)+'" class="si-modal-barcode">'+
-   '<button type="button" class="si-modal-reprint" data-action="print" data-id="'+escape(i.id)+'">Réimprimer</button></article>';
+   '<div class="si-unit-modal-actions"><button type="button" class="si-modal-reprint" data-action="print" data-id="'+escape(i.id)+'">Réimprimer</button>'+
+   '<button type="button" class="si-modal-edit" data-action="editunit" data-id="'+escape(i.id)+'">'+
+   (pcCategory?'Préparation / fiche':'Modifier la fiche')+'</button></div></article>';
  }).join('');
  const alertEditor=c.me?.role==='admin'?'<section class="si-alert-editor si-desktop-alert">'+
   '<div class="si-alert-description"><strong>Seuil de réapprovisionnement</strong>'+
@@ -172,6 +183,46 @@ function stockProductModal(c){
   '<p class="si-modal-explanation">Voici les codes STK imprimés sur les étiquettes de chaque article. Réimprimez celle dont vous avez besoin.</p>'+
   '<div class="si-modal-units">'+(itemRows||'<div class="si-modal-empty">Aucun article actuellement enregistré pour cette référence.</div>')+'</div>'+
   alertEditor+'</div><footer class="modal-foot"><button type="button" class="btn" data-action="closemodal">Fermer</button></footer></div></div>';
+}
+function unitPreparationModal(c){
+ const item=c.db.items.find(i=>i.id===c.modal?.id);
+ if(!item)return '';
+ const p=c.db.catalog.find(p=>p.id===item.pid);
+ if(!p)return '';
+ const category={'PC portable':'Ordinateur portable','PC fixe':'Ordinateur fixe',
+  'Laptop':'Ordinateur portable','Moniteur':'Écran','Téléphone':'Téléphone / tablette'}[p.cat]||p.cat;
+ const pc=['Ordinateur portable','Ordinateur fixe'].includes(category);
+ const byCategory={
+  'Ordinateur portable':[['cpu','Processeur'],['cores','Nombre de cœurs'],['ram_gb','RAM (Go)'],['storage','Stockage'],['os','Système installé'],['gpu','Carte graphique']],
+  'Ordinateur fixe':[['cpu','Processeur'],['cores','Nombre de cœurs'],['ram_gb','RAM (Go)'],['storage','Stockage'],['os','Système installé'],['gpu','Carte graphique']],
+  'Écran':[['size_inches','Taille de l’écran'],['resolution','Résolution'],['connection','Connectiques']],
+  'Imprimante':[['technology','Technologie'],['connection','Connexion']],
+  'Réseau':[['mac','Adresse MAC'],['ip','Adresse IP'],['connection','Connexion']],
+  'Périphérique':[['connection','Connexion']],
+  'Téléphone / tablette':[['ram_gb','RAM (Go)'],['storage','Stockage'],['os','Système']],
+  'Composant':[['model_detail','Précisions']]
+ };
+ const specs=item.specs||{};
+ const status=item.prepStatus||'not_required';
+ const fields=(byCategory[category]||[]).map(([key,label])=>
+  '<label class="sp-unit-field">'+escape(label)+
+  '<input name="spec_'+key+'" id="sp-unit-'+key+'" type="'+(['ram_gb','cores'].includes(key)?'number':'text')+'"'+
+  (['ram_gb','cores'].includes(key)?' min="1" max="2048" step="1" inputmode="numeric"':' maxlength="120"')+
+  ' value="'+escape(specs[key]??'')+'" placeholder="À renseigner si connu"></label>').join('');
+ const choices=pc?'<fieldset class="sp-unit-status"><legend>Avancement de la préparation</legend>'+
+  [['pending','En attente'],['in_progress','En préparation'],['ready','Préparation terminée']].map(([key,text])=>
+  '<label><input type="radio" name="prep_status" value="'+key+'"'+(key===status?' checked':'')+'><span>'+text+'</span></label>').join('')+
+  '</fieldset>':'';
+ return '<div class="overlay" data-action="backdrop"><div class="modal sp-unit-edit-modal" role="dialog" aria-modal="true" aria-labelledby="sp-unit-edit-title" tabindex="-1">'+
+ '<header class="modal-head"><div><div class="si-modal-kicker">'+escape(item.id)+'</div><h2 id="sp-unit-edit-title">'+
+ (pc?'Préparation de l’ordinateur':'Fiche de l’article')+'</h2><p>'+escape(name(p))+'</p></div>'+
+ '<button class="closebtn" type="button" data-action="returnproduct" aria-label="Retour à la fiche produit">×</button></header>'+
+ '<form id="sp-unit-edit-form" data-id="'+escape(item.id)+'"><div class="modal-body sp-unit-edit-body">'+
+ '<p class="sp-unit-hint">Complétez les informations connues. Les champs laissés vides pourront être remplis plus tard.</p>'+
+ '<label class="sp-unit-field">Numéro de série<input name="serial" maxlength="100" value="'+escape(item.serial||'')+'" placeholder="Facultatif"></label>'+
+ choices+(fields?'<div class="sp-unit-spec-grid">'+fields+'</div>':'')+
+ '</div><footer class="modal-foot"><button type="button" class="btn" data-action="returnproduct">Annuler</button>'+
+ '<button type="submit" class="btn primary">Enregistrer la fiche</button></footer></form></div></div>';
 }
 function history(c){
  const ev=[...c.db.events].filter(x=>x.type==='in'||x.type==='out').sort((a,b)=>b.at-a.at);
@@ -247,5 +298,5 @@ function editModal(c){
  const p=c.product(c.modal?.id);if(!p)return '';
  return '<div class="overlay" data-action="backdrop"><div class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Modifier une référence</h2><button class="closebtn" data-action="closemodal">×</button></div><form id="edit-product-form" data-id="'+escape(p.id)+'"><div class="modal-body"><div class="field"><label>Marque</label><input name="brand" required value="'+escape(p.brand)+'"></div><div class="field"><label>Modèle</label><input name="model" required value="'+escape(p.model)+'"></div><div class="field"><label>Catégorie</label><input name="cat" required value="'+escape(p.cat)+'"></div><div class="field"><label>Référence</label><input name="ref" required value="'+escape(p.ref)+'"></div><div class="field"><label>Seuil d’alerte (0 = désactivé)</label><input name="min_stock" type="number" min="0" max="99999" step="1" inputmode="numeric" required value="'+(Number(p.min_stock)||0)+'"></div><label><input type="checkbox" name="active" '+(p.active?'checked':'')+'> Référence active</label></div><div class="modal-foot"><button class="btn" type="button" data-action="closemodal">Annuler</button><button class="btn primary" type="submit">Enregistrer</button></div></form></div></div>';
 }
-window.SPBasic={dashboard,inventory,stockProductModal,history,settings,exit,detailModal,editModal};
+window.SPBasic={dashboard,inventory,stockProductModal,unitPreparationModal,history,settings,exit,detailModal,editModal};
 })();
