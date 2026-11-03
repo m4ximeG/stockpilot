@@ -84,7 +84,7 @@ test('Aurora est chargé et reproduit la structure sans supprimer les fonctions'
  const html=fs.readFileSync('static/index.html','utf8');
  const css=fs.readFileSync('static/aurora.css','utf8');
  assert.match(html,/aurora\.css\?v=aurora-20261102-2/);
- assert.match(html,/barcode-only\.js\?v=inventory-20261103-2/);
+ assert.match(html,/barcode-only\.js\?v=mobile-20261103-3/);
  assert.match(css,/\.aurora-dashboard/);
  assert.match(css,/\.aur-rail-main/);
  assert.match(css,/\.aur-metrics/);
@@ -381,7 +381,7 @@ test('Étiquettes DYMO : PDF à l’échelle choisie depuis les paramètres',()=
 test('iPhone : fond unique stable dans la composition, sans parallax Safari',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
  const css=fs.readFileSync('static/mobile-layout.css','utf8');
- assert.match(html,/\/static\/mobile-layout\.css\?v=3/);
+ assert.match(html,/\/static\/mobile-layout\.css\?v=4/);
  assert.match(css,/body::before\s*\{/);
  assert.match(css,/position:fixed; top:0; left:0/);
  assert.match(css,/height:100lvh/);
@@ -425,7 +425,7 @@ test('Barre de navigation iPhone toujours visible hors accueil malgré polish.cs
  assert.match(mobile,/body:not\(\.aurora-on\) \.mobilebottom,\s*body\.aurora-on \.mobilebottom\s*\{[^}]*display:grid!important/);
  assert.match(mobile,/visibility:visible!important/);
  assert.match(html,/<nav class="mobilebottom" aria-label="Navigation mobile"/);
- assert.match(html,/\/static\/mobile-layout\.css\?v=3/);
+ assert.match(html,/\/static\/mobile-layout\.css\?v=4/);
  const polishPosition=html.indexOf('/static/polish.css');
  const mobilePosition=html.indexOf('/static/mobile-layout.css');
  assert.ok(mobilePosition>polishPosition,'Les règles mobiles doivent venir après polish.css');
@@ -461,10 +461,10 @@ test('Réception depuis le stock : produit existant déjà sélectionné',()=>{
 });
 test('Assets inventaire récents : Safari ne garde pas les anciens styles et scripts',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
- assert.match(html,/\/static\/barcode-only\.js\?v=inventory-20261103-2/);
+ assert.match(html,/\/static\/barcode-only\.js\?v=mobile-20261103-3/);
  assert.match(html,/\/static\/reception\.js\?v=12/);
  assert.match(html,/\/static\/inventory-ui\.css\?v=4/);
- assert.match(html,/\/static\/mobile-layout\.css\?v=3/);
+ assert.match(html,/\/static\/mobile-layout\.css\?v=4/);
 });
 
 test('Notifications : inscription consentie, pas de seuil à configurer sur iPhone',()=>{
@@ -493,4 +493,57 @@ test('Docker embarque les modules nécessaires au démarrage de Gunicorn',()=>{
  assert.match(docker,/USER stockpilot/);
  assert.match(docker,/VOLUME \["\/data"\]/);
  assert.ok(fs.existsSync('push_service.py'));
+});
+
+test('iPhone : aide à la réception absente mais conservée sur ordinateur',()=>{
+ const html=receive.entry(context);
+ const css=fs.readFileSync('static/mobile-layout.css','utf8');
+ assert.match(html,/class="card basic-entry-help"/);
+ assert.match(html,/Comment ça marche \?/);
+ assert.match(css,/@media screen and \(max-width:860px\)/);
+ assert.match(css,/body:not\(\.aurora-on\) \.basic-entry-help\{display:none!important\}/);
+});
+test('iPhone : historique en journal lisible, version tableau préservée sur PC',()=>{
+ const ev=[
+  {itemId:'STK-000010',pid:'terra1',type:'in',actor:'Admin',at:new Date('2026-11-03T10:30:00Z').getTime()},
+  {itemId:'STK-000011',pid:'terra1',type:'out',actor:'Employé',at:new Date('2026-11-03T10:10:00Z').getTime()}
+ ];
+ const ctx={...context,db:{...db,events:ev}};
+ const html=basic.history(ctx);
+ const css=fs.readFileSync('static/mobile-layout.css','utf8');
+ assert.match(html,/class="sp-history-page"/);
+ assert.match(html,/class="sp-mobile-history"/);
+ assert.match(html,/sp-mh-event sp-mh-in/);
+ assert.match(html,/sp-mh-event sp-mh-out/);
+ assert.match(html,/STK-000010/);
+ assert.match(html,/STK-000011/);
+ assert.match(html,/class="slim-table basic-table"/);
+ assert.equal((html.match(/class="sp-mh-day"/g)||[]).length,1);
+ assert.match(css,/\.sp-history-page > \.basic-table-card\{display:none!important\}/);
+ assert.match(css,/\.sp-mobile-history[\s\S]*?display:block!important/);
+ assert.match(css,/\.sp-history-page \.pagehead \.head-actions/);
+});
+test('iPhone : paramètres épurés sans empêcher les réglages bureau',()=>{
+ const html=basic.settings(context);
+ const css=fs.readFileSync('static/mobile-layout.css','utf8');
+ const js=fs.readFileSync('static/index.html','utf8');
+ assert.match(html,/class="sp-mobile-settings"/);
+ assert.match(html,/class="sp-ms-profile"/);
+ assert.match(html,/id="mobile-password-form"/);
+ assert.match(html,/class="sp-ms-password"/);
+ assert.match(html,/data-action="pushsubscribe"/);
+ assert.match(html,/Étiquettes DYMO LabelWriter 450/);
+ assert.match(html,/Gérer les utilisateurs/);
+ assert.match(css,/\.sp-settings-page > \.settings-board\{display:none!important\}/);
+ assert.match(css,/\.sp-mobile-settings\{display:grid!important/);
+ assert.match(js,/mobile-password-form/);
+});
+test('iPhone : carte notification masquée quand l’abonnement est actif',()=>{
+ const html=fs.readFileSync('static/index.html','utf8');
+ const css=fs.readFileSync('static/mobile-layout.css','utf8');
+ const stock=basic.inventory(context);
+ assert.match(stock,/class="si-mobile-push"[^>]* hidden/);
+ assert.match(html,/if\(page==='products'\|\|page==='settings'\)updatePushButton\(\)/);
+ assert.match(html,/if\(visibleBanner\)visibleBanner.hidden=active/);
+ assert.match(css,/\.si-mobile-push\[hidden\]\{display:none!important\}/);
 });
