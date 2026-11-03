@@ -36,6 +36,7 @@
 <link rel="stylesheet" href="/static/liquid-route.css?v=6" />
 <link rel="stylesheet" href="/static/mobile-app.css?v=4" />
 <link rel="stylesheet" href="/static/mobile-layout.css?v=2" />
+<link rel="stylesheet" href="/static/inventory-ui.css?v=1" />
 
 
 
@@ -139,7 +140,7 @@ function nav(p){
   while(title.firstChild)line.appendChild(title.firstChild);
   title.appendChild(line);
  });
- const selectors='.basic-entry-form,.basic-entry-help,.basic-table-card,.settingscard,.formcard,.card,.sp-stock-overview>div,.sp-stock-row';
+ const selectors='.basic-entry-form,.basic-entry-help,.basic-table-card,.settingscard,.formcard,.card';
  const panels=[...stage.querySelectorAll(selectors)].filter(panel=>
   !panel.parentElement?.closest(selectors)
  );
@@ -411,13 +412,20 @@ case'newentryproduct':goEntry(id);break;
 case'exportstocksummary':exportStockSummary();break;
 case'stockthreshold':(async()=>{
  if(me.role!=='admin')return toast('Réservé aux administrateurs.',true);
- const input=document.getElementById('sp-min-'+id);
- const value=input?.value.trim()??'';
- if(!/^\d+$/.test(value)||Number(value)>99999)return toast('Saisissez un seuil entier de 0 à 99999.',true);
+ const enabled=document.getElementById('si-alert-'+id)?.checked===true;
+ const raw=enabled?(document.getElementById('si-min-'+id)?.value.trim()??''):'0';
+ const value=Number(raw);
+ if(!/^\d+$/.test(raw)||!Number.isSafeInteger(value)||(enabled&&value<1)||value>99999){
+  toast('Choisissez un seuil entier entre 1 et 99999.',true);return;
+ }
+ const opened=[...document.querySelectorAll('.si-record[open]')].map(el=>el.dataset.inventoryId);
  try{
-  await api('/api/products/'+encodeURIComponent(id),'PATCH',{min_stock:Number(value)});
-  await refreshState(true);
-  toast('Seuil enregistré pour cette référence.');
+  await api('/api/products/'+encodeURIComponent(id),'PATCH',{min_stock:value});
+  const p=db.catalog.find(p=>p.id===id);
+  if(p)p.min_stock=value;
+  renderContent();
+  document.querySelectorAll('.si-record').forEach(el=>{if(opened.includes(el.dataset.inventoryId))el.open=true});
+  toast(value?'Alerte enregistrée.':'Alerte désactivée pour ce produit.');
  }catch(e){toast(e.message,true)}
 })();break;
 case'camera':startCamera();break;case'installapp':installMobileApp();break;case'selectscan':scanResult=itemById(id);renderContent();break;case'confirmout':case'outfrommodal':openModal({type:'confirmout',id});break;case'remove':removeItem(id);break;case'details':openModal({type:'details',id});break;case'closemodal':closeModal();break;case'entryslot':selectedProduct=db.catalog.find(p=>p.zone===a.dataset.slot[0])?.id||db.catalog[0]?.id||null;chosenSlot=a.dataset.slot;lastAdded=null;nav('entry');SPV3.selectSlot(a.dataset.slot);renderContent();break;case'zone':selectedSlot=`${a.dataset.zone}-1`;renderContent();break;case'pickslot':setSlot(a.dataset.slot);break;case'export':exportStock();break;case'exporthistory':exportHistory();break;case'clearstock':openModal({type:'clearstock'});break;case'reset':openModal({type:'reset'});break;case'doreset':(async()=>{try{await api('/api/admin/reset','POST',{});formSerial='';lastAdded=null;scanResult=null;selectedSlot='A-1';modal=null;await refreshState(true);nav('dashboard');toast('Stock fictif réinitialisé')}catch(e){toast(e.message,true)}})();break;case'movemodal':openModal({type:'move',id});break;case'confirmmove':(async()=>{try{await api('/api/items/'+encodeURIComponent(id)+'/move','POST',{slot:$('#move-slot')?.value});modal=null;await refreshState(true);renderApp();toast('Article déplacé')}catch(e){toast(e.message,true)}})();break;case'editproduct':openModal({type:'editproduct',id});break;case'listusers':(async()=>{try{users=(await api('/api/users')).users;openModal({type:'users'})}catch(e){toast(e.message,true)}})();break;case'toggleuser':(async()=>{const u=users.find(x=>String(x.id)===String(id));if(!u)return;try{await api('/api/users/'+id,'PATCH',{enabled:!u.enabled});users=(await api('/api/users')).users;openModal({type:'users'});toast('Compte mis à jour')}catch(e){toast(e.message,true)}})();break;case'backup':window.open('/api/backup','_blank');break;}});
@@ -426,9 +434,18 @@ window.addEventListener('change',e=>{if(SPV3.onChange(e,{refreshState,renderCont
  try{window.localStorage.setItem('stockpilot-label-size',e.target.value)}catch(err){}
  toast('Format DYMO enregistré : '+e.target.value.replace('x',' × ')+' mm.');
  return;
+}if(e.target.id?.startsWith('si-alert-')){
+ const editor=e.target.closest('.si-alert-editor');
+ const controls=editor?.querySelector('.si-alert-controls');
+ if(controls)controls.hidden=!e.target.checked;
+ return;
 }if(e.target.id==='product-select'){selectedProduct=e.target.value;chosenSlot=null;renderContent()}else if(e.target.id==='condition-in'){formCondition=e.target.value}else if(e.target.id==='slot-in'){chosenSlot=e.target.value;selectedSlot=chosenSlot;renderContent()}else if(e.target.id==='filter-zone'){tableZone=e.target.value;renderContent()}else if(e.target.id==='filter-type'){tableType=e.target.value;renderContent()}});
 window.addEventListener('input',e=>{if(SPV3.onInput(e,db))return;if(e.target.id==='serial-in'){formSerial=e.target.value}else if(e.target.id==='filter-products'){tableFilter=e.target.value;let st=e.target.selectionStart;renderContent();const inp=$('#filter-products');if(inp){inp.focus();inp.setSelectionRange(st,st)}}});
-window.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('sp-mobile-menu')?.hidden===false)toggleMobileMore(false);else if(e.key==='Escape'&&modal)closeModal();else if(e.key==='Enter'&&e.target.id?.startsWith('sp-min-')){e.preventDefault();document.querySelector('[data-action="stockthreshold"][data-id="'+CSS.escape(e.target.id.slice(7))+'"]')?.click()}else if(e.key==='Enter'&&e.target.id==='scan-code'){e.preventDefault();lookup(e.target.value)}else if(e.key==='Enter'&&e.target.id==='global-search'){e.preventDefault();searchGlobal(e.target.value)}else if((e.key==='Enter'||e.key===' ')&&e.target.matches('[data-slot]')){e.preventDefault();setSlot(e.target.dataset.slot)}});
+window.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('sp-mobile-menu')?.hidden===false)toggleMobileMore(false);else if(e.key==='Escape'&&modal)closeModal();else if(e.key==='Enter'&&e.target.id?.startsWith('si-min-')){
+ e.preventDefault();
+ const editor=e.target.closest('.si-alert-editor');
+ editor?.querySelector('[data-action="stockthreshold"]')?.click();
+}else if(e.key==='Enter'&&e.target.id==='scan-code'){e.preventDefault();lookup(e.target.value)}else if(e.key==='Enter'&&e.target.id==='global-search'){e.preventDefault();searchGlobal(e.target.value)}else if((e.key==='Enter'||e.key===' ')&&e.target.matches('[data-slot]')){e.preventDefault();setSlot(e.target.dataset.slot)}});
 window.addEventListener('pagehide',stopCamera);
 document.querySelector('#app').innerHTML='<div style="display:grid;place-items:center;min-height:100vh;color:#53657f;font-family:system-ui">Chargement du stock partagé…</div>';
 // Safari iPhone : bloquer uniquement le dépassement aux extrémités sans casser le défilement.
