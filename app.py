@@ -96,6 +96,13 @@ def initialize():
           at INTEGER NOT NULL, actor TEXT NOT NULL, detail TEXT DEFAULT ''
         );
         CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+        -- Compteur global transactionnel, commun à tous les processus et appareils.
+        -- Les triggers s'exécutent dans la même transaction que le changement métier.
+        CREATE TABLE IF NOT EXISTS sync_revision (
+          id INTEGER PRIMARY KEY CHECK(id = 1), revision INTEGER NOT NULL DEFAULT 0
+        );
+        INSERT OR IGNORE INTO sync_revision(id,revision) VALUES(1,0);
+
         CREATE TABLE IF NOT EXISTS push_subscriptions (
           endpoint TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id),
           p256dh TEXT NOT NULL, auth TEXT NOT NULL, created_at INTEGER NOT NULL
@@ -107,6 +114,14 @@ def initialize():
           note TEXT NOT NULL DEFAULT ''
         );
         ''')
+        # Détection automatique de TOUS les changements de stock (y compris les routes
+        # historiques) sans mémoire locale : fonctionnement multi-workers / multi-appareils.
+        for table in ('products', 'items', 'events', 'shelf_levels', 'users'):
+            for operation in ('INSERT', 'UPDATE', 'DELETE'):
+                con.execute(f"""CREATE TRIGGER IF NOT EXISTS sync_{table}_{operation.lower()}
+                  AFTER {operation} ON {table} BEGIN
+                    UPDATE sync_revision SET revision=revision+1 WHERE id=1;
+                  END""")
         # Migration additive: la préférence d'emplacement n'affecte aucun ancien article.
         existing_columns = {row['name'] for row in con.execute('PRAGMA table_info(products)')}
         if 'preferred_slot' not in existing_columns:
@@ -412,7 +427,22 @@ def state():
     shelves = [dict(slot=r['slot'],size=r['size'],note=r['note']) for r in db.execute('SELECT slot,size,note FROM shelf_levels ORDER BY slot')]
     counter = int(db.execute("SELECT value FROM meta WHERE key='next_item'").fetchone()[0])
     location_mode = db.execute("SELECT value FROM meta WHERE key='location_mode'").fetchone()
-    return jsonify(items=items,events=events,counter=counter,catalog=products,shelves=shelves,me=dict(id=g.user['id'],username=g.user['username'],role=g.user['role']),allowReset=ALLOW_RESET and DEMO_SEED,locationMode='optional')
+    revision = db.execute('SELECT revision FROM sync_revision WHERE id=1').fetchone()[0]
+    response = jsonify(items=items,events=events,counter=counter,catalog=products,shelves=shelves,me=dict(id=g.user['id'],username=g.user['username'],role=g.user['role']),allowReset=ALLOW_RESET and DEMO_SEED,locationMode='optional',revision=revision)
+    response.headers['Cache-Control'] = 'private, no-store'
+    return response
+
+
+@app.get('/api/sync/revision')
+@protected()
+def sync_revision():
+    """Réponse minuscule pour vérifier le stock sans recharger les écrans.
+    Le compteur persiste en SQLite et voit les écritures d'autres workers.
+    """
+    revision = g.db.execute('SELECT revision FROM sync_revision WHERE id=1').fetchone()[0]
+    response = jsonify(revision=revision)
+    response.headers['Cache-Control'] = 'private, no-store'
+    return response
 
 
 @app.get('/api/push/public-key')
