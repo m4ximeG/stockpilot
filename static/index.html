@@ -26,7 +26,7 @@
 
 
 
-<script src="/static/barcode-only.js?v=inventory-20261103-2"></script>
+<script src="/static/barcode-only.js?v=mobile-20261103-3"></script>
 <script src="/static/reception.js?v=12"></script>
 <link rel="stylesheet" href="/static/barcode-only.css?v=aurora-20261102-2" />
 
@@ -35,7 +35,7 @@
 <link rel="stylesheet" href="/static/harmony.css?v=6" />
 <link rel="stylesheet" href="/static/liquid-route.css?v=6" />
 <link rel="stylesheet" href="/static/mobile-app.css?v=4" />
-<link rel="stylesheet" href="/static/mobile-layout.css?v=3" />
+<link rel="stylesheet" href="/static/mobile-layout.css?v=4" />
 <link rel="stylesheet" href="/static/inventory-ui.css?v=4" />
 
 
@@ -248,7 +248,7 @@ function renderContent(){
 function renderApp(){
  const target=$('#app');
  if(target)target.innerHTML=layout();
- if(page==='products')updatePushButton();
+ if(page==='products'||page==='settings')updatePushButton();
 }
 function stockPilotLabelSize(){
  try{const value=window.localStorage.getItem('stockpilot-label-size');return ['54x25','57x32'].includes(value)?value:'54x25'}
@@ -429,20 +429,32 @@ function decodePushKey(encoded){
 }
 async function updatePushButton(){
  const btn=document.querySelector('[data-action="pushsubscribe"]');
+ const stockBanner=document.querySelector('.si-mobile-push');
  if(!btn)return;
+ // Le panneau d'activation n'est montré qu'après vérification de l'état du téléphone.
+ if(stockBanner)stockBanner.hidden=true;
  if(!pushAvailable()){
-  btn.disabled=true;btn.textContent='Indisponible';return;
+  btn.disabled=true;
+  btn.textContent='Indisponible';
+  return;
  }
  try{
   const reg=await navigator.serviceWorker.getRegistration('/');
-  const sub=reg?await reg.pushManager.getSubscription():null;
-  const button=document.querySelector('[data-action="pushsubscribe"]');
-  if(!button)return;
-  const active=!!sub&&Notification.permission==='granted';
-  button.textContent=active?'Désactiver':'Activer';
-  button.dataset.subscribed=active?'yes':'no';
-  button.disabled=false;
- }catch(e){btn.textContent='Activer'}
+  const subscription=reg?await reg.pushManager.getSubscription():null;
+  const active=!!subscription&&Notification.permission==='granted';
+  const current=document.querySelector('[data-action="pushsubscribe"]');
+  if(!current)return; // La page a pu changer pendant la vérification asynchrone.
+  current.textContent=active?'Désactiver':'Activer';
+  current.dataset.subscribed=active?'yes':'no';
+  current.disabled=false;
+  const visibleBanner=document.querySelector('.si-mobile-push');
+  if(visibleBanner)visibleBanner.hidden=active;
+ }catch(error){
+  const current=document.querySelector('[data-action="pushsubscribe"]');
+  if(current){current.textContent='Réessayer';current.disabled=false}
+  const visibleBanner=document.querySelector('.si-mobile-push');
+  if(visibleBanner)visibleBanner.hidden=false;
+ }
 }
 async function togglePushSubscription(button){
  if(!pushAvailable())return toast('Notifications non prises en charge par ce navigateur.',true);
@@ -506,7 +518,7 @@ case'stockthreshold':(async()=>{
  }catch(e){toast(e.message,true)}
 })();break;
 case'camera':startCamera();break;case'installapp':installMobileApp();break;case'selectscan':scanResult=itemById(id);renderContent();break;case'confirmout':case'outfrommodal':openModal({type:'confirmout',id});break;case'remove':removeItem(id);break;case'details':openModal({type:'details',id});break;case'closemodal':closeModal();break;case'entryslot':selectedProduct=db.catalog.find(p=>p.zone===a.dataset.slot[0])?.id||db.catalog[0]?.id||null;chosenSlot=a.dataset.slot;lastAdded=null;nav('entry');SPV3.selectSlot(a.dataset.slot);renderContent();break;case'zone':selectedSlot=`${a.dataset.zone}-1`;renderContent();break;case'pickslot':setSlot(a.dataset.slot);break;case'export':exportStock();break;case'exporthistory':exportHistory();break;case'clearstock':openModal({type:'clearstock'});break;case'reset':openModal({type:'reset'});break;case'doreset':(async()=>{try{await api('/api/admin/reset','POST',{});formSerial='';lastAdded=null;scanResult=null;selectedSlot='A-1';modal=null;await refreshState(true);nav('dashboard');toast('Stock fictif réinitialisé')}catch(e){toast(e.message,true)}})();break;case'movemodal':openModal({type:'move',id});break;case'confirmmove':(async()=>{try{await api('/api/items/'+encodeURIComponent(id)+'/move','POST',{slot:$('#move-slot')?.value});modal=null;await refreshState(true);renderApp();toast('Article déplacé')}catch(e){toast(e.message,true)}})();break;case'editproduct':openModal({type:'editproduct',id});break;case'listusers':(async()=>{try{users=(await api('/api/users')).users;openModal({type:'users'})}catch(e){toast(e.message,true)}})();break;case'toggleuser':(async()=>{const u=users.find(x=>String(x.id)===String(id));if(!u)return;try{await api('/api/users/'+id,'PATCH',{enabled:!u.enabled});users=(await api('/api/users')).users;openModal({type:'users'});toast('Compte mis à jour')}catch(e){toast(e.message,true)}})();break;case'backup':window.open('/api/backup','_blank');break;}});
-window.addEventListener('submit',async e=>{const f=e.target;if(!['catalog-form','user-form','password-form','edit-product-form'].includes(f.id))return;e.preventDefault();const data=Object.fromEntries(new FormData(f).entries());try{if(f.id==='catalog-form'){await api('/api/products','POST',data);toast('Référence ajoutée')}else if(f.id==='user-form'){await api('/api/users','POST',data);toast('Compte employé créé')}else if(f.id==='edit-product-form'){data.active=!!f.querySelector('[name=active]').checked;await api('/api/products/'+encodeURIComponent(f.dataset.id),'PATCH',data);modal=null;toast('Produit modifié')}else{await api('/api/me/password','POST',data);toast('Mot de passe modifié')}f.reset();await refreshState(true);renderApp()}catch(err){toast(err.message,true)}});
+window.addEventListener('submit',async e=>{const f=e.target;if(!['catalog-form','user-form','password-form','mobile-password-form','edit-product-form'].includes(f.id))return;e.preventDefault();const data=Object.fromEntries(new FormData(f).entries());try{if(f.id==='catalog-form'){await api('/api/products','POST',data);toast('Référence ajoutée')}else if(f.id==='user-form'){await api('/api/users','POST',data);toast('Compte employé créé')}else if(f.id==='edit-product-form'){data.active=!!f.querySelector('[name=active]').checked;await api('/api/products/'+encodeURIComponent(f.dataset.id),'PATCH',data);modal=null;toast('Produit modifié')}else{await api('/api/me/password','POST',data);toast('Mot de passe modifié')}f.reset();await refreshState(true);renderApp()}catch(err){toast(err.message,true)}});
 window.addEventListener('change',e=>{if(SPV3.onChange(e,{refreshState,renderContent,toast}))return;if(e.target.id==='label-size'){
  try{window.localStorage.setItem('stockpilot-label-size',e.target.value)}catch(err){}
  toast('Format DYMO enregistré : '+e.target.value.replace('x',' × ')+' mm.');
