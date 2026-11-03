@@ -73,7 +73,8 @@ class StockPilotTests(unittest.TestCase):
         self.assertTrue(qr.data.startswith(b'\x89PNG'))
         label=self.client.get(f'/label/{item_id}')
         self.assertEqual(label.status_code, 200)
-        self.assertIn(item_id.encode(), label.data)
+        self.assertEqual(label.content_type, 'application/pdf')
+        self.assertTrue(label.data.startswith(b'%PDF-'))
         out=self.client.post(f'/api/items/{item_id}/out',json={},headers=self.headers)
         self.assertEqual(out.status_code, 200)
         self.assertEqual(self.client.post(f'/api/items/{item_id}/out',json={},headers=self.headers).status_code,409)
@@ -104,9 +105,40 @@ class StockPilotTests(unittest.TestCase):
         self.assertIn(b'<svg',barcode.data)
         label=self.client.get(f"/label/{first.json['item']['id']}")
         self.assertEqual(label.status_code,200)
-        self.assertIn(b'/barcode.svg',label.data)
-        self.assertNotIn(b'tag',label.data.lower())  # pas de rayon ou étagère
+        self.assertTrue(label.data.startswith(b'%PDF-'))
+        self.assertEqual(label.content_type, 'application/pdf')
+        import re
+        page_size = re.search(rb'/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)\s*\]', label.data)
+        self.assertIsNotNone(page_size)
+        self.assertAlmostEqual(float(page_size.group(1)), 54 * 72 / 25.4, delta=.2)
+        self.assertAlmostEqual(float(page_size.group(2)), 25 * 72 / 25.4, delta=.2)
+        bigger=self.client.get(f"/label/{first.json['item']['id']}?size=57x32")
+        self.assertTrue(bigger.data.startswith(b'%PDF-'))
+        bigger_size=re.search(rb'/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)\s*\]', bigger.data)
+        self.assertIsNotNone(bigger_size)
+        self.assertAlmostEqual(float(bigger_size.group(1)), 57 * 72 / 25.4, delta=.2)
+        self.assertEqual(self.client.get(f"/label/{first.json['item']['id']}?size=A4").status_code,400)
         self.assertEqual(self.client.post(f"/api/items/{first.json['item']['id']}/out",json={},headers=self.headers).status_code,200)
+
+    def test_stock_threshold_persists_for_each_reference(self):
+        created=self.client.post('/api/products',json={
+            'brand':'TERRA','model':'Test seuil stock','cat':'PC portable','ref':'TEST-STOCK-THRESHOLD','min_stock':4
+        },headers=self.headers)
+        self.assertEqual(created.status_code,201,created.text)
+        pid=created.json['id']
+        def stock():
+            return next(x for x in self.client.get('/api/state').json['catalog'] if x['id']==pid)
+        self.assertEqual(stock()['min_stock'],4)
+        self.assertEqual(self.client.patch(f'/api/products/{pid}',json={'min_stock':2},headers=self.headers).status_code,200)
+        self.assertEqual(stock()['min_stock'],2)
+        self.assertEqual(self.client.patch(f'/api/products/{pid}',json={'model':'Test modifié'},headers=self.headers).status_code,200)
+        self.assertEqual(stock()['min_stock'],2)
+        for invalid in (-1,1.5,True,100000,'invalide',None):
+            response=self.client.patch(f'/api/products/{pid}',json={'min_stock':invalid},headers=self.headers)
+            self.assertEqual(response.status_code,400,str(invalid))
+        self.assertEqual(stock()['min_stock'],2)
+        self.assertEqual(self.client.patch(f'/api/products/{pid}',json={'min_stock':0},headers=self.headers).status_code,200)
+        self.assertEqual(stock()['min_stock'],0)
 
     def test_catalog_sans_emplacements(self):
         product=self.client.post('/api/products',json={
@@ -132,6 +164,7 @@ class StockPilotTests(unittest.TestCase):
         self.client.post('/login', data={'username':'reception','password':'NouveauMotDePasseFort#1'})
         forbidden=self.client.post('/api/products',json={'brand':'X','model':'Y','cat':'Autre','zone':'F','ref':'NEVER'},headers=self.headers)
         self.assertEqual(forbidden.status_code,403)
+        self.assertEqual(self.client.patch('/api/products/'+product.json['id'],json={'min_stock':10},headers=self.headers).status_code,403)
         self.assertEqual(self.client.post('/api/settings/location-mode',json={'mode':'guided'},headers=self.headers).status_code,403)
 
     def test_real_reserve_shelves_and_explicit_cleanup(self):
