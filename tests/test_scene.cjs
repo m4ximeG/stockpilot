@@ -317,38 +317,47 @@ test('Installation guidée depuis les paramètres mobiles',()=>{
  assert.match(css,/\.sp-mobile-install\{display:none!important\}/);
 });
 
-test('Inventaire : quantités par référence et seuils de réapprovisionnement',()=>{
- const ctx={...context,
-  db:{...db,items:[item,{...item,id:'STK-000011'}],catalog:[{...product,min_stock:3}]},
-  tableStockFilter:'all'
- };
+test('Inventaire par référence : quantités compactes et alertes vraiment facultatives',()=>{
+ const ctx={...context,db:{...db,items:[item,{...item,id:'STK-000011'}],catalog:[{...product,min_stock:3}]},
+  tableStockFilter:'all'};
  const html=basic.inventory(ctx);
- assert.match(html,/sp-stock-overview/);
- assert.match(html,/sp-stock-list/);
- assert.match(html,/sp-stock-low/);
- assert.match(html,/À réapprovisionner/);
+ assert.match(html,/si-inventory/);
+ assert.match(html,/si-summary/);
+ assert.match(html,/si-list/);
+ assert.match(html,/si-is-alert/);
+ assert.match(html,/Stock faible · à commander/);
+ assert.match(html,/Minimum : 3/);
+ assert.match(html,/id="si-alert-terra1" type="checkbox" checked/);
+ assert.match(html,/id="si-min-terra1"/);
  assert.match(html,/data-action="stockthreshold"/);
- assert.match(html,/value="3"/);
- assert.match(html,/Voir les 2 unités/);
+ assert.match(html,/Unités et étiquettes <span>2/);
  assert.match(html,/data-action="exportstocksummary"/);
  assert.match(html,/data-action="newentryproduct"/);
- assert.equal((html.match(/class="sp-stock-row/g)||[]).length,1);
- const empty=basic.inventory({...ctx,db:{...ctx.db,items:[]}});
- assert.match(empty,/Rupture de stock/);
- const withSav=basic.inventory({...ctx,db:{...ctx.db,items:[{...item,condition:'Retour SAV'}]}});
- assert.match(withSav,/Rupture de stock/);
- assert.match(withSav,/1 en SAV \/ réparation/);
- assert.match(withSav,/Voir les 1 unité/);
+ assert.equal((html.match(/class="si-record /g)||[]).length,1,'Une seule ligne par référence');
+ assert.doesNotMatch(html,/sp-stock-overview|sp-stock-row/);
+ const noAlert={...ctx,db:{...ctx.db,items:[],catalog:[{...product,min_stock:0}]}};
+ const untracked=basic.inventory(noAlert);
+ assert.match(untracked,/Sans alerte/);
+ assert.match(untracked,/0<\/b>/);
+ assert.doesNotMatch(untracked,/si-is-alert|Rupture · à commander|Stock faible · à commander/);
+ assert.match(basic.inventory({...noAlert,tableStockFilter:'low'}),/Aucun produit ne correspond/);
+ const emptyTracked=basic.inventory({...ctx,db:{...ctx.db,items:[]}});
+ assert.match(emptyTracked,/Rupture · à commander/);
+ const sav=basic.inventory({...ctx,db:{...ctx.db,items:[{...item,condition:'Retour SAV'}]}});
+ assert.match(sav,/1 en SAV \/ réparation/);
+ assert.match(sav,/Rupture · à commander/);
  const employee=basic.inventory({...ctx,me:{role:'employee'}});
  assert.doesNotMatch(employee,/data-action="stockthreshold"/);
- assert.match(employee,/Seuil : 3 articles/);
+ assert.match(employee,/Alerte activée à 3 unités/);
 });
 test('iPhone : interface verticale et rebond désactivé sans casser le défilement',()=>{
  const css=fs.readFileSync('static/mobile-app.css','utf8');
  const html=fs.readFileSync('static/index.html','utf8');
  assert.match(css,/overscroll-behavior-y:none!important/);
- assert.match(css,/\.sp-stock-list\{display:grid/);
- assert.match(css,/\.sp-stock-search/);
+ const inventoryCss=fs.readFileSync('static/inventory-ui.css','utf8');
+ assert.match(inventoryCss,/\.si-record-summary/);
+ assert.match(inventoryCss,/\.si-toolbar/);
+ assert.match(inventoryCss,/\.si-inventory/);
  assert.match(css,/@media\(max-width:860px\)/);
  assert.match(html,/function disableViewportRubberBand\(\)/);
  assert.match(html,/\{passive:false\}/);
@@ -418,4 +427,24 @@ test('Barre de navigation iPhone toujours visible hors accueil malgré polish.cs
  const polishPosition=html.indexOf('/static/polish.css');
  const mobilePosition=html.indexOf('/static/mobile-layout.css');
  assert.ok(mobilePosition>polishPosition,'Les règles mobiles doivent venir après polish.css');
+});
+
+test('Animation inventaire : une apparition homogène, sans cascade sur chaque ligne',()=>{
+ const html=fs.readFileSync('static/index.html','utf8');
+ const css=fs.readFileSync('static/inventory-ui.css','utf8');
+ assert.match(html,/const selectors='\.basic-entry-form,\.basic-entry-help,\.basic-table-card,\.settingscard,\.formcard,\.card';/);
+ assert.doesNotMatch(html,/\.sp-stock-overview>div,\.sp-stock-row/);
+ assert.match(css,/#content\.sp-route-in \.si-inventory\s*\{[\s\S]*?animation:aurSlideR/);
+ assert.match(html,/\/static\/inventory-ui\.css\?v=1/);
+ const start=html.indexOf('/static/mobile-layout.css'),last=html.indexOf('/static/inventory-ui.css');
+ assert.ok(last>start);
+});
+test('Desktop et iPhone : tableau compact et détails accessibles',()=>{
+ const css=fs.readFileSync('static/inventory-ui.css','utf8');
+ assert.match(css,/grid-template-columns:minmax\(0,1fr\) 130px minmax\(185px,\.65fr\) 83px/);
+ assert.match(css,/@media\(max-width:700px\)/);
+ assert.match(css,/grid-template-areas:"product quantity" "status expand"/);
+ assert.match(css,/\.si-alert-controls\[hidden\]\{display:none!important\}/);
+ assert.match(css,/\.si-record-summary::\-webkit-details-marker\{display:none\}/);
+ assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
 });
