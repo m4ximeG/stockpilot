@@ -17,6 +17,18 @@ L'entrée, le scanner, l'inventaire, l'historique et la configuration restent ut
 
 Ce sont des points de retour de code, pas des sauvegardes de données. **Ne supprimez pas le volume Docker** `stockpilot_data`.
 
+## Application mobile gratuite (iPhone et Android)
+
+StockPilot s'installe directement depuis **https://stockpilot.m4xim.eu**. L'application mobile utilise la même base SQLite, les mêmes comptes et les mêmes opérations que le site PC.
+
+- **iPhone** : ouvrir StockPilot dans **Safari**, toucher **Partager**, puis **Sur l'écran d'accueil / Ajouter à l'écran d'accueil**, et ouvrir l'icône StockPilot. Aucun abonnement Apple nécessaire.
+- **Android (recommandé)** : ouvrir StockPilot dans Chrome, toucher le menu **⋮**, puis **Installer l'application**. Le site fonctionne ensuite en plein écran.
+- **Android (APK de test)** : [Télécharger StockPilot-Android.apk](https://github.com/m4ximeG/stockpilot/releases/download/android-latest/StockPilot-Android.apk) et autoriser l'installation externe sur l'appareil. APK construit automatiquement par [GitHub Actions](https://github.com/m4ximeG/stockpilot/actions/workflows/android-apk.yml). L'APK de test utilise une signature de débogage, qui peut changer entre compilations.
+- **Scanner** : autoriser la caméra lors du premier scan. La lecture affiche toujours l'article et demande une confirmation avant de l'enlever du stock.
+- **Réseau** : une connexion Internet au serveur reste nécessaire. Aucune donnée de stock, identifiant ni session n'est sauvegardé par le service worker pour un fonctionnement hors ligne.
+
+**Important** : la publication d'une application native iOS sur l'App Store requiert l'Apple Developer Program payant. La PWA ci-dessus est la solution iPhone gratuite et installable, sans App Store. Le déploiement Docker habituel met à jour l'application sur les deux systèmes.
+
 ## Fonctionnement
 
 1. **Entrée** : écrire le nom d'un produit. Le site suggère les références déjà connues. Si aucune référence ne correspond, il la crée pendant l'enregistrement. Le numéro de série est facultatif ; l'état est « Neuf », « Retour SAV » ou « Réparation ».
