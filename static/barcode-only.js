@@ -75,15 +75,18 @@ function inventory(c){
   const units=byProduct.get(p.id)||[];
   const qty=units.filter(i=>!/(sav|répar|repar)/i.test(i.condition||'Neuf')).length;
   const min=Math.max(0,Number(p.min_stock)||0);
-  return {p,units,qty,min,pending:units.length-qty,alert:p.active!==0&&min>0&&qty<=min};
+  const pc=['Ordinateur portable','Ordinateur fixe','PC portable','PC fixe'].includes(p.cat);
+  const prepPending=pc?units.filter(i=>['pending','in_progress'].includes(i.prepStatus)).length:0;
+  return {p,units,qty,min,pending:units.length-qty,prepPending,alert:p.active!==0&&min>0&&qty<=min};
  });
  const alerts=products.filter(x=>x.alert).length,total=products.reduce((sum,x)=>sum+x.qty,0);
  const visible=products.filter(x=>{
   if((c.tableType||'all')!=='all'&&c.tableType!==x.p.cat)return false;
   if(filter==='low'&&!x.alert)return false;
   if(filter==='in'&&x.qty===0)return false;
+  if(filter==='prep'&&x.prepPending===0)return false;
   return !search||[name(x.p),x.p.ref,x.p.cat,...x.units.flatMap(i=>[i.id,i.serial||''])].join(' ').toLocaleLowerCase('fr').includes(search);
- }).sort((a,b)=>Number(b.alert)-Number(a.alert)||name(a.p).localeCompare(name(b.p),'fr'));
+ }).sort((a,b)=>Number(b.alert)-Number(a.alert)||Number(b.prepPending>0)-Number(a.prepPending>0)||name(a.p).localeCompare(name(b.p),'fr'));
  const seg=(value,label)=>'<button type="button" class="si-segment'+(filter===value?' is-selected':'')+
   '" data-action="stockfilter" data-status="'+value+'" aria-pressed="'+(filter===value)+'">'+label+'</button>';
  const rows=visible.map(x=>{
@@ -97,7 +100,8 @@ function inventory(c){
    '<span class="si-record-summary">'+
    '<span class="si-product"><strong>'+escape(name(p))+'</strong><small>'+
     escape(p.ref||'Sans référence')+(p.cat?' · '+escape(p.cat):'')+
-    (x.pending?' · '+x.pending+' en SAV / réparation':'')+'</small></span>'+
+    (x.pending?' · '+x.pending+' en SAV / réparation':'')+
+    (x.prepPending?' · '+x.prepPending+' à préparer':'')+'</small></span>'+
    '<span class="si-quantity"><b>'+q+'</b><small>disponible'+(q!==1?'s':'')+'</small></span>'+
    '<span class="si-status">'+status+(min>0?'<small>Minimum : '+min+'</small>':'')+'</span>'+
    '<span class="si-expand"><span>Voir</span><span class="si-chevron" aria-hidden="true"></span></span>'+
@@ -124,6 +128,7 @@ function inventory(c){
   seg('all','Tous ('+products.length+')'),
   seg('low','À commander'+(alerts?' ('+alerts+')':'')),
   seg('in','Disponibles'),
+  seg('prep','À préparer'+(products.some(x=>x.prepPending)?' ('+products.reduce((sum,x)=>sum+x.prepPending,0)+')':'')),
   '</div><button type="button" class="si-export" data-action="exportstocksummary">Exporter CSV</button></div>'
  ].join('');
  const mobilePush='<section class="si-mobile-push" aria-label="Alertes de stock sur téléphone" hidden>'+
