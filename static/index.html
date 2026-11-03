@@ -244,6 +244,7 @@ function renderModal(){
 function renderContent(){
  const container=$('#content');
  if(container)container.innerHTML=renderPage();
+ if(page==='products'||page==='settings')updatePushButton();
 }
 function renderApp(){
  const target=$('#app');
