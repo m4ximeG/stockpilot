@@ -248,7 +248,7 @@ def row_dict(row):
     return dict(row)
 
 
-LOGIN_HTML = '''<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101a2d"><title>StockPilot — Connexion</title>
+LOGIN_HTML = '''<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101a2d"><title>StockPilot — Connexion</title><link rel="manifest" href="/static/app.webmanifest"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="StockPilot">
 <style>*,*:before,*:after{box-sizing:border-box}body{margin:0;background:#f1f5fb;color:#15223b;font:15px system-ui,-apple-system,Segoe UI,Arial,sans-serif;min-height:100vh;display:grid;place-items:center;padding:20px;background-image:radial-gradient(circle at 20% 10%,#e2ecff 0,transparent 40%),radial-gradient(circle at 90% 80%,#dce6f7 0,transparent 30%)}.wrap{width:min(100%,450px);background:#fff;padding:40px;border-radius:24px;box-shadow:0 22px 80px #243a5c20;border:1px solid #e3eaf5}.brand{display:flex;align-items:center;gap:12px;font-size:24px;font-weight:800}.mark{display:grid;place-items:center;width:42px;height:42px;border-radius:12px;background:#2262e4;color:#fff}.sub{color:#687a93;font-size:14px;line-height:1.6;margin:14px 0 32px}label{display:block;font-size:13px;font-weight:700;margin:17px 0 8px}input{height:48px;padding:0 14px;border:1px solid #d9e1ed;border-radius:11px;width:100%;font:inherit;outline:0}input:focus{border-color:#2870ef;box-shadow:0 0 0 3px #2970ef18}button{margin-top:26px;background:#2469e9;border:0;color:white;border-radius:11px;width:100%;height:48px;font:inherit;font-weight:700;cursor:pointer}p.err{background:#fff1f1;border:1px solid #fecaca;color:#b42318;padding:12px;border-radius:10px}.foot{color:#8b98ab;font-size:12px;text-align:center;margin-top:30px}.wrap{border-radius:12px;box-shadow:0 8px 30px #27394210;border-color:#dfe6e7}.brand{color:#223b48;letter-spacing:-.6px}.mark{background:#2f4f5d;border-radius:8px}body{background:#f5f6f5;background-image:none;color:#233840}input{border-radius:7px}input:focus{border-color:#74949a;box-shadow:0 0 0 3px #2f647115}button{background:#294a57;border-radius:7px}button:hover{background:#3e626f}.foot{color:#87969c}
 /* Aurora login — the same storm-photo and frosted-glass design as the dashboard. */
 body{background:
@@ -273,7 +273,7 @@ button:hover{background:white;color:#18323b;transform:translateY(-1px)}
 p.err{background:#76393a85;border:1px solid #ffffff52;color:white}
 @media(max-width:520px){.wrap{padding:28px 22px;border-radius:20px}.brand{font-size:23px}}
 @media(prefers-reduced-motion:reduce){button{transition:none}}
-</style></head><body><main class="wrap"><div class="brand"><span class="mark">▣</span> StockPilot</div><p class="sub">Votre inventaire, chaque mouvement, un seul endroit.<br>Connectez-vous à votre espace magasin.</p>{% if error %}<p class="err">{{error}}</p>{% endif %}<form method="post"><label for="username">Identifiant</label><input id="username" name="username" autocomplete="username" required autofocus><label for="password">Mot de passe</label><input id="password" type="password" name="password" autocomplete="current-password" required><button type="submit">Se connecter</button></form><div class="foot">StockPilot · Application interne</div></main></body></html>'''
+</style></head><body><main class="wrap"><div class="brand"><span class="mark">▣</span> StockPilot</div><p class="sub">Votre inventaire, chaque mouvement, un seul endroit.<br>Connectez-vous à votre espace magasin.</p>{% if error %}<p class="err">{{error}}</p>{% endif %}<form method="post"><label for="username">Identifiant</label><input id="username" name="username" autocomplete="username" required autofocus><label for="password">Mot de passe</label><input id="password" type="password" name="password" autocomplete="current-password" required><button type="submit">Se connecter</button></form><div class="foot">StockPilot · Application interne</div></main><script>if('serviceWorker' in navigator && location.protocol==='https:')navigator.serviceWorker.register('/sw.js').catch(()=>{});</script></body></html>'''
 _failed = {}
 
 
@@ -323,6 +323,54 @@ def prevent_stale_frontend_assets(response):
         response.headers['Cache-Control'] = 'no-store, max-age=0, must-revalidate'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
+    return response
+
+
+@app.get('/sw.js')
+def service_worker():
+    """Service worker scoped to the site; never cache user data."""
+    response = send_from_directory(app.static_folder, 'sw.js', mimetype='application/javascript')
+    response.headers['Cache-Control'] = 'no-cache, must-revalidate'
+    response.headers['Service-Worker-Allowed'] = '/'
+    return response
+
+
+@app.get('/apple-touch-icon.png')
+@app.get('/app-icon-<int:size>.png')
+def mobile_icon(size=180):
+    """Branded PNG icons generated without external image dependencies."""
+    if size not in (180, 192, 512):
+        abort(404)
+    from PIL import Image, ImageDraw
+    icon = Image.new('RGB', (size, size), '#26354e')
+    draw = ImageDraw.Draw(icon)
+    # Match the dark storm + frosted-glass identity on iOS and Android.
+    for y in range(size):
+        t = y / max(1, size - 1)
+        col = tuple(round(a * (1 - t) + b * t) for a, b in zip((30, 45, 67), (64, 76, 99)))
+        draw.line([(0, y), (size, y)], fill=col)
+    edge = max(2, round(size / 135))
+    draw.rounded_rectangle((edge, edge, size - edge - 1, size - edge - 1),
+                           radius=round(size * .21), outline=(118, 142, 159), width=edge)
+    scale = size / 80
+    def pt(x, y):
+        return (round((x + 8) * scale), round((y + 8) * scale))
+    white, mint = '#F8FDFF', '#C8F6EC'
+    thick = max(3, round(3.3 * scale))
+    draw.line([pt(15, 7), pt(9, 7), pt(7, 9), pt(7, 15)],
+              fill=mint, width=thick, joint='curve')
+    draw.line([pt(49, 57), pt(55, 57), pt(57, 55), pt(57, 49)],
+              fill=mint, width=thick, joint='curve')
+    poly = [pt(32, 14), pt(49, 24), pt(49, 40), pt(32, 50), pt(15, 40), pt(15, 24), pt(32, 14)]
+    draw.line(poly, fill=white, width=thick, joint='curve')
+    draw.line([pt(16, 24), pt(32, 34), pt(48, 24)], fill=white, width=thick, joint='curve')
+    draw.line([pt(32, 34), pt(32, 49)], fill=white, width=thick)
+    draw.line([pt(25, 18), pt(41, 27)], fill=mint, width=max(2, round(2.5 * scale)))
+    buf = io.BytesIO()
+    icon.save(buf, format='PNG', optimize=True)
+    buf.seek(0)
+    response = send_file(buf, mimetype='image/png', max_age=86400)
+    response.headers['X-Content-Type-Options'] = 'nosniff'
     return response
 
 
