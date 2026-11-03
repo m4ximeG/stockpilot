@@ -335,6 +335,10 @@ test('Inventaire : quantités par référence et seuils de réapprovisionnement'
  assert.equal((html.match(/class="sp-stock-row/g)||[]).length,1);
  const empty=basic.inventory({...ctx,db:{...ctx.db,items:[]}});
  assert.match(empty,/Rupture de stock/);
+ const withSav=basic.inventory({...ctx,db:{...ctx.db,items:[{...item,condition:'Retour SAV'}]}});
+ assert.match(withSav,/Rupture de stock/);
+ assert.match(withSav,/1 en SAV \/ réparation/);
+ assert.match(withSav,/Voir les 1 unité/);
  const employee=basic.inventory({...ctx,me:{role:'employee'}});
  assert.doesNotMatch(employee,/data-action="stockthreshold"/);
  assert.match(employee,/Seuil : 3 articles/);
