@@ -3,3 +3,5 @@ gunicorn==23.0.0
 qrcode[pil]==8.2
 python-barcode==0.16.1
 reportlab==5.1.0
+pywebpush==2.5.0
+cryptography>=44,<48
