@@ -226,8 +226,27 @@ test('Les liens du rail possèdent des icônes explicites et une déconnexion id
  assert.ok(html.includes("['settings','Paramètres','settings-gear']"));
  assert.ok(html.includes('href="/logout" class="sp-logout" title="Se déconnecter" aria-label="Se déconnecter"'));
  assert.ok(html.includes("ico('log-out',24)"));
- assert.ok(html.includes('/static/harmony.css?v=3'));
+ assert.ok(html.includes('/static/harmony.css?v=4'));
  assert.ok(css.includes('.sidebar .sidebottom > a.sp-logout::after{content:none!important'));
  assert.ok(css.includes('content:attr(aria-label)'));
  assert.ok(css.includes('aria-label="Scanner une sortie"'));
+});
+
+test('Les modales utilisent des labels contrastés et les champs restent lisibles',()=>{
+ const css=fs.readFileSync('static/harmony.css','utf8');
+ for(const selector of [
+  '.overlay .modal{',
+  '.overlay .modal .modal-body .field label{',
+  '.overlay .modal .ruleitem{',
+  '.overlay .modal .field input:not([type="checkbox"])',
+  '.overlay .modal .btn.primary{',
+  '.overlay .modal .btn:disabled{'
+ ])assert.ok(css.includes(selector),selector);
+ assert.match(css,/\.overlay \.modal \.modal-body \.field label\{[\s\S]*?color:#e7f1f7!important/);
+});
+test('Les suggestions de références évitent le vieux fond vert',()=>{
+ const css=fs.readFileSync('static/harmony.css','utf8');
+ assert.match(css,/body:not\(\.aurora-on\) \.basic-suggestions:not\(:empty\)/);
+ assert.match(css,/\.basic-suggestion small/);
+ assert.match(css,/\.basic-create small/);
 });
