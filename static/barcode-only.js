@@ -175,8 +175,27 @@ function stockProductModal(c){
 }
 function history(c){
  const ev=[...c.db.events].filter(x=>x.type==='in'||x.type==='out').sort((a,b)=>b.at-a.at);
- return c.heading('TRAÇABILITÉ','Historique des mouvements','Toutes les entrées et sorties, avec la date et l’opérateur.',c.btn('Exporter le journal','exporthistory','arrow',''))+
+ const desktop=c.heading('TRAÇABILITÉ','Historique des mouvements','Toutes les entrées et sorties, avec la date et l’opérateur.',c.btn('Exporter le journal','exporthistory','arrow',''))+
  '<section class="card basic-table-card"><div class="table-wrap"><table class="slim-table basic-table"><thead><tr><th>Date</th><th>Mouvement</th><th>Produit</th><th>Identifiant</th><th>Opérateur</th></tr></thead><tbody>'+ (ev.length?ev.map(e=>'<tr><td>'+stamp(e.at)+'</td><td><span class="pill '+(e.type==='in'?'green':'red')+'">'+(e.type==='in'?'Entrée':'Sortie')+'</span></td><td>'+escape(name(c.product(e.pid)))+'</td><td class="basic-id">'+escape(e.itemId)+'</td><td>'+escape(e.actor)+'</td></tr>').join(''):'<tr><td colspan="5" class="basic-table-empty">Aucune entrée ni sortie enregistrée.</td></tr>')+'</tbody></table></div></section>';
+ let lastDay='';
+ const mobile=ev.length?ev.map(e=>{
+  const date=new Date(e.at);
+  const day=date.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const time=date.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  const label=e.type==='in'?'Entrée':'Sortie';
+  let header='';
+  if(day!==lastDay){lastDay=day;header='<h2 class="sp-mh-day">'+escape(day)+'</h2>'}
+  return header+'<article class="sp-mh-event sp-mh-'+escape(e.type)+'">'+
+   '<span class="sp-mh-track" aria-hidden="true"></span>'+
+   '<div class="sp-mh-main"><div class="sp-mh-top"><strong>'+escape(name(c.product(e.pid)))+'</strong>'+
+   '<span class="sp-mh-action '+(e.type==='in'?'sp-mh-in':'sp-mh-out')+'">'+label+'</span></div>'+
+   '<div class="sp-mh-details"><code>'+escape(e.itemId)+'</code><span>'+escape(time)+'</span>'+
+   '<span class="sp-mh-actor">'+escape(e.actor||'—')+'</span></div></div></article>';
+ }).join(''):'<p class="sp-mh-empty">Aucun mouvement enregistré pour le moment.</p>';
+ return '<div class="sp-history-page">'+desktop+
+  '<section class="sp-mobile-history" aria-label="Journal des mouvements">'+
+  '<div class="sp-mh-summary"><strong>'+ev.length+'</strong> mouvement'+(ev.length>1?'s':'')+' enregistré'+(ev.length>1?'s':'')+'</div>'+
+  '<div class="sp-mh-list">'+mobile+'</div></section></div>';
 }
 function settings(c){
  const userCard='<section class="card settingscard"><h2>Mon compte</h2><p>Connecté : <strong>'+escape(c.me.username)+'</strong> · '+(c.me.role==='admin'?'Administrateur':'Employé')+'</p><form id="password-form"><div class="field"><label>Mot de passe actuel</label><input name="old_password" type="password" autocomplete="current-password" required></div><div class="field"><label>Nouveau mot de passe (12 caractères minimum)</label><input name="new_password" type="password" autocomplete="new-password" minlength="12" required></div><button class="btn primary" type="submit">Modifier mon mot de passe</button></form><p style="margin-top:18px"><a href="/logout">Se déconnecter</a></p></section>';
@@ -191,7 +210,24 @@ function settings(c){
   '<p>Pour imprimer depuis le PC relié à la DYMO : papier du même format, échelle 100 %, marges à zéro, sans ajustement automatique.</p></section>';
  const installCard='<section class="card settingscard sp-mobile-install"><h2>Application mobile</h2><p>Installez StockPilot sur votre téléphone : les comptes, le stock et le scanner restent reliés au même serveur.</p><button class="btn primary" type="button" data-action="installapp">Installer StockPilot</button><p class="sp-install-steps"><strong>iPhone :</strong> ouvrez le site dans Safari, touchez Partager puis « Sur l’écran d’accueil ».<br><strong>Android :</strong> ouvrez le site dans Chrome, menu ⋮ puis « Installer l’application ».</p></section>';
  const cleanup='<section class="card settingscard basic-danger"><h2>Réinitialisation du stock</h2><p>Cette action efface l’inventaire, le catalogue et l’historique. Une sauvegarde est créée avant toute suppression. Ne l’utilisez pas pour simplement retirer un produit.</p><button type="button" class="btn negative" data-action="clearstock">Vider totalement le stock</button></section>';
- return c.heading('PARAMÈTRES','Configuration','Gérez les références, les utilisateurs et les accès au stock.')+'<div class="settings-board"><div class="settings-column">'+userCard+labelCard+installCard+(c.me.role==='admin'?access:'')+'</div>'+(c.me.role==='admin'?'<div class="settings-column">'+catalog+cleanup+'</div>':'')+'</div>';
+ const mobileSettings='<section class="sp-mobile-settings" aria-label="Paramètres de l’application mobile">'+
+  '<div class="sp-ms-card sp-ms-profile"><div class="sp-ms-avatar" aria-hidden="true">'+escape(c.me.username.slice(0,2).toUpperCase())+'</div>'+
+  '<div class="sp-ms-profile-name"><strong>'+escape(c.me.username)+'</strong><small>'+(c.me.role==='admin'?'Administrateur':'Employé')+'</small></div>'+
+  '<span class="sp-ms-connected">Connecté</span></div>'+
+  '<div class="sp-ms-card"><div class="sp-ms-section-title"><div><strong>Notifications de stock</strong>'+
+  '<p>Recevoir les alertes des produits sous leur seuil.</p></div>'+
+  '<button type="button" class="sp-ms-push-button" data-action="pushsubscribe">Activer</button></div></div>'+
+  '<details class="sp-ms-card sp-ms-password"><summary><span>Mot de passe</span><span class="sp-ms-chevron" aria-hidden="true"></span></summary>'+
+  '<form id="mobile-password-form" class="sp-ms-password-form">'+
+  '<label>Mot de passe actuel<input name="old_password" type="password" autocomplete="current-password" required></label>'+
+  '<label>Nouveau mot de passe (12 caractères minimum)<input name="new_password" type="password" autocomplete="new-password" minlength="12" required></label>'+
+  '<button class="btn primary" type="submit">Enregistrer le nouveau mot de passe</button></form></details>'+
+  '<p class="sp-ms-footnote">La gestion des références, des employés et des étiquettes DYMO se fait sur ordinateur.</p>'+
+  '</section>';
+ return '<div class="sp-settings-page">'+c.heading('PARAMÈTRES','Configuration','Gérez les références, les utilisateurs et les accès au stock.')+
+  '<div class="settings-board"><div class="settings-column">'+userCard+labelCard+installCard+(c.me.role==='admin'?access:'')+
+  '</div>'+(c.me.role==='admin'?'<div class="settings-column">'+catalog+cleanup+'</div>':'')+'</div>'+
+  mobileSettings+'</div>';
 }
 function exit(c){
  const i=c.scanResult&&c.itemById(c.scanResult.id),p=i&&c.product(i.pid);
