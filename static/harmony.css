@@ -101,3 +101,124 @@ body.aurora-on{background-color:#071b22!important}
  .sidebar .sidebottom > a.sp-logout{transition:none!important}
  .sidebar .navbtn::after,.sidebar .sp-logout::before{transition:none!important}
 }
+
+
+/* SP contrast fix — modal and product suggestions
+ * Glass surfaces match the rest of StockPilot; no changes to animations. */
+.overlay .modal{
+  background:linear-gradient(165deg,rgba(35,55,68,.98),rgba(24,42,55,.985))!important;
+  border:1px solid rgba(241,249,255,.24)!important;
+  box-shadow:0 28px 78px rgba(3,12,22,.38)!important;
+  color:#f6fbff!important;
+  color-scheme:dark;
+}
+.overlay .modal .modal-head,
+.overlay .modal .modal-foot{border-color:rgba(241,249,255,.17)!important}
+.overlay .modal .modal-head h2,
+.overlay .modal .modal-body,
+.overlay .modal .modal-body p,
+.overlay .modal .modal-body strong,
+.overlay .modal .modal-body > label,
+.overlay .modal .modal-body .field label{
+  color:#f6fbff!important;
+}
+.overlay .modal .modal-body .field label{
+  display:block;
+  color:#e7f1f7!important;
+  font-weight:680!important;
+  letter-spacing:0!important;
+}
+.overlay .modal .modal-body small,
+.overlay .modal .ruleitem small,
+.overlay .modal .productpick small,
+.overlay .modal .basic-scanned span{
+  color:#c8d8e3!important;
+}
+.overlay .modal .ruleitem{border-color:rgba(245,250,255,.16)!important}
+.overlay .modal .field input:not([type="checkbox"]),
+.overlay .modal .field select,
+.overlay .modal .field textarea{
+  background:rgba(235,247,255,.13)!important;
+  border:1px solid rgba(235,247,255,.25)!important;
+  color:#fff!important;
+  box-shadow:none!important;
+}
+.overlay .modal .field input::placeholder,
+.overlay .modal .field textarea::placeholder{color:#c0d0da!important}
+.overlay .modal .field input:focus,
+.overlay .modal .field select:focus,
+.overlay .modal .field textarea:focus{
+  border-color:#d2eaf5!important;
+  box-shadow:0 0 0 3px rgba(208,233,248,.14)!important;
+  outline:none!important;
+}
+.overlay .modal input[type="checkbox"]{accent-color:#b7e1f5}
+.overlay .modal .btn:not(.primary):not(.negative),
+.overlay .modal .closebtn{
+  background:rgba(234,247,255,.16)!important;
+  border:1px solid rgba(234,247,255,.23)!important;
+  color:#f5fbff!important;
+}
+.overlay .modal .btn:not(.primary):not(.negative):not(:disabled):hover,
+.overlay .modal .closebtn:hover{
+  background:rgba(234,247,255,.25)!important;
+}
+.overlay .modal .btn.primary{
+  background:#edf7fb!important;
+  color:#183746!important;
+  border-color:#edf7fb!important;
+}
+.overlay .modal .btn.primary:hover{background:#fff!important}
+.overlay .modal .btn.negative{
+  color:#ffe6ea!important;
+  background:rgba(190,66,81,.27)!important;
+  border:1px solid rgba(255,164,177,.38)!important;
+}
+.overlay .modal .btn:disabled{opacity:.5!important;cursor:not-allowed!important}
+.overlay .modal .productpick,
+.overlay .modal .basic-scanned{
+  background:rgba(240,248,255,.09)!important;
+  border:1px solid rgba(241,249,255,.17)!important;
+}
+.overlay .modal .prodicon{
+  background:rgba(238,249,255,.13)!important;
+  color:#edf9ff!important;
+  border-color:rgba(241,249,255,.2)!important;
+}
+
+/* Product name suggestions use the same blue-grey glass palette as the cards. */
+body:not(.aurora-on) .basic-suggestions:not(:empty){
+  background:rgba(35,51,66,.96)!important;
+  border:1px solid rgba(239,248,255,.36)!important;
+  box-shadow:0 12px 30px rgba(4,15,26,.28)!important;
+  backdrop-filter:blur(18px);
+  -webkit-backdrop-filter:blur(18px);
+}
+body:not(.aurora-on) .basic-suggest-title{
+  background:rgba(231,245,255,.10)!important;
+  color:#e6f2f8!important;
+  border-bottom:1px solid rgba(235,249,255,.17);
+}
+body:not(.aurora-on) .basic-suggestion,
+body:not(.aurora-on) .basic-create{
+  background:transparent!important;
+  border-color:rgba(235,249,255,.19)!important;
+  color:#f6fbff!important;
+}
+body:not(.aurora-on) .basic-suggestion:hover,
+body:not(.aurora-on) .basic-create:hover,
+body:not(.aurora-on) .basic-suggestion:focus-visible,
+body:not(.aurora-on) .basic-create:focus-visible{
+  background:rgba(237,248,255,.13)!important;
+}
+body:not(.aurora-on) .basic-suggestion strong,
+body:not(.aurora-on) .basic-create strong{
+  color:#f8fcff!important;
+}
+body:not(.aurora-on) .basic-suggestion small,
+body:not(.aurora-on) .basic-create small{
+  color:#c5d8e5!important;
+}
+body:not(.aurora-on) .basic-suggestion>b{
+  color:#a9edcd!important;
+}
