@@ -222,3 +222,25 @@ body:not(.aurora-on) .basic-create small{
 body:not(.aurora-on) .basic-suggestion>b{
   color:#d0dcff!important;
 }
+
+/* StockPilot — scan caméra intégré au thème orageux */
+body:not(.aurora-on) #scan-panel.sp-camera-active{
+  display:flex!important;flex-direction:column!important;
+  align-items:stretch!important;justify-content:center!important;
+  padding:12px!important;min-height:250px!important;
+}
+body:not(.aurora-on) #sp-camera-reader{
+  width:100%;min-height:175px;overflow:hidden;border-radius:12px;
+}
+body:not(.aurora-on) #sp-camera-reader video{
+  display:block!important;width:100%!important;max-height:52dvh;
+  object-fit:cover!important;border-radius:12px!important;
+}
+body:not(.aurora-on) #scan-panel .sp-camera-hint{
+  color:#e7f1f7!important;text-align:center;font-size:12px;
+  margin:12px 6px 2px!important;line-height:1.5;
+}
+@media(max-width:520px){
+ body:not(.aurora-on) #scan-panel.sp-camera-active{padding:9px!important;min-height:220px!important}
+ body:not(.aurora-on) #sp-camera-reader video{max-height:45dvh}
+}
