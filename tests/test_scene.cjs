@@ -84,7 +84,7 @@ test('Aurora est chargé et reproduit la structure sans supprimer les fonctions'
  const html=fs.readFileSync('static/index.html','utf8');
  const css=fs.readFileSync('static/aurora.css','utf8');
  assert.match(html,/aurora\.css\?v=aurora-20261102-2/);
- assert.match(html,/barcode-only\.js\?v=polish-20261102-2/);
+ assert.match(html,/barcode-only\.js\?v=inventory-20261103-1/);
  assert.match(css,/\.aurora-dashboard/);
  assert.match(css,/\.aur-rail-main/);
  assert.match(css,/\.aur-metrics/);
@@ -435,7 +435,7 @@ test('Animation inventaire : une apparition homogène, sans cascade sur chaque l
  assert.match(html,/const selectors='\.basic-entry-form,\.basic-entry-help,\.basic-table-card,\.settingscard,\.formcard,\.card';/);
  assert.doesNotMatch(html,/\.sp-stock-overview>div,\.sp-stock-row/);
  assert.match(css,/#content\.sp-route-in \.si-inventory\s*\{[\s\S]*?animation:aurSlideR/);
- assert.match(html,/\/static\/inventory-ui\.css\?v=1/);
+ assert.match(html,/\/static\/inventory-ui\.css\?v=2/);
  const start=html.indexOf('/static/mobile-layout.css'),last=html.indexOf('/static/inventory-ui.css');
  assert.ok(last>start);
 });
@@ -447,4 +447,20 @@ test('Desktop et iPhone : tableau compact et détails accessibles',()=>{
  assert.match(css,/\.si-alert-controls\[hidden\]\{display:none!important\}/);
  assert.match(css,/\.si-record-summary::\-webkit-details-marker\{display:none\}/);
  assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
+});
+
+test('Réception depuis le stock : produit existant déjà sélectionné',()=>{
+ const p={...product,active:1};
+ receive.prefill(p);
+ const html=receive.entry({...context,db:{...db,catalog:[p]}});
+ assert.match(html,/id="rx-name"[^>]*value="TERRA Mobile 1517"/);
+ assert.match(html,/Référence existante : T-1517/);
+ receive.reset();
+});
+test('Assets inventaire récents : Safari ne garde pas les anciens styles et scripts',()=>{
+ const html=fs.readFileSync('static/index.html','utf8');
+ assert.match(html,/\/static\/barcode-only\.js\?v=inventory-20261103-1/);
+ assert.match(html,/\/static\/reception\.js\?v=12/);
+ assert.match(html,/\/static\/inventory-ui\.css\?v=2/);
+ assert.match(html,/\/static\/mobile-layout\.css\?v=2/);
 });
