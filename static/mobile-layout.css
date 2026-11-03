@@ -35,6 +35,15 @@
     display:none!important;
   }
   .mobilemenu,.sidebackdrop {display:none!important}
+  /* Priorité supérieure à l'ancienne règle polish.css :
+     body:not(.aurora-on) .mobilebottom {display:none!important}
+     La navigation reste visible sur l'accueil ET toutes les sous-pages. */
+  body:not(.aurora-on) .mobilebottom,
+  body.aurora-on .mobilebottom {
+    display:grid!important;
+    visibility:visible!important;
+    opacity:1!important;
+  }
   .mobilebottom {
     display:grid!important;
     grid-template-columns:repeat(5,minmax(0,1fr));
