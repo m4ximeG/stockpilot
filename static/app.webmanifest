@@ -1,0 +1,32 @@
+{
+  "id": "/",
+  "name": "StockPilot — Gestion du stock",
+  "short_name": "StockPilot",
+  "description": "Inventaire partagé, entrées et sorties, lecture QR et code-barres sur téléphone.",
+  "lang": "fr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#071b22",
+  "theme_color": "#26354e",
+  "orientation": "any",
+  "categories": [
+    "business",
+    "productivity",
+    "utilities"
+  ],
+  "icons": [
+    {
+      "src": "/app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

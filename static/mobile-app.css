@@ -1,0 +1,42 @@
+/* StockPilot — ergonomie mobile et affichage standalone iOS/Android.
+   Le tableau de bord Aurora et ses animations restent inchangés. */
+@media(max-width:860px){
+ html,body{overflow-x:hidden!important}
+ .sidebar{
+   left:8px!important;right:8px!important;bottom:calc(8px + env(safe-area-inset-bottom,0px))!important;
+   width:auto!important;z-index:90!important;
+   padding:5px 4px!important;
+   gap:0!important;
+ }
+ .sidebar .navbtn{
+   flex:1 1 0!important;min-width:0!important;
+   width:auto!important;max-width:49px!important;
+   height:47px!important;min-height:47px!important;
+   margin:0!important;
+ }
+ .sidebar .navbtn .ic{width:21px!important;height:21px!important}
+ .main,.content,#content{max-width:100%;min-width:0}
+ body:not(.aurora-on) #content{padding-bottom:calc(104px + env(safe-area-inset-bottom,0px))!important}
+ body.aurora-on .aurora-dashboard{padding-bottom:calc(110px + env(safe-area-inset-bottom,0px))!important}
+ .basic-scan-buttons{display:grid!important;grid-template-columns:1fr!important}
+ .basic-scan-buttons .btn{min-height:48px!important;width:100%!important}
+ .basic-entry-grid,.flowgrid,.settings-board{min-width:0!important}
+ #scan-panel.sp-camera-active{min-width:0!important}
+ .scan-input{min-width:0!important}
+ .scan-input input{min-width:0!important}
+ button,a,input,select{touch-action:manipulation}
+}
+@media(max-width:860px) and (display-mode:standalone){
+ body.aurora-on .aurora-dashboard{
+  padding-top:calc(26px + env(safe-area-inset-top,0px))!important;
+ }
+ body:not(.aurora-on) #content{
+  padding-top:calc(26px + env(safe-area-inset-top,0px))!important;
+ }
+ .overlay{padding-top:calc(20px + env(safe-area-inset-top,0px))!important;
+   padding-bottom:calc(20px + env(safe-area-inset-bottom,0px))!important;}
+}
+@media(max-width:360px){
+ .sidebar .navbtn{max-width:44px!important}
+ .sidebar .navbtn .ic{width:19px!important;height:19px!important}
+}
