@@ -298,9 +298,20 @@ test('Application iPhone / Android : manifeste et protections des données',()=>
  assert.match(html,/rel="manifest" href="\/static\/app\.webmanifest"/);
  assert.match(html,/apple-touch-icon/);
  assert.match(html,/navigator\.serviceWorker\.register\('\/sw\.js'\)/);
- assert.match(html,/\/static\/mobile-app\.css\?v=1/);
+ assert.match(html,/\/static\/mobile-app\.css\?v=2/);
  assert.match(app,/@app\.get\('\/sw\.js'\)/);
  assert.match(app,/@app\.get\('\/apple-touch-icon\.png'\)/);
  assert.doesNotMatch(worker,/cache\.addAll\(\[['"][\/]api/);
  assert.match(worker,/event\.request\.mode==='navigate'/);
+});
+
+test('Installation guidée depuis les paramètres mobiles',()=>{
+ const html=fs.readFileSync('static/index.html','utf8');
+ const code=fs.readFileSync('static/barcode-only.js','utf8');
+ const css=fs.readFileSync('static/mobile-app.css','utf8');
+ assert.match(html,/case'installapp':installMobileApp\(\)/);
+ assert.match(html,/beforeinstallprompt/);
+ assert.match(code,/data-action="installapp"/);
+ assert.match(code,/sp-mobile-install/);
+ assert.match(css,/\.sp-mobile-install\{display:none!important\}/);
 });
