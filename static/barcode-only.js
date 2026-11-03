@@ -87,45 +87,21 @@ function inventory(c){
  const seg=(value,label)=>'<button type="button" class="si-segment'+(filter===value?' is-selected':'')+
   '" data-action="stockfilter" data-status="'+value+'" aria-pressed="'+(filter===value)+'">'+label+'</button>';
  const rows=visible.map(x=>{
-  const p=x.p,id=escape(p.id),q=x.qty,min=x.min;
+  const p=x.p,q=x.qty,min=x.min,id=escape(p.id);
   const status=min===0?'<span class="si-badge si-neutral">Sans alerte</span>':
    x.alert?'<span class="si-badge '+(q===0?'si-critical':'si-warning')+'">'+
     (q===0?'Rupture · à commander':'Stock faible · à commander')+'</span>':
     '<span class="si-badge si-safe">Stock suffisant</span>';
-  const alertEditor=c.me?.role==='admin'?[
-   '<section class="si-alert-editor" aria-label="Alerte pour '+escape(name(p))+'">',
-   '<div class="si-alert-description"><strong>Alerte de réapprovisionnement</strong>',
-   '<p>Facultative. Signaler cette référence quand la quantité atteint le minimum.</p></div>',
-   '<label class="si-alert-toggle" for="si-alert-'+id+'"><input id="si-alert-'+id+'" type="checkbox"'+(min>0?' checked':'')+'><span>Activer</span></label>',
-   '<div class="si-alert-controls" data-si-min="'+id+'"'+(min>0?'':' hidden')+'>',
-   '<label for="si-min-'+id+'">Seuil minimum</label>',
-   '<input id="si-min-'+id+'" type="number" min="1" max="99999" step="1" inputmode="numeric" value="'+(min||1)+'"></div>',
-   '<button type="button" class="si-save" data-action="stockthreshold" data-id="'+id+'">Enregistrer</button></section>'
-  ].join(''):'<p class="si-alert-readonly">'+(min>0?'Alerte activée à '+min+' unité'+(min>1?'s':'')+'.':'Aucune alerte configurée.')+'</p>';
-  const unitList=x.units.length?[
-   '<details class="si-units"><summary>Unités et étiquettes <span>'+x.units.length+'</span></summary>',
-   '<div class="si-units-list">',
-   ...x.units.slice().sort((a,b)=>(b.inAt||0)-(a.inAt||0)).map(i=>[
-    '<div class="si-unit"><div><strong>'+escape(i.id)+'</strong><small>'+escape(i.serial||'Sans numéro de série')+
-      ' · '+escape(i.condition||'Neuf')+'</small></div>',
-    '<div class="si-unit-actions"><button type="button" data-action="details" data-id="'+escape(i.id)+'">Détails</button>',
-    '<button type="button" data-action="print" data-id="'+escape(i.id)+'">Étiquette</button></div></div>'
-   ].join('')),
-   '</div></details>'
-  ].join(''):'<p class="si-empty-units">Aucune unité enregistrée.</p>';
-  return [
-   '<details class="si-record'+(x.alert?' si-is-alert':'')+'" data-inventory-id="'+id+'">',
-   '<summary class="si-record-summary">',
-   '<span class="si-product"><strong>'+escape(name(p))+'</strong><small>'+escape(p.ref||'Sans référence')+
-    (p.cat?' · '+escape(p.cat):'')+(x.pending?' · '+x.pending+' en SAV / réparation':'')+'</small></span>',
-   '<span class="si-quantity"><b>'+q+'</b><small>disponible'+(q!==1?'s':'')+'</small></span>',
-   '<span class="si-status">'+status+(min>0?'<small>Minimum : '+min+'</small>':'')+'</span>',
-   '<span class="si-expand"><span>Détails</span><span class="si-chevron" aria-hidden="true"></span></span>',
-   '</summary><div class="si-record-details">',
-   '<div class="si-record-actions"><div><strong>Gestion du produit</strong><p>Réceptions, alertes et étiquettes.</p></div>',
-   '<button type="button" class="si-receive" data-action="newentryproduct" data-id="'+id+'">+ Réceptionner</button></div>',
-   alertEditor,unitList,'</div></details>'
-  ].join('');
+  return '<button type="button" class="si-record'+(x.alert?' si-is-alert':'')+
+   '" data-action="stockproduct" data-id="'+id+'" aria-label="Voir les étiquettes de '+escape(name(p))+'">'+
+   '<span class="si-record-summary">'+
+   '<span class="si-product"><strong>'+escape(name(p))+'</strong><small>'+
+    escape(p.ref||'Sans référence')+(p.cat?' · '+escape(p.cat):'')+
+    (x.pending?' · '+x.pending+' en SAV / réparation':'')+'</small></span>'+
+   '<span class="si-quantity"><b>'+q+'</b><small>disponible'+(q!==1?'s':'')+'</small></span>'+
+   '<span class="si-status">'+status+(min>0?'<small>Minimum : '+min+'</small>':'')+'</span>'+
+   '<span class="si-expand"><span>Voir</span><span class="si-chevron" aria-hidden="true"></span></span>'+
+   '</span></button>';
  }).join('');
  const summary=[
   '<div class="si-summary"><div class="si-summary-numbers">',
@@ -150,15 +126,52 @@ function inventory(c){
   seg('in','Disponibles'),
   '</div><button type="button" class="si-export" data-action="exportstocksummary">Exporter CSV</button></div>'
  ].join('');
+ const mobilePush='<section class="si-mobile-push" aria-label="Alertes de stock sur téléphone">'+
+  '<div><strong>Alertes sur votre téléphone</strong><p>Recevoir une notification lorsqu’un produit atteint son seuil.</p></div>'+
+  '<button type="button" data-action="pushsubscribe" class="si-enable-push">Activer</button></section>';
  return c.heading('INVENTAIRE','Produits en stock',
-  'Consultez les quantités et définissez une alerte seulement si nécessaire.',
-  c.btn('Nouvelle entrée','newentry','plus'))+
-  '<section class="si-inventory" aria-label="Inventaire des produits">'+summary+toolbar+tabs+
+  'Quantités disponibles et étiquettes par référence.')+
+  mobilePush+'<section class="si-inventory" aria-label="Inventaire des produits">'+summary+toolbar+tabs+
   '<div class="si-list" aria-label="Références en stock">'+
   '<div class="si-columns" aria-hidden="true"><span>Produit</span><span>Disponible</span><span>Alerte</span><span></span></div>'+
   (rows||'<div class="si-empty">Aucun produit ne correspond à ces filtres.</div>')+'</div>'+
   '<footer class="si-footer">'+visible.length+' référence'+(visible.length>1?'s':'')+
   ' affichée'+(visible.length>1?'s':'')+'</footer></section>';
+}
+function stockProductModal(c){
+ const p=c.product(c.modal?.id);
+ if(!p)return '';
+ const units=c.db.items.filter(i=>i.pid===p.id).sort((a,b)=>(b.inAt||0)-(a.inAt||0));
+ const qty=units.filter(i=>!/(sav|répar|repar)/i.test(i.condition||'Neuf')).length;
+ const threshold=Math.max(0,Number(p.min_stock)||0);
+ const title=escape(name(p));
+ const itemRows=units.map(i=>{
+  const state=escape(i.condition||'Neuf');
+  return '<article class="si-modal-unit"><div class="si-modal-unit-code">'+
+   '<strong>'+escape(i.id)+'</strong><small>'+escape(i.serial||'Sans numéro de série')+' · '+state+'</small></div>'+
+   '<img loading="lazy" src="/api/items/'+encodeURIComponent(i.id)+'/barcode.svg" alt="Code-barres '+escape(i.id)+'" class="si-modal-barcode">'+
+   '<button type="button" class="si-modal-reprint" data-action="print" data-id="'+escape(i.id)+'">Réimprimer</button></article>';
+ }).join('');
+ const alertEditor=c.me?.role==='admin'?'<section class="si-alert-editor si-desktop-alert">'+
+  '<div class="si-alert-description"><strong>Seuil de réapprovisionnement</strong>'+
+  '<p>Optionnel. Vous recevrez une alerte à partir de cette quantité.</p></div>'+
+  '<label class="si-alert-toggle" for="si-alert-'+escape(p.id)+'">'+
+  '<input id="si-alert-'+escape(p.id)+'" type="checkbox"'+(threshold?' checked':'')+'><span>Activer</span></label>'+
+  '<div class="si-alert-controls"'+(threshold?'':' hidden')+'>'+
+  '<label for="si-min-'+escape(p.id)+'">Minimum</label>'+
+  '<input id="si-min-'+escape(p.id)+'" type="number" min="1" max="99999" inputmode="numeric" value="'+(threshold||1)+'"></div>'+
+  '<button type="button" class="si-save" data-action="stockthreshold" data-id="'+escape(p.id)+'">Enregistrer</button></section>':'';
+ return '<div class="overlay" data-action="backdrop"><div class="modal si-product-modal" role="dialog" aria-modal="true" aria-labelledby="si-product-title" tabindex="-1">'+
+  '<header class="modal-head si-modal-head"><div><div class="si-modal-kicker">FICHE PRODUIT</div>'+
+  '<h2 id="si-product-title">'+title+'</h2><p>'+escape(p.ref||'Sans référence')+(p.cat?' · '+escape(p.cat):'')+'</p></div>'+
+  '<button type="button" class="closebtn" data-action="closemodal" aria-label="Fermer">×</button></header>'+
+  '<div class="modal-body si-modal-body"><div class="si-modal-summary"><strong>'+qty+'</strong>'+
+  '<span>unité'+(qty>1?'s':'')+' disponible'+(qty>1?'s':'')+'</span>'+
+  '<small>'+(threshold?'Seuil configuré : '+threshold:'Aucun seuil configuré')+'</small></div>'+
+  '<h3 class="si-modal-subtitle">Articles encore enregistrés <span>'+units.length+'</span></h3>'+
+  '<p class="si-modal-explanation">Voici les codes STK imprimés sur les étiquettes de chaque article. Réimprimez celle dont vous avez besoin.</p>'+
+  '<div class="si-modal-units">'+(itemRows||'<div class="si-modal-empty">Aucun article actuellement enregistré pour cette référence.</div>')+'</div>'+
+  alertEditor+'</div><footer class="modal-foot"><button type="button" class="btn" data-action="closemodal">Fermer</button></footer></div></div>';
 }
 function history(c){
  const ev=[...c.db.events].filter(x=>x.type==='in'||x.type==='out').sort((a,b)=>b.at-a.at);
@@ -196,5 +209,5 @@ function editModal(c){
  const p=c.product(c.modal?.id);if(!p)return '';
  return '<div class="overlay" data-action="backdrop"><div class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Modifier une référence</h2><button class="closebtn" data-action="closemodal">×</button></div><form id="edit-product-form" data-id="'+escape(p.id)+'"><div class="modal-body"><div class="field"><label>Marque</label><input name="brand" required value="'+escape(p.brand)+'"></div><div class="field"><label>Modèle</label><input name="model" required value="'+escape(p.model)+'"></div><div class="field"><label>Catégorie</label><input name="cat" required value="'+escape(p.cat)+'"></div><div class="field"><label>Référence</label><input name="ref" required value="'+escape(p.ref)+'"></div><div class="field"><label>Seuil d’alerte (0 = désactivé)</label><input name="min_stock" type="number" min="0" max="99999" step="1" inputmode="numeric" required value="'+(Number(p.min_stock)||0)+'"></div><label><input type="checkbox" name="active" '+(p.active?'checked':'')+'> Référence active</label></div><div class="modal-foot"><button class="btn" type="button" data-action="closemodal">Annuler</button><button class="btn primary" type="submit">Enregistrer</button></div></form></div></div>';
 }
-window.SPBasic={dashboard,inventory,history,settings,exit,detailModal,editModal};
+window.SPBasic={dashboard,inventory,stockProductModal,history,settings,exit,detailModal,editModal};
 })();
