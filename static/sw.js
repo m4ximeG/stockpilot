@@ -23,3 +23,31 @@ self.addEventListener('fetch',event=>{
   )));
  }
 });
+
+/* Apple iOS 16.4+ PWA: a push event must display a visible notification. */
+self.addEventListener('push',event=>{
+ let payload={};
+ try{payload=event.data?event.data.json():{}}catch(e){payload={}}
+ const title=typeof payload.title==='string'?payload.title:'StockPilot · Alerte de stock';
+ const body=typeof payload.body==='string'?payload.body:'Un produit nécessite votre attention.';
+ const tag=typeof payload.tag==='string'?payload.tag:'stockpilot-stock';
+ const safeUrl=typeof payload.url==='string'&&payload.url.startsWith('/')&&!payload.url.startsWith('//')?
+  payload.url:'/?page=products';
+ event.waitUntil(self.registration.showNotification(title,{
+  body,tag,icon:'/app-icon-192.png',badge:'/app-icon-192.png',
+  data:{url:safeUrl},renotify:false
+ }));
+});
+self.addEventListener('notificationclick',event=>{
+ event.notification.close();
+ const dest=new URL(event.notification.data?.url||'/?page=products',self.location.origin);
+ if(dest.origin!==self.location.origin)return;
+ event.waitUntil(self.clients.matchAll({type:'window',includeUncontrolled:true}).then(async clients=>{
+  const existing=clients.find(client=>new URL(client.url).origin===self.location.origin);
+  if(existing){
+   if('navigate' in existing)await existing.navigate(dest.href);
+   return existing.focus();
+  }
+  return self.clients.openWindow(dest.href);
+ }));
+});
