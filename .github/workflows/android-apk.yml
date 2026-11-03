@@ -37,11 +37,14 @@ jobs:
       - name: Compiler l'application Android
         run: gradle -p android-app :app:assembleDebug --no-daemon
 
+      - name: Nommer le fichier à installer
+        run: cp android-app/app/build/outputs/apk/debug/app-debug.apk StockPilot-Android.apk
+
       - name: Sauvegarder l'APK
         uses: actions/upload-artifact@v4
         with:
           name: StockPilot-Android-APK
-          path: android-app/app/build/outputs/apk/debug/app-debug.apk
+          path: StockPilot-Android.apk
           if-no-files-found: error
 
       - name: Publier un lien de téléchargement stable
@@ -51,4 +54,5 @@ jobs:
           if ! gh release view android-latest >/dev/null 2>&1; then
             gh release create android-latest --title "StockPilot Android — APK de test" --notes "Application de test Android gratuite, connectée au StockPilot du NAS. Installez le fichier APK uniquement si vous faites confiance à ce dépôt."
           fi
-          gh release upload android-latest "android-app/app/build/outputs/apk/debug/app-debug.apk#StockPilot-Android.apk" --clobber
+          gh release upload android-latest "StockPilot-Android.apk" --clobber
+          gh release delete-asset android-latest app-debug.apk --yes || true
