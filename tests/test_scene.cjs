@@ -84,7 +84,7 @@ test('Aurora est chargé et reproduit la structure sans supprimer les fonctions'
  const html=fs.readFileSync('static/index.html','utf8');
  const css=fs.readFileSync('static/aurora.css','utf8');
  assert.match(html,/aurora\.css\?v=aurora-20261102-2/);
- assert.match(html,/barcode-only\.js\?v=categories-20261103-1/);
+ assert.match(html,/barcode-only\.js\?v=categories-20261103-2/);
  assert.match(css,/\.aurora-dashboard/);
  assert.match(css,/\.aur-rail-main/);
  assert.match(css,/\.aur-metrics/);
@@ -463,7 +463,7 @@ test('Réception depuis le stock : produit existant déjà sélectionné',()=>{
 });
 test('Assets inventaire récents : Safari ne garde pas les anciens styles et scripts',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
- assert.match(html,/\/static\/barcode-only\.js\?v=categories-20261103-1/);
+ assert.match(html,/\/static\/barcode-only\.js\?v=categories-20261103-2/);
  assert.match(html,/\/static\/reception\.js\?v=13/);
  assert.match(html,/\/static\/inventory-ui\.css\?v=4/);
  assert.match(html,/\/static\/mobile-layout\.css\?v=5/);
@@ -709,4 +709,21 @@ test('Les fichiers de catégories sont embarqués avec le site et responsables s
  assert.match(app,/ALTER TABLE items ADD COLUMN prep_status/);
  assert.match(app,/ALTER TABLE items ADD COLUMN specs_json/);
  assert.match(app,/@app\.patch\('\/api\/items\/<item_id>\/preparation'\)/);
+});
+
+test('Filtre de préparation : n’affiche que les ordinateurs en attente',()=>{
+ const old={...product,cat:'PC portable'};
+ const pcPending={...item,id:'STK-000011',prepStatus:'pending'};
+ const pcReady={...item,id:'STK-000012',prepStatus:'ready'};
+ const material={id:'simple',brand:'',model:'Câble HDMI',cat:'Matériel',ref:'REF-HDMI',active:1};
+ const extra={...item,id:'STK-000013',pid:'simple',prepStatus:'not_required'};
+ const ctx={...context,db:{items:[pcPending,pcReady,extra],catalog:[old,material],events:[],shelves:[]},
+  tableStockFilter:'prep',tableType:'all'};
+ const html=basic.inventory(ctx);
+ assert.match(html,/data-action="stockproduct" data-id="terra1"/);
+ assert.match(html,/1 à préparer/);
+ assert.doesNotMatch(html,/data-action="stockproduct" data-id="simple"/);
+ assert.match(html,/À préparer \(1\)/);
+ const style=fs.readFileSync('static/product-types.css','utf8');
+ assert.match(style,/grid-template-columns:repeat\(2,minmax\(0,1fr\)\)!important/);
 });
