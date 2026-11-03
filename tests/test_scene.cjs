@@ -549,3 +549,93 @@ test('iPhone : carte notification masquée quand l’abonnement est actif',()=>{
  assert.match(html,/if\(visibleBanner\)visibleBanner.hidden=active/);
  assert.match(css,/\.si-mobile-push\[hidden\]\{display:none!important\}/);
 });
+
+test('Synchronisation : vérifie une révision puis met à jour sans recréer le formulaire en cours',async()=>{
+ const html=fs.readFileSync('static/index.html','utf8');
+ const scripts=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(x=>x[1]).filter(Boolean);
+ const callbacks={};
+ const intervals=[];
+ let changes=0,revision=10,updatedProduct=false;
+ const app={
+  markup:'',
+  set innerHTML(value){this.markup=value;changes++},
+  get innerHTML(){return this.markup}
+ };
+ const el={'#app':app,'#toasts':{appendChild:()=>{}}};
+ const fakeDocument={
+  hidden:false,
+  addEventListener:(event,callback)=>{callbacks['document:'+event]=callback},
+  getElementById:()=>null,querySelector:(sel)=>el[sel]||null,
+  querySelectorAll:()=>[],
+  body:{classList:{toggle:()=>{},remove:()=>{}}},
+  createElement:()=>({innerHTML:'',className:'',remove:()=>{}})
+ };
+ const windowListeners={};
+ const fakeWindow={
+  addEventListener:(event,callback)=>{windowListeners[event]=callback},
+  scrollTo:()=>{},open:()=>({}),location:{href:'/'}
+ };
+ const fakeFetch=async(url)=>{
+  let body;
+  if(url==='/api/state')body={
+   items:[],events:[],catalog:updatedProduct?[{id:'new',brand:'Nouveau',model:'PC',ref:'T-001',cat:'PC portable',active:1}]:[],
+   shelves:[],counter:1,revision,me:{username:'Admin',role:'admin'}
+  };
+  else if(url==='/api/sync/revision')body={revision};
+  else throw new Error('Unexpected request: '+url);
+  return {ok:true,status:200,headers:{get:()=> 'application/json'},json:async()=>body};
+ };
+ const ctx={
+  window:fakeWindow,document:fakeDocument,fetch:fakeFetch,URL,console,
+  history:{scrollRestoration:'auto'},
+  navigator:{},requestAnimationFrame:cb=>cb(),
+  setTimeout:()=>0,setInterval:(fn,delay)=>{intervals.push({fn,delay});return 1}
+ };
+ for(const path of ['static/barcode-only.js','static/reception.js']){
+  vm.runInNewContext(fs.readFileSync(path,'utf8'),ctx,{filename:path});
+ }
+ ctx.SPBasic=fakeWindow.SPBasic;
+ ctx.SPV3=fakeWindow.SPV3;
+ vm.runInNewContext(scripts[0],ctx,{filename:'static/index.html'});
+ await new Promise(resolve=>setTimeout(resolve,35));
+ assert.equal(changes,1);
+ assert.equal(intervals.length,1);
+ assert.equal(intervals[0].delay,1200);
+ assert.match(app.markup,/Stock central/);
+
+ // L'utilisateur navigue et commence une saisie : celle-ci ne doit pas disparaître.
+ const target={closest:sel=>sel==='[data-nav]'?{dataset:{nav:'entry'}}:null};
+ windowListeners.click({target});
+ assert.match(app.markup,/id="rx-name"/);
+ const changesBefore=changes;
+ ctx.SPV3.onInput({target:{id:'rx-name',value:'Travail non enregistré'}}, {catalog:[],items:[]});
+ revision=11;updatedProduct=true;
+ await intervals[0].fn();
+ assert.equal(changes,changesBefore,'Aucun renderApp/innerHTML lors du changement distant');
+ assert.match(ctx.SPV3.entry({db:{items:[],catalog:[]}}),/value="Travail non enregistré"/);
+ assert.doesNotMatch(app.markup,/Connexion au serveur impossible/);
+
+ // L'application reçoit aussi le signal dès son retour au premier plan.
+ assert.equal(typeof callbacks['document:visibilitychange'],'function');
+ assert.equal(typeof windowListeners.focus,'function');
+});
+test('Historique mobile : animation uniquement à la navigation',()=>{
+ const css=fs.readFileSync('static/mobile-layout.css','utf8');
+ const js=fs.readFileSync('static/index.html','utf8');
+ assert.match(css,/@keyframes spHistoryHeadingEnter/);
+ assert.match(css,/@keyframes spHistoryJournalEnter/);
+ assert.match(css,/#content\.sp-route-in \.sp-history-page \.sp-mobile-pagehead/);
+ assert.match(css,/#content\.sp-route-in \.sp-history-page \.sp-mobile-history/);
+ assert.match(js,/patch\('\.sp-mobile-history \.sp-mh-list'\)/);
+ assert.doesNotMatch(js,/setInterval\(\(\)=>\{if\(!document.hidden&&!modal&&page!=='entry'/);
+});
+test('Notifications iPhone : préférence persistante et réparation du serveur sans nouveau consentement',()=>{
+ const html=fs.readFileSync('static/index.html','utf8');
+ assert.match(html,/PUSH_PREFERENCE_KEY='stockpilot-notifications-enabled'/);
+ assert.match(html,/function restorePushOnAppLaunch\(\)/);
+ assert.match(html,/rememberPushPreference\(true\)/);
+ assert.match(html,/rememberPushPreference\(false\)/);
+ assert.match(html,/await api\('\/api\/push\/subscriptions','POST',sub.toJSON\(\)\)/);
+ assert.match(html,/if\(!sub&&wantsPushNotifications\(\)\)/);
+ assert.match(html,/await restorePushOnAppLaunch\(\)/);
+});
