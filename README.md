@@ -32,9 +32,9 @@ StockPilot s'installe directement depuis **https://stockpilot.m4xim.eu**. L'appl
 ## Fonctionnement
 
 1. **Entrée** : écrire le nom d'un produit. Le site suggère les références déjà connues. Si aucune référence ne correspond, il la crée pendant l'enregistrement. Le numéro de série est facultatif ; l'état est « Neuf », « Retour SAV » ou « Réparation ».
-2. **Étiquetage** : chaque unité enregistrée reçoit un identifiant `STK-000001`, un **code-barres Code 128** et un **QR code** imprimables au format 70 × 50 mm.
+2. **Étiquetage** : chaque unité reçoit un identifiant `STK-000001`, un **code-barres Code 128** et un **QR code** dans un **PDF vectoriel d'une seule page**, exactement dimensionné pour la DYMO LabelWriter 450 : **54 × 25 mm (11352)** par défaut ou **57 × 32 mm (11354)**, à sélectionner dans Configuration. Pas de page A4 autour.
 3. **Sortie** : scanner l'étiquette avec une douchette USB/Bluetooth ou une caméra compatible, ou saisir l'identifiant. Vérifier le produit, puis confirmer sa sortie. L'article disparaît du stock disponible.
-4. **Suivi** : le tableau de bord affiche les quantités, les références, les entrées/sorties du jour ; l'inventaire et l'historique sont consultables et exportables en CSV.
+4. **Suivi** : la page **Produits en stock** regroupe les unités par référence et affiche la **quantité utilisable** (les articles en SAV ou réparation sont signalés à part). La direction peut fixer un seuil de stock minimum pour déclencher l'indication **À réapprovisionner**. Les filtres « À commander » et les exports CSV présentent les quantités par référence. L'historique conserve les mouvements par unité.
 
 La connexion à plusieurs comptes permet de conserver le nom de l'opérateur sur chaque mouvement. Les données sont centralisées dans une base SQLite persistante sur le NAS. Aucun faux stock n'est injecté en production.
 
@@ -62,9 +62,11 @@ Variables essentielles :
 
 **Déploiement** : la stack `compose.yaml` publie le port 8787 du NAS vers le port 8080 du conteneur. Depuis Nginx Proxy Manager, utilisez le domaine HTTPS relié à `http://IP_DU_NAS:8787`. L'image GHCR propose les plateformes AMD64 et ARM64 après publication du build.
 
-**Étiqueteuse** : installer l'imprimante thermique sur le PC de l'accueil. Le navigateur imprime les étiquettes 70 × 50 mm en utilisant le pilote de cette imprimante. L'impression automatique sans boîte de dialogue nécessiterait une intégration complémentaire.
+**DYMO LabelWriter 450** : connecter l'imprimante USB au PC du magasin et installer son pilote. Dans **Configuration → Étiquettes DYMO**, choisir la dimension du rouleau chargé (54 × 25 mm / 57 × 32 mm). Cliquer sur une étiquette ouvre un **PDF à sa taille physique exacte** : imprimer avec la DYMO, en sélectionnant le bon papier, à **100 %** (sans « Ajuster à la page », marges à zéro). La DYMO 450 USB n'est pas une imprimante AirPrint native : depuis l'iPhone, il faut passer par le PC connecté à l'imprimante ou mettre en place un serveur d'impression distinct.
 
 **Scanner** : une douchette USB/Bluetooth configurée en mode clavier peut lire le Code 128. Le lecteur caméra web utilise `html5-qrcode` (chargé à la demande via CDN, version 2.3.8) pour lire les QR codes et les Code 128/39 sur Safari iOS, Android et ordinateurs. Il nécessite HTTPS, une caméra autorisée et un accès au CDN. La saisie manuelle reste possible ; aucun article n'est sorti sans confirmation.
+
+Sur iPhone et PC, la navigation réduit le rebond aux limites de défilement et l'inventaire utilise une seule liste verticale, sans tableau horizontal à manipuler sur téléphone.
 
 ## Sauvegardes et sécurité
 
