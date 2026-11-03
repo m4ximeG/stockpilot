@@ -126,7 +126,7 @@ function inventory(c){
   seg('in','Disponibles'),
   '</div><button type="button" class="si-export" data-action="exportstocksummary">Exporter CSV</button></div>'
  ].join('');
- const mobilePush='<section class="si-mobile-push" aria-label="Alertes de stock sur téléphone">'+
+ const mobilePush='<section class="si-mobile-push" aria-label="Alertes de stock sur téléphone" hidden>'+
   '<div><strong>Alertes sur votre téléphone</strong><p>Recevoir une notification lorsqu’un produit atteint son seuil.</p></div>'+
   '<button type="button" data-action="pushsubscribe" class="si-enable-push">Activer</button></section>';
  return c.heading('INVENTAIRE','Produits en stock',
