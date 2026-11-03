@@ -40,3 +40,16 @@
  .sidebar .navbtn{max-width:44px!important}
  .sidebar .navbtn .ic{width:19px!important;height:19px!important}
 }
+
+/* Carte d'installation : uniquement sur les téléphones. */
+.sp-mobile-install{display:none!important}
+@media(max-width:860px){
+ .sp-mobile-install{display:block!important}
+ .sp-mobile-install .btn{margin:7px 0 4px;min-height:46px;max-width:100%}
+ .sp-mobile-install .sp-install-steps{
+  margin:14px 0 0!important;padding:12px 14px;
+  color:#dbe9f3!important;font-size:12px!important;line-height:1.85;
+  background:rgba(255,255,255,.09);border-radius:11px;
+ }
+ .sp-mobile-install .sp-install-steps strong{color:#fff!important}
+}
