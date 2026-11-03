@@ -555,42 +555,83 @@ def move_item(item_id):
 @app.get('/label/<item_id>')
 @protected()
 def label_page(item_id):
+    """PDF d'une seule page, découpé aux dimensions physiques d'un rouleau DYMO."""
     row = g.db.execute("""SELECT items.id, items.slot, items.serial, products.brand, products.model, products.ref
                           FROM items JOIN products ON items.pid=products.id WHERE items.id=?""", (item_id,)).fetchone()
     if not row:
         abort(404)
-    html = """<!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><title>Étiquette {{i.id}}</title>
-<style>
-@page{size:70mm 50mm;margin:1mm}*{box-sizing:border-box}
-body{margin:0;padding:1mm;background:white;color:#161b23;font:9px Arial,sans-serif}
-.paper{width:68mm;height:47mm;padding:2mm;border:1px solid #ddd;overflow:hidden}
-.brand{font-size:9px;font-weight:900;letter-spacing:.7px}
-.name{font-size:13px;font-weight:900;line-height:1.2;max-height:9mm;overflow:hidden;margin:2mm 0 1mm}
-.meta{font-size:8px;color:#555;margin-bottom:1mm;white-space:nowrap;overflow:hidden}
-.barcode{display:block;width:61mm;height:15mm;object-fit:fill;margin:1mm auto}
-.foot{display:flex;align-items:center;justify-content:space-between}
-.qr{width:14mm;height:14mm;image-rendering:pixelated;display:block}
-.identifier{font:900 12px monospace;text-align:right}
-.helper{font-size:8px;color:#555;text-align:right}
-.print{padding:15px;text-align:center}.print button{background:#2d5ddb;color:#fff;padding:11px 24px;border:0;border-radius:6px;cursor:pointer}
-@media print{body{padding:0}.paper{border:0}.print{display:none}}
-</style></head><body>
-<div class="paper">
- <div class="brand">STOCKPILOT</div>
- <div class="name">{{ ((i.brand ~ ' ' ~ i.model)|trim) }}</div>
- <div class="meta">{{i.ref}}{% if i.serial %} · Série : {{i.serial}}{% endif %}</div>
- <img class="barcode" src="/api/items/{{i.id}}/barcode.svg" alt="Code-barres {{i.id}}">
- <div class="foot"><img class="qr" src="/api/items/{{i.id}}/qr.png" alt="QR code {{i.id}}"><div><div class="identifier">{{i.id}}</div><div class="helper">Scanner à la sortie</div></div></div>
-</div>
-<div class="print"><button onclick="window.print()">Imprimer l'étiquette</button></div>
-<script>
-window.addEventListener('load',()=>{
- const images=[...document.querySelectorAll('.paper img')];
- Promise.all(images.map(x=>x.complete?Promise.resolve():new Promise(done=>{x.onload=done;x.onerror=done}))).then(()=>window.print());
-});
-</script></body></html>"""
-    return render_template_string(html, i=dict(row))
+    # 11352 = 54 x 25 mm ; 11354 = 57 x 32 mm (à choisir selon le rouleau).
+    formats = {'54x25': (54, 25), '57x32': (57, 32)}
+    paper = request.args.get('size', '54x25')
+    if paper not in formats:
+        return bad('Format non pris en charge. Choisissez 54x25 ou 57x32.')
+    width_mm, height_mm = formats[paper]
+
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.units import mm
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    from reportlab.graphics.barcode.code128 import Code128
+    from reportlab.graphics.barcode.qr import QrCodeWidget
+    from reportlab.graphics import renderPDF
+    from reportlab.graphics.shapes import Drawing
+
+    width, height = width_mm * mm, height_mm * mm
+    output = io.BytesIO()
+    label = canvas.Canvas(output, pagesize=(width, height), pageCompression=1)
+    label.setTitle('StockPilot - Etiquette ' + item_id)
+    label.setAuthor('StockPilot')
+    label.setFillColorRGB(0, 0, 0)
+
+    def fit_line(text, font, width_limit, initial_size):
+        text = str(text or '').replace('\n', ' ').strip()
+        point = initial_size
+        while point > 5 and stringWidth(text, font, point) > width_limit:
+            point -= .25
+        while len(text) > 4 and stringWidth(text, font, point) > width_limit:
+            text = text[:-2] + '…'
+        label.setFont(font, point)
+        return text
+
+    margin = 2.2 * mm
+    label.setFont('Helvetica-Bold', 5.5)
+    label.drawString(margin, height - 2.8 * mm, 'STOCKPILOT')
+    display_name = ' '.join([row['brand'], row['model']]).strip()
+    fitted_name = fit_line(display_name, 'Helvetica-Bold', width - 2 * margin, 8.3)
+    label.drawString(margin, height - 5.3 * mm, fitted_name)
+    reference = fit_line('REF ' + row['ref'], 'Helvetica', width - 2 * margin, 5.7)
+    label.drawString(margin, height - 7.6 * mm, reference)
+
+    qr_size = (10.9 if height_mm == 25 else 13) * mm
+    code_width = width - margin * 2 - qr_size - 3 * mm
+    code_height = (8.5 if height_mm == 25 else 11) * mm
+    code = Code128(item_id, barHeight=code_height, barWidth=.61, quiet=False, humanReadable=False)
+    if code.width > code_width:
+        code = Code128(item_id, barHeight=code_height,
+                       barWidth=.61 * code_width / code.width,
+                       quiet=False, humanReadable=False)
+    code.drawOn(label, margin, (5.3 if height_mm == 25 else 7) * mm)
+
+    qr_code = QrCodeWidget(item_id)
+    bounds = qr_code.getBounds()
+    drawing = Drawing(bounds[2] - bounds[0], bounds[3] - bounds[1])
+    drawing.add(qr_code)
+    label.saveState()
+    label.translate(width - margin - qr_size, (3.1 if height_mm == 25 else 4.4) * mm)
+    label.scale(qr_size / drawing.width, qr_size / drawing.height)
+    renderPDF.draw(drawing, label, -bounds[0], -bounds[1])
+    label.restoreState()
+
+    label.setFont('Courier-Bold', 7.2)
+    label.drawString(margin, 2.1 * mm, item_id)
+    label.showPage()
+    label.save()
+    output.seek(0)
+    response = send_file(output, mimetype='application/pdf', as_attachment=False,
+                         download_name=f'StockPilot-{item_id}-{paper}mm.pdf', max_age=0)
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['Cache-Control'] = 'private, no-store'
+    return response
+
 
 @app.get('/api/items/<item_id>/barcode.svg')
 @protected()
