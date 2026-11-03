@@ -513,6 +513,7 @@ test('iPhone : historique en journal lisible, version tableau préservée sur PC
  const css=fs.readFileSync('static/mobile-layout.css','utf8');
  assert.match(html,/class="sp-history-page"/);
  assert.match(html,/class="sp-mobile-history"/);
+ assert.match(html,/<h1>Historique<\/h1>/);
  assert.match(html,/sp-mh-event sp-mh-in/);
  assert.match(html,/sp-mh-event sp-mh-out/);
  assert.match(html,/STK-000010/);
@@ -528,9 +529,10 @@ test('iPhone : paramètres épurés sans empêcher les réglages bureau',()=>{
  const css=fs.readFileSync('static/mobile-layout.css','utf8');
  const js=fs.readFileSync('static/index.html','utf8');
  assert.match(html,/class="sp-mobile-settings"/);
+ assert.match(html,/<h1>Paramètres<\/h1>/);
  assert.match(html,/class="sp-ms-card sp-ms-profile"/);
  assert.match(html,/id="mobile-password-form"/);
- assert.match(html,/class="sp-ms-password"/);
+ assert.match(html,/class="sp-ms-card sp-ms-password"/);
  assert.match(html,/data-action="pushsubscribe"/);
  assert.match(html,/Étiquettes DYMO LabelWriter 450/);
  assert.match(html,/Gérer les utilisateurs/);
