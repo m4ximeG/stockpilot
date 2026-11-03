@@ -193,6 +193,7 @@ function history(c){
    '<span class="sp-mh-actor">'+escape(e.actor||'—')+'</span></div></div></article>';
  }).join(''):'<p class="sp-mh-empty">Aucun mouvement enregistré pour le moment.</p>';
  return '<div class="sp-history-page">'+desktop+
+  '<header class="sp-mobile-pagehead"><span>ACTIVITÉ</span><h1>Historique</h1></header>'+
   '<section class="sp-mobile-history" aria-label="Journal des mouvements">'+
   '<div class="sp-mh-summary"><strong>'+ev.length+'</strong> mouvement'+(ev.length>1?'s':'')+' enregistré'+(ev.length>1?'s':'')+'</div>'+
   '<div class="sp-mh-list">'+mobile+'</div></section></div>';
@@ -211,6 +212,7 @@ function settings(c){
  const installCard='<section class="card settingscard sp-mobile-install"><h2>Application mobile</h2><p>Installez StockPilot sur votre téléphone : les comptes, le stock et le scanner restent reliés au même serveur.</p><button class="btn primary" type="button" data-action="installapp">Installer StockPilot</button><p class="sp-install-steps"><strong>iPhone :</strong> ouvrez le site dans Safari, touchez Partager puis « Sur l’écran d’accueil ».<br><strong>Android :</strong> ouvrez le site dans Chrome, menu ⋮ puis « Installer l’application ».</p></section>';
  const cleanup='<section class="card settingscard basic-danger"><h2>Réinitialisation du stock</h2><p>Cette action efface l’inventaire, le catalogue et l’historique. Une sauvegarde est créée avant toute suppression. Ne l’utilisez pas pour simplement retirer un produit.</p><button type="button" class="btn negative" data-action="clearstock">Vider totalement le stock</button></section>';
  const mobileSettings='<section class="sp-mobile-settings" aria-label="Paramètres de l’application mobile">'+
+  '<header class="sp-mobile-pagehead"><span>MON ESPACE</span><h1>Paramètres</h1></header>'+
   '<div class="sp-ms-card sp-ms-profile"><div class="sp-ms-avatar" aria-hidden="true">'+escape(c.me.username.slice(0,2).toUpperCase())+'</div>'+
   '<div class="sp-ms-profile-name"><strong>'+escape(c.me.username)+'</strong><small>'+(c.me.role==='admin'?'Administrateur':'Employé')+'</small></div>'+
   '<span class="sp-ms-connected">Connecté</span></div>'+
