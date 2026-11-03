@@ -56,6 +56,10 @@ function onClick(ev,ctx){
  return true;
 }
 function reset(){state=blank();}
+function prefill(product){
+ state=blank();
+ if(product){state.name=name(product);state.pid=product.id;state.suggestions=false;}
+}
 function onChange(){return false;}
-window.SPV3={entry,onInput,onClick,onChange,reset,selectSlot(){}};
+window.SPV3={entry,onInput,onClick,onChange,reset,prefill,selectSlot(){}};
 })();
