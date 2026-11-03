@@ -148,7 +148,7 @@ test('Paramètres et scanner : aucune structure blanche ni carte accolée',()=>{
 test('Fond identique pour l’accueil et les pages secondaires',()=>{
  const harmony=fs.readFileSync('static/harmony.css','utf8');
  const html=fs.readFileSync('static/index.html','utf8');
- assert.match(html,/\/static\/harmony\.css\?v=2/);
+ assert.match(html,/\/static\/harmony\.css\?v=6/);
  assert.match(harmony,/var\(--sp-storm-image\) center 45% \/ cover fixed no-repeat/);
  assert.match(harmony,/\.aurora-dashboard\s*\{\s*background:transparent!important;/);
  assert.match(harmony,/--sp-storm-image:url\("\/static\/aurora-storm\.jpg"\)/);
@@ -170,7 +170,7 @@ test('Retour à l’accueil : animations Aurora originales intactes',()=>{
  assert.match(html,/if\(page==='dashboard'\)\{/);
  assert.match(html,/return;\s*\}\s*\/\/ Pages secondaires/);
  assert.doesNotMatch(html,/stage\.classList\.add\('sp-no-intro'\)/);
- assert.doesNotMatch(route,/sp-no-intro|sp-route-active|\.aur-welcome|\.aur-rail button/);
+ assert.doesNotMatch(route.replace(/\/\*[\s\S]*?\*\//g,''),/sp-no-intro|sp-route-active|\.aur-welcome|\.aur-rail button/);
  for(const animation of ['aurSlideR','aurRise','aurLine','aurPop','aurDraw','aurFill','aurSheen']){
    assert.match(css,new RegExp('@keyframes '+animation));
  }
@@ -284,4 +284,23 @@ test('Scanner caméra : QR Code et Code 128 sur iOS/Android',()=>{
  assert.match(html,/ensureScannerLibrary\(\)/);
  assert.match(css,/#scan-panel\.sp-camera-active/);
  assert.match(css,/#sp-camera-reader video/);
+});
+
+test('Application iPhone / Android : manifeste et protections des données',()=>{
+ const fs=require('node:fs');
+ const app=fs.readFileSync('app.py','utf8');
+ const html=fs.readFileSync('static/index.html','utf8');
+ const manifest=JSON.parse(fs.readFileSync('static/app.webmanifest','utf8'));
+ const worker=fs.readFileSync('static/sw.js','utf8');
+ assert.equal(manifest.display,'standalone');
+ assert.equal(manifest.start_url,'/');
+ assert.deepEqual(manifest.icons.map(i=>i.sizes),['192x192','512x512']);
+ assert.match(html,/rel="manifest" href="\/static\/app\.webmanifest"/);
+ assert.match(html,/apple-touch-icon/);
+ assert.match(html,/navigator\.serviceWorker\.register\('\/sw\.js'\)/);
+ assert.match(html,/\/static\/mobile-app\.css\?v=1/);
+ assert.match(app,/@app\.get\('\/sw\.js'\)/);
+ assert.match(app,/@app\.get\('\/apple-touch-icon\.png'\)/);
+ assert.doesNotMatch(worker,/cache\.addAll\(\[['"][\/]api/);
+ assert.match(worker,/event\.request\.mode==='navigate'/);
 });
