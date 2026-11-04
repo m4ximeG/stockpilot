@@ -84,7 +84,7 @@ test('Aurora est chargé et reproduit la structure sans supprimer les fonctions'
  const html=fs.readFileSync('static/index.html','utf8');
  const css=fs.readFileSync('static/aurora.css','utf8');
  assert.match(html,/aurora\.css\?v=aurora-20261102-2/);
- assert.match(html,/barcode-only\.js\?v=variants-20261104-1/);
+ assert.match(html,/barcode-only\.js\?v=variants-20261104-2/);
  assert.match(css,/\.aurora-dashboard/);
  assert.match(css,/\.aur-rail-main/);
  assert.match(css,/\.aur-metrics/);
@@ -463,8 +463,8 @@ test('Réception depuis le stock : produit existant déjà sélectionné',()=>{
 });
 test('Assets inventaire récents : Safari ne garde pas les anciens styles et scripts',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
- assert.match(html,/\/static\/barcode-only\.js\?v=variants-20261104-1/);
- assert.match(html,/\/static\/reception\.js\?v=14/);
+ assert.match(html,/\/static\/barcode-only\.js\?v=variants-20261104-2/);
+ assert.match(html,/\/static\/reception\.js\?v=15/);
  assert.match(html,/\/static\/inventory-ui\.css\?v=4/);
  assert.match(html,/\/static\/mobile-layout\.css\?v=5/);
 });
@@ -697,8 +697,8 @@ test('Les fichiers de catégories sont embarqués avec le site et responsables s
  const index=fs.readFileSync('static/index.html','utf8');
  const style=fs.readFileSync('static/product-types.css','utf8');
  const app=fs.readFileSync('app.py','utf8');
- assert.match(index,/\/static\/product-types\.css\?v=1/);
- assert.match(index,/\/static\/reception\.js\?v=14/);
+ assert.match(index,/\/static\/product-types\.css\?v=2/);
+ assert.match(index,/\/static\/reception\.js\?v=15/);
  assert.match(index,/unitPreparationModal/);
  assert.match(index,/case'editunit'/);
  assert.match(index,/sp-unit-edit-form/);
