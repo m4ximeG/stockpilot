@@ -70,7 +70,7 @@ class StockPilotTests(unittest.TestCase):
         name=manual.json['name']
         self.assertTrue(name.startswith('manual-'))
         download=self.client.get(f'/api/admin/backups/{name}/download')
-        self.assertEqual(download.status_code,200,download.text)
+        self.assertEqual(download.status_code,200)
         self.assertIn(b'SQLite format 3',download.data[:30])
         self.assertEqual(self.client.get('/api/admin/backups/../../etc/passwd/download').status_code,404)
         self.assertEqual(self.client.get('/api/admin/backups/fake.sqlite3/download').status_code,404)
