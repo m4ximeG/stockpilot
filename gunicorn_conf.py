@@ -1,7 +1,7 @@
-"""Lance la sauvegarde quotidienne depuis le processus maître Gunicorn.
+"""Lance la sauvegarde quotidienne depuis chaque worker Gunicorn.
 
-Un seul thread pour le conteneur, et un verrou fichier évite les doublons
-en cas de plusieurs instances partageant /data.
+Un thread léger par worker, et un verrou fichier évite les doublons
+en cas de plusieurs processus partageant /data.
 """
 import logging
 import os
@@ -14,7 +14,7 @@ import backup_service
 log = logging.getLogger('stockpilot.backups')
 
 
-def when_ready(server):
+def post_worker_init(worker):
     data_dir = Path(os.environ.get('STOCKPILOT_DATA_DIR', '/data'))
     db_file = data_dir / 'stockpilot.sqlite3'
 
