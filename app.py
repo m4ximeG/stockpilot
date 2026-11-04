@@ -102,6 +102,15 @@ def initialize():
         CREATE TABLE IF NOT EXISTS sync_revision (
           id INTEGER PRIMARY KEY CHECK(id = 1), revision INTEGER NOT NULL DEFAULT 0
         );
+        CREATE TABLE IF NOT EXISTS product_variants (
+          id TEXT PRIMARY KEY,
+          pid TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+          specs_json TEXT NOT NULL,
+          signature TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          UNIQUE(pid,signature)
+        );
+        CREATE INDEX IF NOT EXISTS variants_by_product ON product_variants(pid);
         INSERT OR IGNORE INTO sync_revision(id,revision) VALUES(1,0);
 
         CREATE TABLE IF NOT EXISTS push_subscriptions (
@@ -117,7 +126,7 @@ def initialize():
         ''')
         # Détection automatique de TOUS les changements de stock (y compris les routes
         # historiques) sans mémoire locale : fonctionnement multi-workers / multi-appareils.
-        for table in ('products', 'items', 'events', 'shelf_levels', 'users'):
+        for table in ('products', 'items', 'events', 'shelf_levels', 'users', 'product_variants'):
             for operation in ('INSERT', 'UPDATE', 'DELETE'):
                 con.execute(f"""CREATE TRIGGER IF NOT EXISTS sync_{table}_{operation.lower()}
                   AFTER {operation} ON {table} BEGIN
@@ -136,6 +145,24 @@ def initialize():
             con.execute("ALTER TABLE items ADD COLUMN prep_status TEXT NOT NULL DEFAULT 'not_required'")
         if 'specs_json' not in item_columns:
             con.execute("ALTER TABLE items ADD COLUMN specs_json TEXT NOT NULL DEFAULT '{}'")
+        if 'variant_id' not in item_columns:
+            con.execute("ALTER TABLE items ADD COLUMN variant_id TEXT")
+        # Migration non destructive : les PC déjà renseignés retrouvent leur
+        # configuration même après une vente, et leurs STK restent inchangés.
+        missing_variants = con.execute('''SELECT i.id,i.pid,i.specs_json,p.cat
+          FROM items i JOIN products p ON p.id=i.pid
+          WHERE i.variant_id IS NULL''').fetchall()
+        for item in missing_variants:
+            try:
+                specs = parse_item_specifications(json.loads(item['specs_json'] or '{}'),
+                                                  item['cat'])
+            except (ValueError, TypeError, json.JSONDecodeError):
+                # Ancien enregistrement libre : garder son contenu original et
+                # ranger dans la configuration non renseignée, sans perte de donnée.
+                specs = {}
+            variant = ensure_variant(con, item['pid'], specs)
+            con.execute('UPDATE items SET variant_id=? WHERE id=?',
+                        (variant, item['id']))
 
         con.executemany("INSERT OR IGNORE INTO shelf_levels(slot,size,note) VALUES(?,'unknown','')", [(slot,) for slot in SLOTS])
         con.execute("INSERT OR IGNORE INTO meta(key,value) VALUES('location_mode','optional')")
@@ -359,10 +386,41 @@ def read_prep_status(value, category, fallback=None):
 def serialize_specs(specs):
     return json.dumps(specs, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
 
+def ensure_variant(db, pid, specs):
+    """Réutilise une fiche persistante pour une configuration identique.
+    SQLite garantit son unicité, y compris entre plusieurs postes en parallèle.
+    """
+    signature = serialize_specs(specs)
+    db.execute("""INSERT OR IGNORE INTO product_variants
+       (id,pid,specs_json,signature,created_at) VALUES(?,?,?,?,?)""",
+       ('v_' + secrets.token_hex(12), pid, signature, signature, int(time.time()*1000)))
+    row = db.execute('SELECT id FROM product_variants WHERE pid=? AND signature=?',
+                     (pid, signature)).fetchone()
+    return row['id']
+
+
+def resolve_unit_variant(db, pid, category, data):
+    """Retourne (variant_id, specs) sans supposer que deux PC du même modèle sont identiques."""
+    selected = data.get('variant_id')
+    if selected not in (None, ''):
+        if not isinstance(selected, str) or len(selected) > 64:
+            raise ValueError('Configuration sélectionnée invalide.')
+        row = db.execute('SELECT id,specs_json FROM product_variants WHERE id=? AND pid=?',
+                         (selected, pid)).fetchone()
+        if not row:
+            raise ValueError('Cette configuration n’existe pas pour le produit.')
+        if 'specs' not in data:
+            specs = json.loads(row['specs_json'])
+            return row['id'], specs
+    specs = parse_item_specifications(data.get('specs', {}), category)
+    return ensure_variant(db, pid, specs), specs
+
+
 def item_dict(row):
     return dict(id=row['id'], pid=row['pid'], slot=row['slot'],
                 serial=row['serial'] or '', condition=row['condition'], inAt=row['in_at'],
-                prepStatus=row['prep_status'], specs=json.loads(row['specs_json'] or '{}'))
+                prepStatus=row['prep_status'], specs=json.loads(row['specs_json'] or '{}'),
+                variantId=row['variant_id'])
 
 
 
@@ -506,12 +564,15 @@ def state():
     try:
         products = [row_dict(x) for x in db.execute('SELECT id,brand,model,cat,zone,kind,ref,active,preferred_slot,min_stock FROM products ORDER BY brand,model')]
         items = [item_dict(x) for x in db.execute('SELECT * FROM items WHERE out_at IS NULL ORDER BY in_at')]
+        variants = [dict(id=x['id'],pid=x['pid'],specs=json.loads(x['specs_json']),
+                         createdAt=x['created_at']) for x in db.execute(
+                             'SELECT * FROM product_variants ORDER BY created_at,id')]
         events = [dict(id='e'+str(x['id']),type=x['type'],itemId=x['item_id'],pid=x['pid'],slot=x['slot'],at=x['at'],actor=x['actor'],detail=x['detail']) for x in db.execute('SELECT * FROM events ORDER BY id DESC LIMIT 1500')]
         shelves = [dict(slot=r['slot'],size=r['size'],note=r['note']) for r in db.execute('SELECT slot,size,note FROM shelf_levels ORDER BY slot')]
         counter = int(db.execute("SELECT value FROM meta WHERE key='next_item'").fetchone()[0])
         location_mode = db.execute("SELECT value FROM meta WHERE key='location_mode'").fetchone()
         revision = db.execute('SELECT revision FROM sync_revision WHERE id=1').fetchone()[0]
-        response = jsonify(items=items,events=events,counter=counter,catalog=products,shelves=shelves,me=dict(id=g.user['id'],username=g.user['username'],role=g.user['role']),allowReset=ALLOW_RESET and DEMO_SEED,locationMode='optional',revision=revision)
+        response = jsonify(items=items,variants=variants,events=events,counter=counter,catalog=products,shelves=shelves,me=dict(id=g.user['id'],username=g.user['username'],role=g.user['role']),allowReset=ALLOW_RESET and DEMO_SEED,locationMode='optional',revision=revision)
         response.headers['Cache-Control'] = 'private, no-store'
         return response
 
@@ -619,7 +680,7 @@ def receive_free_text():
                     VALUES(?, '', ?, ?, ?, 'package', ?, ?)""",
                     (pid,name,requested_category,slot[0] if slot else 'A',ref,slot))
                 created=True
-        specs=parse_item_specifications(data.get('specs', {}),requested_category)
+        variant_id,specs=resolve_unit_variant(db,pid,requested_category,data)
         preparation=read_prep_status(data.get('prep_status'), requested_category)
         next_row=db.execute("SELECT value FROM meta WHERE key='next_item'").fetchone()
         num=int(next_row['value']) if next_row else 1
@@ -628,14 +689,14 @@ def receive_free_text():
             num+=1
         item_id=f'STK-{num:06d}'
         when=int(time.time()*1000)
-        db.execute("""INSERT INTO items(id,pid,slot,serial,condition,in_at,in_by,prep_status,specs_json)
-                    VALUES(?,?,?,?,?,?,?,?,?)""",(item_id,pid,slot,serial or None,condition,when,g.user['username'],preparation,serialize_specs(specs)))
+        db.execute("""INSERT INTO items(id,pid,slot,serial,condition,in_at,in_by,prep_status,specs_json,variant_id)
+                    VALUES(?,?,?,?,?,?,?,?,?,?)""",(item_id,pid,slot,serial or None,condition,when,g.user['username'],preparation,serialize_specs(specs),variant_id))
         db.execute("""INSERT INTO events(type,item_id,pid,slot,at,actor)
                     VALUES('in',?,?,?,?,?)""",(item_id,pid,slot,when,g.user['username']))
         db.execute("INSERT INTO meta(key,value) VALUES('next_item',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(str(num+1),))
         db.commit()
         return jsonify(item=dict(id=item_id,pid=pid,slot=slot,serial=serial,
-                   condition=condition,inAt=when,prepStatus=preparation,specs=specs),
+                   condition=condition,inAt=when,prepStatus=preparation,specs=specs,variantId=variant_id),
                    createdProduct=created),201
     except sqlite3.IntegrityError:
         db.rollback()
@@ -663,18 +724,18 @@ def entry_item():
             db.rollback()
             return bad('Référence introuvable ou désactivée.')
         category=category_key(p['cat'])
-        specs=parse_item_specifications(data.get('specs', {}),category)
+        variant_id,specs=resolve_unit_variant(db,pid,category,data)
         preparation=read_prep_status(data.get('prep_status'),category)
         n = int(db.execute("SELECT value FROM meta WHERE key='next_item'").fetchone()[0])
         item_id = f'STK-{n:06d}'
         when = int(time.time()*1000)
-        db.execute('INSERT INTO items(id,pid,slot,serial,condition,in_at,in_by,prep_status,specs_json) VALUES(?,?,?,?,?,?,?,?,?)',
-                   (item_id,pid,slot,serial or None,condition,when,g.user['username'],preparation,serialize_specs(specs)))
+        db.execute('INSERT INTO items(id,pid,slot,serial,condition,in_at,in_by,prep_status,specs_json,variant_id) VALUES(?,?,?,?,?,?,?,?,?,?)',
+                   (item_id,pid,slot,serial or None,condition,when,g.user['username'],preparation,serialize_specs(specs),variant_id))
         db.execute('INSERT INTO events(type,item_id,pid,slot,at,actor) VALUES(?,?,?,?,?,?)',
                    ('in',item_id,pid,slot,when,g.user['username']))
         db.execute("UPDATE meta SET value=? WHERE key='next_item'", (str(n+1),))
         db.commit()
-        return jsonify(item=dict(id=item_id,pid=pid,slot=slot,serial=serial,condition=condition,inAt=when,prepStatus=preparation,specs=specs)), 201
+        return jsonify(item=dict(id=item_id,pid=pid,slot=slot,serial=serial,condition=condition,inAt=when,prepStatus=preparation,specs=specs,variantId=variant_id)), 201
     except sqlite3.IntegrityError:
         g.db.rollback()
         return bad('Ce numéro de série est déjà enregistré dans le stock.', 409)
@@ -716,11 +777,12 @@ def update_item_preparation(item_id):
         serial=item['serial'] or ''
         if 'serial' in data:
             serial=clean_text(data['serial'],'Numéro de série',100)
-        db.execute('''UPDATE items SET serial=?,prep_status=?,specs_json=?
+        variant_id=ensure_variant(db,item['pid'],new_specs)
+        db.execute('''UPDATE items SET serial=?,prep_status=?,specs_json=?,variant_id=?
                       WHERE id=? AND out_at IS NULL''',
-                   (serial or None,preparation,serialize_specs(new_specs),item_id))
+                   (serial or None,preparation,serialize_specs(new_specs),variant_id,item_id))
         db.commit()
-        return jsonify(ok=True,item=dict(id=item_id,serial=serial,prepStatus=preparation,specs=new_specs))
+        return jsonify(ok=True,item=dict(id=item_id,serial=serial,prepStatus=preparation,specs=new_specs,variantId=variant_id))
     except sqlite3.IntegrityError:
         g.db.rollback()
         return bad('Ce numéro de série est déjà attribué à un autre article.',409)
