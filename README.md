@@ -88,6 +88,16 @@ Variables essentielles :
 
 Sur iPhone et PC, la navigation réduit le rebond aux limites de défilement et l'inventaire utilise une seule liste verticale, sans tableau horizontal à manipuler sur téléphone.
 
+## Sauvegardes automatiques et restauration
+
+- Sauvegarde **SQLite binaire cohérente** créée automatiquement au démarrage de Gunicorn puis contrôlée toutes les 15 minutes. Une seule copie par jour UTC, sans interrompre les réceptions ni les sorties de stock.
+- Conservation des **30 dernières sauvegardes quotidiennes**. Les sauvegardes sont stockées dans `/data/backups/managed/` avec les droits privés du conteneur, et non dans les fichiers publics du site.
+- Dans **Paramètres sur PC → Accès employés → Sauvegardes automatiques**, un administrateur peut consulter, créer, télécharger et restaurer une sauvegarde.
+- La restauration demande à la fois **RESTAURER LE STOCK** et le mot de passe de l'administrateur. Elle vérifie d'abord la base à restaurer, puis crée automatiquement une copie de sécurité de l'état actuel, avant d'effectuer le remplacement. Les autres appareils rechargent leurs données via la révision de synchronisation.
+- Les comptes et les mouvements de stock font partie de la sauvegarde, ainsi que l'historique et les niveaux des étagères. Les fichiers de configuration hors SQLite, en particulier la clé VAPID `stockpilot-vapid-private.pem`, restent dans `/data` mais **ne sont pas inclus dans la sauvegarde SQLite**.
+- Important : une sauvegarde située sur **le même volume que la base n'est pas une sauvegarde hors site**. Pour résister à une panne du NAS/disque, copier régulièrement le dossier `/data/backups/managed` ainsi que la clé VAPID sur un autre support (SFTP, autre NAS ou stockage externe). Ne jamais exposer ces fichiers en accès public.
+- Pour les sauvegardes automatiques, il faut démarrer Gunicorn avec le fichier `gunicorn_conf.py` inclus dans l'image Docker officielle. Une exécution manuelle avec `python app.py` n'active pas le planificateur.
+
 ## Sauvegardes et sécurité
 
 Base : `/data/stockpilot.sqlite3` dans le volume Docker `stockpilot_data`. Ne supprimez jamais ce volume lors d'un redéploiement. La page Configuration permet une sauvegarde administrative ; les comptes sont protégés par mot de passe. Il est conseillé d'accéder au site derrière un reverse proxy HTTPS plutôt que d'exposer directement le port du conteneur.
