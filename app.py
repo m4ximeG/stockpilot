@@ -759,6 +759,16 @@ def update_item_preparation(item_id):
             return bad('Article introuvable dans le stock.',404)
         category=category_key(item['cat'])
         old_specs=json.loads(item['specs_json'] or '{}')
+        if 'expected' in data:
+            baseline=data['expected']
+            if not isinstance(baseline,dict) or set(baseline)!={'serial','prep_status','specs'}:
+                raise ValueError('Version de la fiche invalide.')
+            if (baseline['serial'] != (item['serial'] or '') or
+                baseline['prep_status'] != item['prep_status'] or
+                not isinstance(baseline['specs'],dict) or
+                serialize_specs(baseline['specs']) != serialize_specs(old_specs)):
+                db.rollback()
+                return bad('Cette fiche a été modifiée depuis un autre appareil. Vérifiez les nouvelles informations avant d’enregistrer.',409)
         if 'specs' in data:
             # Mise à jour partielle : les champs déjà renseignés restent sauvegardés.
             patch=data['specs']
