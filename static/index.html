@@ -88,8 +88,7 @@ async function refreshState(silent=false){
   const data=await api('/api/state');
   if(!receiveStockSnapshot(data))return true;
   if(!silent)renderApp();
-  else if(page==='dashboard')syncDashboardData();
-  else if(!modal && ['products','history','settings'].includes(page))patchLiveStockView();
+  else patchLiveStockView();
   return true;
  }catch(e){
   if(!silent){
@@ -314,36 +313,36 @@ function renderApp(){
 // Synchronisation silencieuse : ne remplace jamais #content ni #app.
  // Les formulaires, la recherche, les fenêtres et l'animation de navigation restent montés.
 function patchLiveStockView(){
- if(modal)return; // On ne touche pas à une fenêtre en cours d'utilisation.
- if(page==='dashboard'){syncDashboardData();return}
- if(!['products','history','exit','settings'].includes(page))return;
- const current=document.getElementById('content');
- if(!current)return;
- const temp=document.createElement('div');
- temp.innerHTML=renderPage();
- const patch=(selector)=>{
-  const oldNode=current.querySelector(selector),newNode=temp.querySelector(selector);
-  if(oldNode&&newNode && oldNode.innerHTML!==newNode.innerHTML)oldNode.innerHTML=newNode.innerHTML;
+ // Mise à jour différenciée : aucun renderApp, animation ou formulaire recréé.
+ const patch=(oldRoot,newRoot,selector)=>{
+  const old=oldRoot?.querySelector(selector),fresh=newRoot?.querySelector(selector);
+  if(old&&fresh&&old.innerHTML!==fresh.innerHTML&&!old.contains(document.activeElement))
+   old.innerHTML=fresh.innerHTML;
  };
- if(page==='products'){
-  // Les champs de recherche, choix de catégorie et onglets restent intacts.
-  patch('.si-summary');
-  patch('.si-list');
-  patch('.si-footer');
- }else if(page==='history'){
-  // Aucun retour en haut, aucune réanimation : seuls les mouvements changent.
-  patch('.basic-table-card .slim-table tbody');
-  patch('.sp-mobile-history .sp-mh-summary');
-  patch('.sp-mobile-history .sp-mh-list');
- }else if(page==='exit'){
-  // Le champ en cours de scan et la sélection du produit ne sont pas modifiés.
-  patch('.basic-manual-list');
- }else if(page==='settings'){
-  // La création de comptes et les champs de mots de passe restent inchangés.
-  patch('.basic-catalog');
+ const count=document.querySelector('.sidebar [data-nav="products"] .count');
+ if(count)count.textContent=String(db.items.length);
+ if(page==='entry'){SPV3.refreshSuggestions(db);return}
+ if(page==='dashboard'){syncDashboardData();return}
+ const current=document.getElementById('content');
+ if(current&&['products','history','exit','settings'].includes(page)){
+  const fresh=document.createElement('div');fresh.innerHTML=renderPage();
+  const selectors=page==='products'?['.si-summary','.si-list','.si-footer']:
+   page==='history'?['.basic-table-card .slim-table tbody',
+    '.sp-mobile-history .sp-mh-summary','.sp-mobile-history .sp-mh-list']:
+   page==='exit'?['.basic-manual-list','.sp-scan-result']:
+    ['.basic-catalog'];
+  selectors.forEach(selector=>patch(current,fresh,selector));
  }
- const navCount=document.querySelector('.sidebar [data-nav="products"] .count');
- if(navCount)navCount.textContent=String(db.items.length);
+ if(modal?.type==='stockproduct'||modal?.type==='users'){
+  const overlay=document.querySelector('.overlay');
+  if(overlay){
+   const fresh=document.createElement('div');fresh.innerHTML=renderModal();
+   const selectors=modal.type==='stockproduct'?
+    ['.si-modal-summary','.si-modal-subtitle','.si-modal-units']:['.modal-body'];
+   selectors.forEach(selector=>patch(overlay,fresh,selector));
+  }
+ }
+ // Les boîtes de confirmation et les champs de seuil restent inchangés.
 }
 async function syncStockAcrossDevices(){
  if(liveSyncBusy||!liveSyncActive||document.hidden||stockRevision<0)return;
@@ -352,7 +351,12 @@ async function syncStockAcrossDevices(){
   const next=await api('/api/sync/revision');
   if(typeof next.revision==='number'&&next.revision>stockRevision){
    const snapshot=await api('/api/state');
-   if(receiveStockSnapshot(snapshot))patchLiveStockView();
+   if(receiveStockSnapshot(snapshot)){
+    if(modal?.type==='users'&&me.role==='admin'){
+     try{users=(await api('/api/users')).users||users}catch(e){}
+    }
+    patchLiveStockView();
+   }
   }
  }catch(e){
   // Perte de réseau provisoire : garder le formulaire et réessayer au cycle suivant.
