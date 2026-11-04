@@ -52,6 +52,14 @@ function variantsPicker(db,p){
  '<button type="button" class="rx-variant-choice rx-variant-new'+(!state.variantId?' active':'')+
  '" data-rx="customvariant"><span>＋ Nouvelle configuration</span></button></div></section>';
 }
+function refreshVariants(db){
+ const area=document.getElementById('rx-variant-picker');
+ const p=db.catalog.find(p=>p.id===state.pid);
+ if(area){
+  const html=variantsPicker(db,p);
+  if(area.innerHTML!==html)area.innerHTML=html;
+ }
+}
 function refreshSuggestions(db){
  if(state.received||!state.suggestions)return;
  const hintsEl=document.getElementById('rx-suggestions');
@@ -95,7 +103,7 @@ function entry(ctx){
  return '<div class="basic-entry"><div class="basic-entry-heading"><div><span>NOUVELLE RÉCEPTION</span><h1>Entrée en stock</h1><p>Enregistrez un article, puis imprimez son étiquette pour le retrouver au scanner.</p></div><span class="basic-entry-tag">Code-barres individuel</span></div><div class="basic-entry-grid"><section class="card basic-entry-form"><h2>Informations du produit</h2><p class="basic-intro">Choisissez une catégorie : les champs s’adaptent automatiquement au type d’article.</p>'+
  '<div class="basic-field"><label for="rx-category">Type de matériel *</label><select id="rx-category" class="rx-category-select">'+typeOptions+'</select></div>'+
  '<div class="basic-field"><label for="rx-name">Nom du produit *</label><input id="rx-name" maxlength="120" autocomplete="off" value="'+esc(state.name)+'" placeholder="Ex. TERRA Mobile 1517, souris Logitech…" /><div id="rx-suggestions" class="basic-suggestions">'+hints(db)+'</div>'+(p?'<span class="basic-reused">✓ Référence existante : '+esc(p.ref)+'</span>':'')+'</div>'+
- variantsPicker(db,p)+
+ '<div id="rx-variant-picker">'+variantsPicker(db,p)+'</div>'+
  '<div class="basic-dual-fields"><div class="basic-field"><label for="rx-serial">Numéro de série <small>(facultatif)</small></label><input id="rx-serial" maxlength="100" autocomplete="off" value="'+esc(state.serial)+'" placeholder="À laisser vide si inutile"></div>'+
  '<div class="basic-field"><label>État de l’article</label><div class="basic-conditions">'+['Neuf','Retour SAV','Réparation'].map(c=>'<button type="button" data-rx="condition" data-value="'+esc(c)+'" class="'+(state.condition===c?'active':'')+'">'+esc(c)+'</button>').join('')+'</div></div></div>'+
  specsFields(category,state.specs)+(isPc(category)?prepButtons(state.prep_status):'')+
@@ -170,5 +178,5 @@ function onChange(ev,ctx){
  ctx.renderContent();
  return true;
 }
-window.SPV3={entry,onInput,onClick,onChange,reset,prefill,refreshSuggestions,selectSlot(){}};
+window.SPV3={entry,onInput,onClick,onChange,reset,prefill,refreshSuggestions,refreshVariants,selectSlot(){}};
 })();
