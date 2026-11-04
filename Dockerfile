@@ -4,7 +4,7 @@ WORKDIR /app
 RUN useradd -r -u 10001 -m stockpilot && mkdir -p /data && chown -R stockpilot:stockpilot /data
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY app.py push_service.py ./
+COPY app.py push_service.py backup_service.py gunicorn_conf.py ./
 COPY static/ ./static/
 # Vérifie pendant le build le même import que Gunicorn au démarrage.
 # Utilise une base éphémère séparée : jamais le volume de production.
@@ -19,4 +19,4 @@ USER stockpilot
 EXPOSE 8080
 VOLUME ["/data"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 CMD python -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8080/healthz',timeout=3)" || exit 1
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--threads", "8", "--timeout", "60", "app:app"]
+CMD ["gunicorn", "--config", "gunicorn_conf.py", "--bind", "0.0.0.0:8080", "--workers", "1", "--threads", "8", "--timeout", "60", "app:app"]
