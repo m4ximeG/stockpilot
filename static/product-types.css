@@ -70,3 +70,22 @@
  .si-segments{grid-template-columns:repeat(2,minmax(0,1fr))!important}
  .si-segment{min-height:42px}
 }
+
+/* Configurations mémorisées : cartes sobres et clairement sélectionnables. */
+.rx-variants{padding:15px 0 17px;margin:5px 0 10px;border-top:1px solid rgba(236,246,255,.17);border-bottom:1px solid rgba(236,246,255,.17)}
+.rx-variant-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.rx-variant-choice{display:flex;flex-direction:column;justify-content:center;gap:5px;align-items:flex-start;
+ width:100%;min-height:55px;padding:12px 13px;border:1px solid rgba(232,244,255,.23);
+ border-radius:11px;background:rgba(8,23,44,.22);color:#eef6ff;cursor:pointer;text-align:left;
+ font:620 12px/1.35 Inter,system-ui,sans-serif}
+.rx-variant-choice:hover{border-color:rgba(239,249,255,.55);background:rgba(242,250,255,.13)}
+.rx-variant-choice.active{background:rgba(237,247,255,.19);border-color:rgba(242,249,255,.67)}
+.rx-variant-choice small{font-size:10px;color:#bfd3e3;font-weight:550}
+.rx-variant-new{border-style:dashed}
+.si-variant-caption{display:block;color:#e8f3fc;font-size:12px;line-height:1.4;font-weight:620;overflow-wrap:anywhere}
+.si-modal-variant-label{margin-top:10px!important;font-weight:690;color:#edf5fc!important}
+@media(max-width:860px){
+ .rx-variant-choices{grid-template-columns:1fr}
+ .rx-variant-choice{min-height:52px}
+ .si-variant-caption{font-size:11px}
+}
