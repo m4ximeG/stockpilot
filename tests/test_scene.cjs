@@ -207,7 +207,7 @@ test('Les autres pages réutilisent exactement les animations d\'accueil en casc
 
 test('L’actualisation périodique de l’accueil conserve les éléments animés',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
- assert.ok(html.includes("else if(page==='dashboard')syncDashboardData()"));
+ assert.ok(html.includes("if(page==='dashboard'){syncDashboardData();return}"));
  assert.ok(html.includes('function syncDashboardData()'));
  assert.ok(html.includes("syncText('.aur-metric-value strong"));
  assert.ok(html.includes("syncInlineText('.aur-chart-label"));
@@ -215,7 +215,7 @@ test('L’actualisation périodique de l’accueil conserve les éléments anim�
  assert.ok(!html.includes("if(!silent||['dashboard'"));
  assert.ok(html.includes("setInterval(syncStockAcrossDevices,1200)"));
  assert.ok(html.includes("function patchLiveStockView()"));
- assert.ok(html.includes("patch('.si-summary')"));
+ assert.ok(html.includes("'.si-summary','.si-list','.si-footer','.si-segments'"));
 });
 test('Les liens du rail possèdent des icônes explicites et une déconnexion identifiable',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
@@ -628,7 +628,7 @@ test('Historique mobile : animation uniquement à la navigation',()=>{
  assert.match(css,/@keyframes spHistoryJournalEnter/);
  assert.match(css,/#content\.sp-route-in \.sp-history-page \.sp-mobile-pagehead/);
  assert.match(css,/#content\.sp-route-in \.sp-history-page \.sp-mobile-history/);
- assert.match(js,/patch\('\.sp-mobile-history \.sp-mh-list'\)/);
+ assert.match(js,/\.sp-mobile-history \.sp-mh-list/);
  assert.doesNotMatch(js,/setInterval\(\(\)=>\{if\(!document.hidden&&!modal&&page!=='entry'/);
 });
 test('Notifications iPhone : préférence persistante et réparation du serveur sans nouveau consentement',()=>{
