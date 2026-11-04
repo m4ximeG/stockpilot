@@ -1,0 +1,26 @@
+/* Sauvegardes : fenêtre d'administration PC, sans modifier la direction artistique du site. */
+.sp-backups-modal{width:min(94vw,700px)!important;max-height:min(90dvh,820px)!important;display:flex;flex-direction:column;background:linear-gradient(145deg,rgba(52,66,89,.99),rgba(35,49,70,.99))!important;color:#f4f8fd!important}
+.sp-backups-modal .modal-head{flex:none;border-bottom:1px solid rgba(241,248,255,.16)!important}
+.sp-backups-modal .modal-head h2{color:#fff!important}
+.sp-backups-modal .modal-body{overflow-y:auto;min-height:0;overscroll-behavior:contain}
+.sp-backups-modal .modal-foot{flex:none;border-top:1px solid rgba(241,248,255,.15)!important}
+.sp-backup-intro,.sp-backup-note{font-size:12px!important;line-height:1.6!important;color:#d1e0ee!important}
+.sp-backup-list{margin:19px 0 12px;border-top:1px solid rgba(241,249,255,.15)}
+.sp-backup-item{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid rgba(240,249,255,.14)}
+.sp-backup-item>div:first-child{display:flex;flex-direction:column;min-width:0;gap:5px}
+.sp-backup-item strong{color:#fff!important;font-size:13px}
+.sp-backup-item small{font-size:11px;color:#c5d6e6}
+.sp-backup-actions{display:flex;align-items:center;gap:7px}
+.sp-backups-modal .sp-backup-actions .btn{min-height:38px;padding:8px 11px}
+.sp-backups-modal .btn{background:rgba(235,245,255,.14);color:#eef6fc;border:1px solid rgba(235,245,255,.27)}
+.sp-backups-modal .btn:hover{background:rgba(246,250,255,.22)}
+.sp-backups-modal .btn.primary{background:#e5f2fc;color:#1b3545;border:1px solid #e5f2fc}
+.sp-backups-modal .btn.negative{background:#bc5665;color:#fff;border-color:#bc5665}
+.sp-backups-modal .field input{background:rgba(12,29,47,.36)!important;color:#fff!important;border:1px solid rgba(236,245,255,.33)!important}
+.sp-backups-modal .field label{color:#f3f7fc}
+.sp-backup-warning{color:#fce0dd!important;border-left:3px solid #eca3a9;padding:11px 13px;background:rgba(169,86,103,.18);border-radius:6px;line-height:1.6}
+.sp-backup-empty{font-size:12px;color:#c4d4e3;padding:14px 0}
+@media(max-width:860px){.sp-backups-modal{width:calc(100vw - 24px)!important;max-height:calc(100dvh - 36px)!important}
+.sp-backup-item{align-items:flex-start;flex-direction:column}
+.sp-backup-actions{width:100%;flex-wrap:wrap}
+.sp-backup-actions .btn{flex:1}}
