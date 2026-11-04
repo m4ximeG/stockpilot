@@ -311,6 +311,30 @@ class StockPilotTests(unittest.TestCase):
         self.assertEqual(item.status_code,201,item.text)
         self.assertEqual(len(self.client.get('/api/state').json['items']),1)
 
+    def test_old_stock_migrates_to_profiles_without_changing_stk_ids(self):
+        old=self.client.post('/api/receive',json={
+            'name':'TERRA Legacy','category':'Ordinateur portable',
+            'specs':{'ram_gb':16,'cpu':'Intel i5'},'serial':'LEGACY-001',
+            'condition':'Neuf'
+        },headers=self.headers)
+        self.assertEqual(old.status_code,201,old.text)
+        item=old.json['item']
+        with stock.connect() as con:
+            con.execute("UPDATE items SET variant_id=NULL WHERE id=?", (item['id'],))
+            con.execute("DELETE FROM product_variants WHERE id=?", (item['variantId'],))
+        stock.initialize()
+        snapshot=self.client.get('/api/state')
+        self.assertEqual(snapshot.status_code,200,snapshot.text)
+        unit=next(u for u in snapshot.json['items'] if u['id']==item['id'])
+        self.assertEqual(unit['id'],item['id'])
+        self.assertEqual(unit['serial'],'LEGACY-001')
+        self.assertEqual(unit['specs']['ram_gb'],16)
+        profile=next(v for v in snapshot.json['variants'] if v['id']==unit['variantId'])
+        self.assertEqual(profile['specs']['cpu'],'Intel i5')
+        stock.initialize()
+        profiles=[v for v in self.client.get('/api/state').json['variants'] if v['pid']==item['pid']]
+        self.assertEqual(len(profiles),1)
+
     def test_saved_variants_are_reused_and_separated_by_configuration(self):
         base={'name':'TERRA 1552','category':'Ordinateur portable',
               'condition':'Neuf','prep_status':'pending'}
