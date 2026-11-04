@@ -1,7 +1,6 @@
 """StockPilot — serveur multi-utilisateurs à stockage SQLite persistant."""
 import io
 import os
-import json
 import re
 import secrets
 import sqlite3
@@ -102,15 +101,6 @@ def initialize():
         CREATE TABLE IF NOT EXISTS sync_revision (
           id INTEGER PRIMARY KEY CHECK(id = 1), revision INTEGER NOT NULL DEFAULT 0
         );
-        CREATE TABLE IF NOT EXISTS product_variants (
-          id TEXT PRIMARY KEY,
-          pid TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-          specs_json TEXT NOT NULL,
-          signature TEXT NOT NULL,
-          created_at INTEGER NOT NULL,
-          UNIQUE(pid,signature)
-        );
-        CREATE INDEX IF NOT EXISTS variants_by_product ON product_variants(pid);
         INSERT OR IGNORE INTO sync_revision(id,revision) VALUES(1,0);
 
         CREATE TABLE IF NOT EXISTS push_subscriptions (
@@ -124,13 +114,9 @@ def initialize():
           note TEXT NOT NULL DEFAULT ''
         );
         ''')
-        # Plusieurs workers Gunicorn peuvent démarrer simultanément.
-        # Une transaction d'écriture sérialise la migration et le rattachement
-        # des anciens articles, sans perte ni double affectation.
-        con.execute('BEGIN IMMEDIATE')
         # Détection automatique de TOUS les changements de stock (y compris les routes
         # historiques) sans mémoire locale : fonctionnement multi-workers / multi-appareils.
-        for table in ('products', 'items', 'events', 'shelf_levels', 'users', 'product_variants'):
+        for table in ('products', 'items', 'events', 'shelf_levels', 'users'):
             for operation in ('INSERT', 'UPDATE', 'DELETE'):
                 con.execute(f"""CREATE TRIGGER IF NOT EXISTS sync_{table}_{operation.lower()}
                   AFTER {operation} ON {table} BEGIN
@@ -143,31 +129,6 @@ def initialize():
         # Seuil de réapprovisionnement par référence : migration additive et sans perte.
         if 'min_stock' not in existing_columns:
             con.execute("ALTER TABLE products ADD COLUMN min_stock INTEGER NOT NULL DEFAULT 0 CHECK(min_stock >= 0)")
-        # Informations propres à chaque appareil (pas à la référence partagée).
-        item_columns = {row['name'] for row in con.execute('PRAGMA table_info(items)')}
-        if 'prep_status' not in item_columns:
-            con.execute("ALTER TABLE items ADD COLUMN prep_status TEXT NOT NULL DEFAULT 'not_required'")
-        if 'specs_json' not in item_columns:
-            con.execute("ALTER TABLE items ADD COLUMN specs_json TEXT NOT NULL DEFAULT '{}'")
-        if 'variant_id' not in item_columns:
-            con.execute("ALTER TABLE items ADD COLUMN variant_id TEXT")
-        # Migration non destructive : les PC déjà renseignés retrouvent leur
-        # configuration même après une vente, et leurs STK restent inchangés.
-        missing_variants = con.execute('''SELECT i.id,i.pid,i.specs_json,p.cat
-          FROM items i JOIN products p ON p.id=i.pid
-          WHERE i.variant_id IS NULL''').fetchall()
-        for item in missing_variants:
-            try:
-                specs = parse_item_specifications(json.loads(item['specs_json'] or '{}'),
-                                                  item['cat'])
-            except (ValueError, TypeError, json.JSONDecodeError):
-                # Ancien enregistrement libre : garder son contenu original et
-                # ranger dans la configuration non renseignée, sans perte de donnée.
-                specs = {}
-            variant = ensure_variant(con, item['pid'], specs)
-            con.execute('UPDATE items SET variant_id=? WHERE id=?',
-                        (variant, item['id']))
-
         con.executemany("INSERT OR IGNORE INTO shelf_levels(slot,size,note) VALUES(?,'unknown','')", [(slot,) for slot in SLOTS])
         con.execute("INSERT OR IGNORE INTO meta(key,value) VALUES('location_mode','optional')")
         if not con.execute('SELECT 1 FROM users LIMIT 1').fetchone():
@@ -186,7 +147,6 @@ def initialize():
                 seed_stock(con)
         if not DEMO_SEED:
             purge_original_demo_stock(con)
-        con.commit()
 
 
 def purge_original_demo_stock(con):
@@ -324,109 +284,6 @@ def read_stock_threshold(value):
 
 def row_dict(row):
     return dict(row)
-
-# Types de matériel et champs facultatifs, propres à une unité physique.
-ITEM_CATEGORIES = {
-    'Matériel': (), 'Ordinateur portable': ('cpu', 'cores', 'ram_gb', 'storage', 'os', 'gpu'),
-    'Ordinateur fixe': ('cpu', 'cores', 'ram_gb', 'storage', 'os', 'gpu'),
-    'Écran': ('size_inches', 'resolution', 'connection'),
-    'Imprimante': ('technology', 'connection'),
-    'Réseau': ('mac', 'ip', 'connection'),
-    'Périphérique': ('connection',), 'Téléphone / tablette': ('ram_gb', 'storage', 'os'),
-    'Composant': ('model_detail',), 'Autre': ()
-}
-PC_CATEGORIES = {'Ordinateur portable', 'Ordinateur fixe'}
-CATEGORY_ALIASES = {
-    'pc portable': 'Ordinateur portable', 'pc fixe': 'Ordinateur fixe',
-    'ordinateur': 'Ordinateur fixe', 'ordinateur portable': 'Ordinateur portable',
-    'ordinateur fixe': 'Ordinateur fixe', 'laptop': 'Ordinateur portable',
-    'moniteur': 'Écran', 'telephonie': 'Téléphone / tablette',
-    'téléphone': 'Téléphone / tablette', 'tablette': 'Téléphone / tablette',
-}
-
-def category_key(category):
-    text = (category or 'Matériel').strip()
-    if text in ITEM_CATEGORIES:
-        return text
-    return CATEGORY_ALIASES.get(text.casefold(), 'Matériel')
-
-def parse_item_specifications(raw, category):
-    if raw is None:
-        raw = {}
-    if not isinstance(raw, dict):
-        raise ValueError('Les caractéristiques doivent être un objet.')
-    allowed = set(ITEM_CATEGORIES[category_key(category)])
-    if set(raw) - allowed:
-        raise ValueError('Caractéristique non autorisée pour cette catégorie.')
-    specs = {}
-    for key, value in raw.items():
-        if value is None or value == '':
-            continue
-        if key in ('cores', 'ram_gb'):
-            if isinstance(value, bool) or not str(value).strip().isdigit():
-                raise ValueError('Mémoire et cœurs : nombres entiers positifs requis.')
-            number = int(str(value).strip())
-            if not (1 <= number <= (2048 if key == 'ram_gb' else 512)):
-                raise ValueError('Mémoire ou nombre de cœurs hors limite.')
-            specs[key] = number
-        else:
-            if not isinstance(value, str) or len(value.strip()) > 120:
-                raise ValueError('Caractéristique invalide (120 caractères maximum).')
-            if value.strip():
-                specs[key] = value.strip()
-    return specs
-
-def read_prep_status(value, category, fallback=None):
-    category = category_key(category)
-    if category not in PC_CATEGORIES:
-        if value not in (None, '', 'not_required'):
-            raise ValueError('La préparation concerne uniquement les ordinateurs.')
-        return 'not_required'
-    if value in (None, ''):
-        return fallback if fallback is not None else 'pending'
-    if value not in ('pending', 'in_progress', 'ready', 'not_required'):
-        raise ValueError('Statut de préparation invalide.')
-    return value
-
-def serialize_specs(specs):
-    return json.dumps(specs, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
-
-def ensure_variant(db, pid, specs):
-    """Réutilise une fiche persistante pour une configuration identique.
-    SQLite garantit son unicité, y compris entre plusieurs postes en parallèle.
-    """
-    signature = serialize_specs(specs)
-    db.execute("""INSERT OR IGNORE INTO product_variants
-       (id,pid,specs_json,signature,created_at) VALUES(?,?,?,?,?)""",
-       ('v_' + secrets.token_hex(12), pid, signature, signature, int(time.time()*1000)))
-    row = db.execute('SELECT id FROM product_variants WHERE pid=? AND signature=?',
-                     (pid, signature)).fetchone()
-    return row['id']
-
-
-def resolve_unit_variant(db, pid, category, data):
-    """Retourne (variant_id, specs) sans supposer que deux PC du même modèle sont identiques."""
-    selected = data.get('variant_id')
-    if selected not in (None, ''):
-        if not isinstance(selected, str) or len(selected) > 64:
-            raise ValueError('Configuration sélectionnée invalide.')
-        row = db.execute('SELECT id,specs_json FROM product_variants WHERE id=? AND pid=?',
-                         (selected, pid)).fetchone()
-        if not row:
-            raise ValueError('Cette configuration n’existe pas pour le produit.')
-        if 'specs' not in data:
-            specs = json.loads(row['specs_json'])
-            return row['id'], specs
-    specs = parse_item_specifications(data.get('specs', {}), category)
-    return ensure_variant(db, pid, specs), specs
-
-
-def item_dict(row):
-    return dict(id=row['id'], pid=row['pid'], slot=row['slot'],
-                serial=row['serial'] or '', condition=row['condition'], inAt=row['in_at'],
-                prepStatus=row['prep_status'], specs=json.loads(row['specs_json'] or '{}'),
-                variantId=row['variant_id'])
-
 
 
 LOGIN_HTML = '''<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101a2d"><title>StockPilot — Connexion</title><link rel="manifest" href="/static/app.webmanifest"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="StockPilot">
@@ -568,16 +425,13 @@ def state():
     db.execute('BEGIN')
     try:
         products = [row_dict(x) for x in db.execute('SELECT id,brand,model,cat,zone,kind,ref,active,preferred_slot,min_stock FROM products ORDER BY brand,model')]
-        items = [item_dict(x) for x in db.execute('SELECT * FROM items WHERE out_at IS NULL ORDER BY in_at')]
-        variants = [dict(id=x['id'],pid=x['pid'],specs=json.loads(x['specs_json']),
-                         createdAt=x['created_at']) for x in db.execute(
-                             'SELECT * FROM product_variants ORDER BY created_at,id')]
+        items = [dict(id=x['id'],pid=x['pid'],slot=x['slot'],serial=x['serial'] or '',condition=x['condition'],inAt=x['in_at']) for x in db.execute('SELECT * FROM items WHERE out_at IS NULL ORDER BY in_at')]
         events = [dict(id='e'+str(x['id']),type=x['type'],itemId=x['item_id'],pid=x['pid'],slot=x['slot'],at=x['at'],actor=x['actor'],detail=x['detail']) for x in db.execute('SELECT * FROM events ORDER BY id DESC LIMIT 1500')]
         shelves = [dict(slot=r['slot'],size=r['size'],note=r['note']) for r in db.execute('SELECT slot,size,note FROM shelf_levels ORDER BY slot')]
         counter = int(db.execute("SELECT value FROM meta WHERE key='next_item'").fetchone()[0])
         location_mode = db.execute("SELECT value FROM meta WHERE key='location_mode'").fetchone()
         revision = db.execute('SELECT revision FROM sync_revision WHERE id=1').fetchone()[0]
-        response = jsonify(items=items,variants=variants,events=events,counter=counter,catalog=products,shelves=shelves,me=dict(id=g.user['id'],username=g.user['username'],role=g.user['role']),allowReset=ALLOW_RESET and DEMO_SEED,locationMode='optional',revision=revision)
+        response = jsonify(items=items,events=events,counter=counter,catalog=products,shelves=shelves,me=dict(id=g.user['id'],username=g.user['username'],role=g.user['role']),allowReset=ALLOW_RESET and DEMO_SEED,locationMode='optional',revision=revision)
         response.headers['Cache-Control'] = 'private, no-store'
         return response
 
@@ -650,9 +504,6 @@ def receive_free_text():
         data=json_body()
         name=clean_text(data.get('name',''), 'Nom du produit', 120, True)
         serial=clean_text(data.get('serial',''), 'Numéro de série', 100)
-        requested_category = clean_text(data.get('category', 'Matériel'), 'Catégorie', 60)
-        if requested_category not in ITEM_CATEGORIES:
-            return bad('Catégorie de produit inconnue.')
         # Mode inventaire simple : aucune localisation n'est demandée.
         slot = ''
         condition=clean_text(data.get('condition','Neuf'), 'État',30,True)
@@ -662,19 +513,16 @@ def receive_free_text():
         db.execute('BEGIN IMMEDIATE')
         created=False
         if product_id:
-            product=db.execute('SELECT id,cat FROM products WHERE id=? AND active=1',(product_id,)).fetchone()
+            product=db.execute('SELECT id FROM products WHERE id=? AND active=1',(product_id,)).fetchone()
             if not product:
                 db.rollback()
                 return bad('Référence sélectionnée indisponible.')
             pid=product['id']
-            requested_category=category_key(product['cat'])
         else:
             # Reconnait automatiquement une référence portant exactement ce nom.
-            product=db.execute("""SELECT id,cat FROM products WHERE active=1
+            product=db.execute("""SELECT id FROM products WHERE active=1
                 AND (lower(trim(brand || ' ' || model))=lower(?) OR lower(trim(model))=lower(?))
                 ORDER BY id LIMIT 1""",(name,name)).fetchone()
-            if product and category_key(product['cat']) != requested_category:
-                product = None
             if product:
                 pid=product['id']
             else:
@@ -682,11 +530,9 @@ def receive_free_text():
                 ref='REF-'+secrets.token_hex(5).upper()
                 # Aucun renseignement de marque obligatoire au comptoir.
                 db.execute("""INSERT INTO products(id,brand,model,cat,zone,kind,ref,preferred_slot)
-                    VALUES(?, '', ?, ?, ?, 'package', ?, ?)""",
-                    (pid,name,requested_category,slot[0] if slot else 'A',ref,slot))
+                    VALUES(?, '', ?, 'Matériel', ?, 'package', ?, ?)""",
+                    (pid,name,slot[0] if slot else 'A',ref,slot))
                 created=True
-        variant_id,specs=resolve_unit_variant(db,pid,requested_category,data)
-        preparation=read_prep_status(data.get('prep_status'), requested_category)
         next_row=db.execute("SELECT value FROM meta WHERE key='next_item'").fetchone()
         num=int(next_row['value']) if next_row else 1
         # Compteur monotone : ne réutilise jamais un identifiant historique.
@@ -694,15 +540,14 @@ def receive_free_text():
             num+=1
         item_id=f'STK-{num:06d}'
         when=int(time.time()*1000)
-        db.execute("""INSERT INTO items(id,pid,slot,serial,condition,in_at,in_by,prep_status,specs_json,variant_id)
-                    VALUES(?,?,?,?,?,?,?,?,?,?)""",(item_id,pid,slot,serial or None,condition,when,g.user['username'],preparation,serialize_specs(specs),variant_id))
+        db.execute("""INSERT INTO items(id,pid,slot,serial,condition,in_at,in_by)
+                    VALUES(?,?,?,?,?,?,?)""",(item_id,pid,slot,serial or None,condition,when,g.user['username']))
         db.execute("""INSERT INTO events(type,item_id,pid,slot,at,actor)
                     VALUES('in',?,?,?,?,?)""",(item_id,pid,slot,when,g.user['username']))
         db.execute("INSERT INTO meta(key,value) VALUES('next_item',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(str(num+1),))
         db.commit()
         return jsonify(item=dict(id=item_id,pid=pid,slot=slot,serial=serial,
-                   condition=condition,inAt=when,prepStatus=preparation,specs=specs,variantId=variant_id),
-                   createdProduct=created),201
+                   condition=condition,inAt=when),createdProduct=created),201
     except sqlite3.IntegrityError:
         db.rollback()
         return bad('Numéro de série déjà présent ou référence en conflit.',409)
@@ -724,86 +569,25 @@ def entry_item():
             return bad('État invalide.')
         db = g.db
         db.execute('BEGIN IMMEDIATE')
-        p = db.execute('SELECT id,cat FROM products WHERE id=? AND active=1', (pid,)).fetchone()
+        p = db.execute('SELECT id FROM products WHERE id=? AND active=1', (pid,)).fetchone()
         if not p:
             db.rollback()
             return bad('Référence introuvable ou désactivée.')
-        category=category_key(p['cat'])
-        variant_id,specs=resolve_unit_variant(db,pid,category,data)
-        preparation=read_prep_status(data.get('prep_status'),category)
         n = int(db.execute("SELECT value FROM meta WHERE key='next_item'").fetchone()[0])
         item_id = f'STK-{n:06d}'
         when = int(time.time()*1000)
-        db.execute('INSERT INTO items(id,pid,slot,serial,condition,in_at,in_by,prep_status,specs_json,variant_id) VALUES(?,?,?,?,?,?,?,?,?,?)',
-                   (item_id,pid,slot,serial or None,condition,when,g.user['username'],preparation,serialize_specs(specs),variant_id))
+        db.execute('INSERT INTO items(id,pid,slot,serial,condition,in_at,in_by) VALUES(?,?,?,?,?,?,?)',
+                   (item_id,pid,slot,serial or None,condition,when,g.user['username']))
         db.execute('INSERT INTO events(type,item_id,pid,slot,at,actor) VALUES(?,?,?,?,?,?)',
                    ('in',item_id,pid,slot,when,g.user['username']))
         db.execute("UPDATE meta SET value=? WHERE key='next_item'", (str(n+1),))
         db.commit()
-        return jsonify(item=dict(id=item_id,pid=pid,slot=slot,serial=serial,condition=condition,inAt=when,prepStatus=preparation,specs=specs,variantId=variant_id)), 201
+        return jsonify(item=dict(id=item_id,pid=pid,slot=slot,serial=serial,condition=condition,inAt=when)), 201
     except sqlite3.IntegrityError:
         g.db.rollback()
         return bad('Ce numéro de série est déjà enregistré dans le stock.', 409)
     except ValueError as e:
         return bad(str(e))
-
-
-@app.patch('/api/items/<item_id>/preparation')
-@protected()
-def update_item_preparation(item_id):
-    """Fiche technique et état de préparation d'une unité, complétés après réception."""
-    try:
-        data = json_body()
-        db = g.db
-        db.execute('BEGIN IMMEDIATE')
-        item = db.execute('''SELECT items.*,products.cat FROM items
-                             JOIN products ON products.id=items.pid
-                             WHERE items.id=? AND items.out_at IS NULL''',(item_id,)).fetchone()
-        if not item:
-            db.rollback()
-            return bad('Article introuvable dans le stock.',404)
-        category=category_key(item['cat'])
-        old_specs=json.loads(item['specs_json'] or '{}')
-        if 'expected' in data:
-            baseline=data['expected']
-            if not isinstance(baseline,dict) or set(baseline)!={'serial','prep_status','specs'}:
-                raise ValueError('Version de la fiche invalide.')
-            if (baseline['serial'] != (item['serial'] or '') or
-                baseline['prep_status'] != item['prep_status'] or
-                not isinstance(baseline['specs'],dict) or
-                serialize_specs(baseline['specs']) != serialize_specs(old_specs)):
-                db.rollback()
-                return bad('Cette fiche a été modifiée depuis un autre appareil. Vérifiez les nouvelles informations avant d’enregistrer.',409)
-        if 'specs' in data:
-            # Mise à jour partielle : les champs déjà renseignés restent sauvegardés.
-            patch=data['specs']
-            if not isinstance(patch,dict):
-                raise ValueError('Caractéristiques invalides.')
-            merged=dict(old_specs)
-            for key,value in patch.items():
-                if value in ('',None):
-                    merged.pop(key,None)
-                else:
-                    merged[key]=value
-            new_specs=parse_item_specifications(merged,category)
-        else:
-            new_specs=old_specs
-        preparation=read_prep_status(data.get('prep_status'),category,item['prep_status'])
-        serial=item['serial'] or ''
-        if 'serial' in data:
-            serial=clean_text(data['serial'],'Numéro de série',100)
-        variant_id=ensure_variant(db,item['pid'],new_specs)
-        db.execute('''UPDATE items SET serial=?,prep_status=?,specs_json=?,variant_id=?
-                      WHERE id=? AND out_at IS NULL''',
-                   (serial or None,preparation,serialize_specs(new_specs),variant_id,item_id))
-        db.commit()
-        return jsonify(ok=True,item=dict(id=item_id,serial=serial,prepStatus=preparation,specs=new_specs,variantId=variant_id))
-    except sqlite3.IntegrityError:
-        g.db.rollback()
-        return bad('Ce numéro de série est déjà attribué à un autre article.',409)
-    except ValueError as error:
-        g.db.rollback()
-        return bad(str(error))
 
 
 @app.post('/api/items/<item_id>/out')

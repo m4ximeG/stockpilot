@@ -66,89 +66,47 @@ function dashboard(c){
  '<button data-nav="exit">'+c.ico('barcode',18)+' Scanner une sortie <span>→</span></button>'+
  '<button data-nav="products">'+c.ico('package',18)+' Inventaire <span>→</span></button></div></section>';
 }
-const VARIANT_SPEC_LABELS={cpu:'Processeur',cores:'cœurs',ram_gb:'Go RAM',storage:'Stockage',
- gpu:'Carte graphique',os:'Système',size_inches:'pouces',resolution:'Résolution',
- connection:'Connexion',technology:'Technologie',mac:'MAC',ip:'IP',model_detail:'Modèle'};
-function variantLabel(specs){
- const list=Object.entries(specs||{});
- if(!list.length)return 'Caractéristiques non renseignées';
- return list.map(([key,val])=>key==='ram_gb'?val+' Go RAM':
-  key==='cores'?val+' cœurs':key==='cpu'?String(val):
-  key==='storage'?String(val):key==='gpu'?String(val):
-  (VARIANT_SPEC_LABELS[key]||key)+' : '+val).join(' · ');
-}
-function stockGroups(db){
- const byProduct=new Map();
- (db.items||[]).forEach(i=>{
-  if(!byProduct.has(i.pid))byProduct.set(i.pid,[]);
-  byProduct.get(i.pid).push(i);
- });
- const variants=db.variants||[];
- return db.catalog.flatMap(p=>{
-  const all=byProduct.get(p.id)||[],variantList=variants.filter(v=>v.pid===p.id);
-  const usable=i=>!/(sav|répar|repar)/i.test(i.condition||'Neuf');
-  const totalForProduct=all.filter(usable).length;
-  const min=Math.max(0,Number(p.min_stock)||0);
-  const alert=p.active!==0&&min>0&&totalForProduct<=min;
-  const pc=['Ordinateur portable','Ordinateur fixe','PC portable','PC fixe'].includes(p.cat);
-  const configs=variantList.map(v=>({id:v.id,specs:v.specs||{}}));
-  if(!configs.length||all.some(i=>!i.variantId||!variantList.some(v=>v.id===i.variantId))){
-   configs.push({id:'unassigned',specs:{}});
-  }
-  return configs.map(v=>{
-   const units=all.filter(i=>(i.variantId||'unassigned')===v.id);
-   const qty=units.filter(usable).length;
-   return {p,v,units,qty,min,pending:units.length-qty,
-    prepPending:pc?units.filter(i=>['pending','in_progress'].includes(i.prepStatus)).length:0,
-    alert,productTotal:totalForProduct};
-  });
- });
-}
 function inventory(c){
  const search=(c.tableFilter||'').trim().toLocaleLowerCase('fr'),filter=c.tableStockFilter||'all';
  const cats=[...new Set(c.db.catalog.map(p=>p.cat).filter(Boolean))].sort();
- const products=stockGroups(c.db);
- const alerts=new Set(products.filter(x=>x.alert).map(x=>x.p.id)).size;
- const total=products.reduce((sum,x)=>sum+x.qty,0);
+ const byProduct=new Map();
+ c.db.items.forEach(i=>{if(!byProduct.has(i.pid))byProduct.set(i.pid,[]);byProduct.get(i.pid).push(i)});
+ const products=c.db.catalog.map(p=>{
+  const units=byProduct.get(p.id)||[];
+  const qty=units.filter(i=>!/(sav|répar|repar)/i.test(i.condition||'Neuf')).length;
+  const min=Math.max(0,Number(p.min_stock)||0);
+  return {p,units,qty,min,pending:units.length-qty,alert:p.active!==0&&min>0&&qty<=min};
+ });
+ const alerts=products.filter(x=>x.alert).length,total=products.reduce((sum,x)=>sum+x.qty,0);
  const visible=products.filter(x=>{
   if((c.tableType||'all')!=='all'&&c.tableType!==x.p.cat)return false;
   if(filter==='low'&&!x.alert)return false;
   if(filter==='in'&&x.qty===0)return false;
-  if(filter==='prep'&&x.prepPending===0)return false;
-  return !search||[name(x.p),x.p.ref,x.p.cat,variantLabel(x.v.specs),
-   ...x.units.flatMap(i=>[i.id,i.serial||''])].join(' ').toLocaleLowerCase('fr').includes(search);
- }).sort((a,b)=>Number(b.alert)-Number(a.alert)||Number(b.prepPending>0)-Number(a.prepPending>0)||
- name(a.p).localeCompare(name(b.p),'fr')||variantLabel(a.v.specs).localeCompare(variantLabel(b.v.specs),'fr'));
+  return !search||[name(x.p),x.p.ref,x.p.cat,...x.units.flatMap(i=>[i.id,i.serial||''])].join(' ').toLocaleLowerCase('fr').includes(search);
+ }).sort((a,b)=>Number(b.alert)-Number(a.alert)||name(a.p).localeCompare(name(b.p),'fr'));
  const seg=(value,label)=>'<button type="button" class="si-segment'+(filter===value?' is-selected':'')+
   '" data-action="stockfilter" data-status="'+value+'" aria-pressed="'+(filter===value)+'">'+label+'</button>';
  const rows=visible.map(x=>{
-  const p=x.p,q=x.qty,min=x.min,id=escape(p.id),vId=escape(x.v.id);
+  const p=x.p,q=x.qty,min=x.min,id=escape(p.id);
   const status=min===0?'<span class="si-badge si-neutral">Sans alerte</span>':
-   x.alert?'<span class="si-badge '+(x.productTotal===0?'si-critical':'si-warning')+'">'+
-    (x.productTotal===0?'Rupture · à commander':'Stock faible · à commander')+'</span>':
+   x.alert?'<span class="si-badge '+(q===0?'si-critical':'si-warning')+'">'+
+    (q===0?'Rupture · à commander':'Stock faible · à commander')+'</span>':
     '<span class="si-badge si-safe">Stock suffisant</span>';
-  const distinctCount=products.filter(group=>group.p.id===p.id).length;
-  const specLine=distinctCount>1||Object.keys(x.v.specs).length>0?
-   '<span class="si-variant-caption">'+escape(variantLabel(x.v.specs))+'</span>':'';
   return '<button type="button" class="si-record'+(x.alert?' si-is-alert':'')+
-   '" data-action="stockproduct" data-id="'+id+'" data-variant="'+vId+'" aria-label="Voir les étiquettes de '+escape(name(p))+
-   ', '+escape(variantLabel(x.v.specs))+'">'+
+   '" data-action="stockproduct" data-id="'+id+'" aria-label="Voir les étiquettes de '+escape(name(p))+'">'+
    '<span class="si-record-summary">'+
-   '<span class="si-product"><strong>'+escape(name(p))+'</strong>'+specLine+'<small>'+
+   '<span class="si-product"><strong>'+escape(name(p))+'</strong><small>'+
     escape(p.ref||'Sans référence')+(p.cat?' · '+escape(p.cat):'')+
-    (x.pending?' · '+x.pending+' en SAV / réparation':'')+
-    (x.prepPending?' · '+x.prepPending+' à préparer':'')+'</small></span>'+
+    (x.pending?' · '+x.pending+' en SAV / réparation':'')+'</small></span>'+
    '<span class="si-quantity"><b>'+q+'</b><small>disponible'+(q!==1?'s':'')+'</small></span>'+
-   '<span class="si-status">'+status+(min>0?'<small>Seuil de référence : '+min+'</small>':'')+'</span>'+
+   '<span class="si-status">'+status+(min>0?'<small>Minimum : '+min+'</small>':'')+'</span>'+
    '<span class="si-expand"><span>Voir</span><span class="si-chevron" aria-hidden="true"></span></span>'+
    '</span></button>';
  }).join('');
  const summary=[
   '<div class="si-summary"><div class="si-summary-numbers">',
   '<span><strong>'+total+'</strong> unités disponibles</span><i aria-hidden="true"></i>',
-  '<span><strong>'+c.db.catalog.length+'</strong> références</span>',
-  (products.length>c.db.catalog.length?'<span><strong>'+products.length+'</strong> configurations</span>':''),
-  '</div>',
+  '<span><strong>'+products.length+'</strong> références</span></div>',
   alerts?'<button type="button" class="si-summary-alert" data-action="stockfilter" data-status="low">'+
    alerts+' alerte'+(alerts>1?'s':'')+' de stock</button>':
    '<span class="si-summary-clear">Aucune alerte active</span>',
@@ -166,49 +124,33 @@ function inventory(c){
   seg('all','Tous ('+products.length+')'),
   seg('low','À commander'+(alerts?' ('+alerts+')':'')),
   seg('in','Disponibles'),
-  seg('prep','À préparer'+(products.some(x=>x.prepPending)?' ('+products.reduce((sum,x)=>sum+x.prepPending,0)+')':'')),
   '</div><button type="button" class="si-export" data-action="exportstocksummary">Exporter CSV</button></div>'
  ].join('');
  const mobilePush='<section class="si-mobile-push" aria-label="Alertes de stock sur téléphone" hidden>'+
   '<div><strong>Alertes sur votre téléphone</strong><p>Recevoir une notification lorsqu’un produit atteint son seuil.</p></div>'+
   '<button type="button" data-action="pushsubscribe" class="si-enable-push">Activer</button></section>';
  return c.heading('INVENTAIRE','Produits en stock',
-  'Quantités disponibles et étiquettes par configuration.')+
+  'Quantités disponibles et étiquettes par référence.')+
   mobilePush+'<section class="si-inventory" aria-label="Inventaire des produits">'+summary+toolbar+tabs+
   '<div class="si-list" aria-label="Références en stock">'+
   '<div class="si-columns" aria-hidden="true"><span>Produit</span><span>Disponible</span><span>Alerte</span><span></span></div>'+
   (rows||'<div class="si-empty">Aucun produit ne correspond à ces filtres.</div>')+'</div>'+
-  '<footer class="si-footer">'+visible.length+' configuration'+(visible.length>1?'s':'')+
+  '<footer class="si-footer">'+visible.length+' référence'+(visible.length>1?'s':'')+
   ' affichée'+(visible.length>1?'s':'')+'</footer></section>';
 }
 function stockProductModal(c){
  const p=c.product(c.modal?.id);
  if(!p)return '';
- const selectedVariant=c.modal?.variantId||null;
- const variants=c.db.variants||[];
- const variant=variants.find(v=>v.id===selectedVariant&&v.pid===p.id);
- const units=c.db.items.filter(i=>i.pid===p.id&&(!selectedVariant||
-   (i.variantId||'unassigned')===selectedVariant)).sort((a,b)=>(b.inAt||0)-(a.inAt||0));
+ const units=c.db.items.filter(i=>i.pid===p.id).sort((a,b)=>(b.inAt||0)-(a.inAt||0));
  const qty=units.filter(i=>!/(sav|répar|repar)/i.test(i.condition||'Neuf')).length;
  const threshold=Math.max(0,Number(p.min_stock)||0);
  const title=escape(name(p));
- const pcCategory=['Ordinateur portable','Ordinateur fixe','PC portable','PC fixe'].includes(p.cat);
- const prepLabel={pending:'En attente de préparation',in_progress:'En préparation',ready:'Préparation terminée',not_required:'Préparation non suivie'};
- const specsLabels={cpu:'Processeur',cores:'Cœurs',ram_gb:'RAM (Go)',storage:'Stockage',os:'Système',
-   gpu:'Carte graphique',size_inches:'Taille',resolution:'Résolution',connection:'Connexion',
-   technology:'Technologie',mac:'MAC',ip:'IP',model_detail:'Précisions'};
  const itemRows=units.map(i=>{
   const state=escape(i.condition||'Neuf');
-  const specs=Object.entries(i.specs||{}).map(([k,v])=>escape(specsLabels[k]||k)+' : '+escape(v)).join(' · ');
-  const prep=pcCategory?'<span class="si-prep-badge si-prep-'+escape(i.prepStatus||'not_required')+'">'+
-   escape(prepLabel[i.prepStatus||'not_required'])+'</span>':'';
   return '<article class="si-modal-unit"><div class="si-modal-unit-code">'+
-   '<strong>'+escape(i.id)+'</strong><small>'+escape(i.serial||'Sans numéro de série')+' · '+state+'</small>'+
-   prep+(specs?'<small class="si-specs-summary">'+specs+'</small>':'')+'</div>'+
+   '<strong>'+escape(i.id)+'</strong><small>'+escape(i.serial||'Sans numéro de série')+' · '+state+'</small></div>'+
    '<img loading="lazy" src="/api/items/'+encodeURIComponent(i.id)+'/barcode.svg" alt="Code-barres '+escape(i.id)+'" class="si-modal-barcode">'+
-   '<div class="si-unit-modal-actions"><button type="button" class="si-modal-reprint" data-action="print" data-id="'+escape(i.id)+'">Réimprimer</button>'+
-   '<button type="button" class="si-modal-edit" data-action="editunit" data-id="'+escape(i.id)+'">'+
-   (pcCategory?'Préparation / fiche':'Modifier la fiche')+'</button></div></article>';
+   '<button type="button" class="si-modal-reprint" data-action="print" data-id="'+escape(i.id)+'">Réimprimer</button></article>';
  }).join('');
  const alertEditor=c.me?.role==='admin'?'<section class="si-alert-editor si-desktop-alert">'+
   '<div class="si-alert-description"><strong>Seuil de réapprovisionnement</strong>'+
@@ -221,59 +163,15 @@ function stockProductModal(c){
   '<button type="button" class="si-save" data-action="stockthreshold" data-id="'+escape(p.id)+'">Enregistrer</button></section>':'';
  return '<div class="overlay" data-action="backdrop"><div class="modal si-product-modal" role="dialog" aria-modal="true" aria-labelledby="si-product-title" tabindex="-1">'+
   '<header class="modal-head si-modal-head"><div><div class="si-modal-kicker">FICHE PRODUIT</div>'+
-  '<h2 id="si-product-title">'+title+'</h2><p>'+escape(p.ref||'Sans référence')+(p.cat?' · '+escape(p.cat):'')+'</p>'+
- (selectedVariant?'<p class="si-modal-variant-label">'+escape(variantLabel(variant?.specs||{}))+'</p>':'')+'</div>'+
+  '<h2 id="si-product-title">'+title+'</h2><p>'+escape(p.ref||'Sans référence')+(p.cat?' · '+escape(p.cat):'')+'</p></div>'+
   '<button type="button" class="closebtn" data-action="closemodal" aria-label="Fermer">×</button></header>'+
   '<div class="modal-body si-modal-body"><div class="si-modal-summary"><strong>'+qty+'</strong>'+
   '<span>unité'+(qty>1?'s':'')+' disponible'+(qty>1?'s':'')+'</span>'+
   '<small>'+(threshold?'Seuil configuré : '+threshold:'Aucun seuil configuré')+'</small></div>'+
-  '<h3 class="si-modal-subtitle">Articles de cette configuration <span>'+units.length+'</span></h3>'+
+  '<h3 class="si-modal-subtitle">Articles encore enregistrés <span>'+units.length+'</span></h3>'+
   '<p class="si-modal-explanation">Voici les codes STK imprimés sur les étiquettes de chaque article. Réimprimez celle dont vous avez besoin.</p>'+
   '<div class="si-modal-units">'+(itemRows||'<div class="si-modal-empty">Aucun article actuellement enregistré pour cette référence.</div>')+'</div>'+
   alertEditor+'</div><footer class="modal-foot"><button type="button" class="btn" data-action="closemodal">Fermer</button></footer></div></div>';
-}
-function unitPreparationModal(c){
- const item=c.db.items.find(i=>i.id===c.modal?.id);
- if(!item)return '';
- const p=c.db.catalog.find(p=>p.id===item.pid);
- if(!p)return '';
- const category={'PC portable':'Ordinateur portable','PC fixe':'Ordinateur fixe',
-  'Laptop':'Ordinateur portable','Moniteur':'Écran','Téléphone':'Téléphone / tablette'}[p.cat]||p.cat;
- const pc=['Ordinateur portable','Ordinateur fixe'].includes(category);
- const byCategory={
-  'Ordinateur portable':[['cpu','Processeur'],['cores','Nombre de cœurs'],['ram_gb','RAM (Go)'],['storage','Stockage'],['os','Système installé'],['gpu','Carte graphique']],
-  'Ordinateur fixe':[['cpu','Processeur'],['cores','Nombre de cœurs'],['ram_gb','RAM (Go)'],['storage','Stockage'],['os','Système installé'],['gpu','Carte graphique']],
-  'Écran':[['size_inches','Taille de l’écran'],['resolution','Résolution'],['connection','Connectiques']],
-  'Imprimante':[['technology','Technologie'],['connection','Connexion']],
-  'Réseau':[['mac','Adresse MAC'],['ip','Adresse IP'],['connection','Connexion']],
-  'Périphérique':[['connection','Connexion']],
-  'Téléphone / tablette':[['ram_gb','RAM (Go)'],['storage','Stockage'],['os','Système']],
-  'Composant':[['model_detail','Précisions']]
- };
- const specs=item.specs||{};
- const status=item.prepStatus||'not_required';
- const fields=(byCategory[category]||[]).map(([key,label])=>
-  '<label class="sp-unit-field">'+escape(label)+
-  '<input name="spec_'+key+'" id="sp-unit-'+key+'" type="'+(['ram_gb','cores'].includes(key)?'number':'text')+'"'+
-  (['ram_gb','cores'].includes(key)?' min="1" max="2048" step="1" inputmode="numeric"':' maxlength="120"')+
-  ' value="'+escape(specs[key]??'')+'" placeholder="À renseigner si connu"></label>').join('');
- const choices=pc?'<fieldset class="sp-unit-status"><legend>Avancement de la préparation</legend>'+
-  [['pending','En attente'],['in_progress','En préparation'],['ready','Préparation terminée']].map(([key,text])=>
-  '<label><input type="radio" name="prep_status" value="'+key+'"'+(key===status?' checked':'')+'><span>'+text+'</span></label>').join('')+
-  '</fieldset>':'';
- return '<div class="overlay" data-action="backdrop"><div class="modal sp-unit-edit-modal" role="dialog" aria-modal="true" aria-labelledby="sp-unit-edit-title" tabindex="-1">'+
- '<header class="modal-head"><div><div class="si-modal-kicker">'+escape(item.id)+'</div><h2 id="sp-unit-edit-title">'+
- (pc?'Préparation de l’ordinateur':'Fiche de l’article')+'</h2><p>'+escape(name(p))+'</p></div>'+
- '<button class="closebtn" type="button" data-action="returnproduct" aria-label="Retour à la fiche produit">×</button></header>'+
- '<form id="sp-unit-edit-form" data-id="'+escape(item.id)+'">'+
- '<input type="hidden" name="baseline" value="'+escape(JSON.stringify({
-  serial:item.serial||'',prep_status:item.prepStatus||'not_required',specs:item.specs||{}
- }))+'"><div class="modal-body sp-unit-edit-body">'+
- '<p class="sp-unit-hint">Complétez les informations connues. Les champs laissés vides pourront être remplis plus tard.</p>'+
- '<label class="sp-unit-field">Numéro de série<input name="serial" maxlength="100" value="'+escape(item.serial||'')+'" placeholder="Facultatif"></label>'+
- choices+(fields?'<div class="sp-unit-spec-grid">'+fields+'</div>':'')+
- '</div><footer class="modal-foot"><button type="button" class="btn" data-action="returnproduct">Annuler</button>'+
- '<button type="submit" class="btn primary">Enregistrer la fiche</button></footer></form></div></div>';
 }
 function history(c){
  const ev=[...c.db.events].filter(x=>x.type==='in'||x.type==='out').sort((a,b)=>b.at-a.at);
@@ -338,7 +236,7 @@ function exit(c){
  const card=i?'<div class="productpick"><div class="prodicon">'+c.ico(p?.kind||'package',25)+'</div><div><strong>'+escape(name(p))+'</strong><small>'+escape(i.id)+' · '+escape(p?.ref||'')+'</small></div></div><div class="basic-scanned"><div><span>Numéro de série</span><strong>'+escape(i.serial||'Non renseigné')+'</strong></div><div><span>État</span><strong>'+escape(i.condition||'Neuf')+'</strong></div></div><button class="btn negative full" data-action="confirmout" data-id="'+escape(i.id)+'">'+c.ico('out',18)+' Confirmer la sortie du stock</button>':'<div class="basic-scan-empty">'+c.ico('package',34)+'<p>Aucun article scanné pour le moment.</p></div>';
  return c.heading('SORTIE DU STOCK','Scanner une étiquette','Scannez le code-barres ou le QR code d’un article pour le retirer de l’inventaire.')+
  '<div class="flowgrid"><section class="card formcard"><h2>Scanner un article</h2><p class="intro">Utilisez une douchette USB/Bluetooth, votre caméra ou saisissez l’identifiant manuellement.</p><div class="scan-panel" id="scan-panel">'+c.ico('barcode',55)+'<strong>Prêt pour un scan</strong><p>Exemple : STK-000001</p></div><div class="basic-scan-buttons"><button class="btn" data-action="camera">'+c.ico('camera',17)+' Activer la caméra</button></div><label for="scan-code">Identifiant du produit</label><div class="scan-input"><input id="scan-code" placeholder="STK-000001" autocomplete="off"><button class="btn primary" data-action="lookup">Rechercher</button></div></section>'+
- '<section class="card formcard"><h2>Produit identifié</h2><p class="intro">Vérifiez le produit avant de confirmer la sortie.</p><div class="sp-scan-result">'+card+'</div><div class="basic-manual-list"><h3>Derniers articles en stock</h3>'+c.db.items.slice(-7).reverse().map(i=>'<button type="button" data-action="selectscan" data-id="'+escape(i.id)+'"><span>'+escape(name(c.product(i.pid)))+'</span><strong>'+escape(i.id)+'</strong></button>').join('')+'</div></section></div>';
+ '<section class="card formcard"><h2>Produit identifié</h2><p class="intro">Vérifiez le produit avant de confirmer la sortie.</p>'+card+'<div class="basic-manual-list"><h3>Derniers articles en stock</h3>'+c.db.items.slice(-7).reverse().map(i=>'<button type="button" data-action="selectscan" data-id="'+escape(i.id)+'"><span>'+escape(name(c.product(i.pid)))+'</span><strong>'+escape(i.id)+'</strong></button>').join('')+'</div></section></div>';
 }
 function detailModal(c){
  const i=c.itemById(c.modal?.id);if(!i)return '';
@@ -349,5 +247,5 @@ function editModal(c){
  const p=c.product(c.modal?.id);if(!p)return '';
  return '<div class="overlay" data-action="backdrop"><div class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Modifier une référence</h2><button class="closebtn" data-action="closemodal">×</button></div><form id="edit-product-form" data-id="'+escape(p.id)+'"><div class="modal-body"><div class="field"><label>Marque</label><input name="brand" required value="'+escape(p.brand)+'"></div><div class="field"><label>Modèle</label><input name="model" required value="'+escape(p.model)+'"></div><div class="field"><label>Catégorie</label><input name="cat" required value="'+escape(p.cat)+'"></div><div class="field"><label>Référence</label><input name="ref" required value="'+escape(p.ref)+'"></div><div class="field"><label>Seuil d’alerte (0 = désactivé)</label><input name="min_stock" type="number" min="0" max="99999" step="1" inputmode="numeric" required value="'+(Number(p.min_stock)||0)+'"></div><label><input type="checkbox" name="active" '+(p.active?'checked':'')+'> Référence active</label></div><div class="modal-foot"><button class="btn" type="button" data-action="closemodal">Annuler</button><button class="btn primary" type="submit">Enregistrer</button></div></form></div></div>';
 }
-window.SPBasic={dashboard,inventory,stockGroups,stockProductModal,unitPreparationModal,history,settings,exit,detailModal,editModal};
+window.SPBasic={dashboard,inventory,stockProductModal,history,settings,exit,detailModal,editModal};
 })();

@@ -84,7 +84,7 @@ test('Aurora est chargé et reproduit la structure sans supprimer les fonctions'
  const html=fs.readFileSync('static/index.html','utf8');
  const css=fs.readFileSync('static/aurora.css','utf8');
  assert.match(html,/aurora\.css\?v=aurora-20261102-2/);
- assert.match(html,/barcode-only\.js\?v=variants-20261104-2/);
+ assert.match(html,/barcode-only\.js\?v=mobile-20261103-3/);
  assert.match(css,/\.aurora-dashboard/);
  assert.match(css,/\.aur-rail-main/);
  assert.match(css,/\.aur-metrics/);
@@ -207,7 +207,7 @@ test('Les autres pages réutilisent exactement les animations d\'accueil en casc
 
 test('L’actualisation périodique de l’accueil conserve les éléments animés',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
- assert.ok(html.includes("if(page==='dashboard'){syncDashboardData();return}"));
+ assert.ok(html.includes("else if(page==='dashboard')syncDashboardData()"));
  assert.ok(html.includes('function syncDashboardData()'));
  assert.ok(html.includes("syncText('.aur-metric-value strong"));
  assert.ok(html.includes("syncInlineText('.aur-chart-label"));
@@ -215,7 +215,7 @@ test('L’actualisation périodique de l’accueil conserve les éléments anim�
  assert.ok(!html.includes("if(!silent||['dashboard'"));
  assert.ok(html.includes("setInterval(syncStockAcrossDevices,1200)"));
  assert.ok(html.includes("function patchLiveStockView()"));
- assert.ok(html.includes("'.si-summary','.si-list','.si-footer','.si-segments'"));
+ assert.ok(html.includes("patch('.si-summary')"));
 });
 test('Les liens du rail possèdent des icônes explicites et une déconnexion identifiable',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
@@ -325,7 +325,7 @@ test('Inventaire : popup produit au lieu de menu déroulant, seuil facultatif en
  assert.match(html,/si-inventory/);
  assert.match(html,/si-is-alert/);
  assert.match(html,/Stock faible · à commander/);
- assert.match(html,/Seuil de référence : 3/);
+ assert.match(html,/Minimum : 3/);
  assert.match(html,/data-action="stockproduct"/);
  assert.doesNotMatch(html,/data-action="newentryproduct"/);
  assert.doesNotMatch(html,/data-action="newentry"/);
@@ -463,8 +463,8 @@ test('Réception depuis le stock : produit existant déjà sélectionné',()=>{
 });
 test('Assets inventaire récents : Safari ne garde pas les anciens styles et scripts',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
- assert.match(html,/\/static\/barcode-only\.js\?v=variants-20261104-2/);
- assert.match(html,/\/static\/reception\.js\?v=15/);
+ assert.match(html,/\/static\/barcode-only\.js\?v=mobile-20261103-3/);
+ assert.match(html,/\/static\/reception\.js\?v=12/);
  assert.match(html,/\/static\/inventory-ui\.css\?v=4/);
  assert.match(html,/\/static\/mobile-layout\.css\?v=5/);
 });
@@ -628,7 +628,7 @@ test('Historique mobile : animation uniquement à la navigation',()=>{
  assert.match(css,/@keyframes spHistoryJournalEnter/);
  assert.match(css,/#content\.sp-route-in \.sp-history-page \.sp-mobile-pagehead/);
  assert.match(css,/#content\.sp-route-in \.sp-history-page \.sp-mobile-history/);
- assert.match(js,/\.sp-mobile-history \.sp-mh-list/);
+ assert.match(js,/patch\('\.sp-mobile-history \.sp-mh-list'\)/);
  assert.doesNotMatch(js,/setInterval\(\(\)=>\{if\(!document.hidden&&!modal&&page!=='entry'/);
 });
 test('Notifications iPhone : préférence persistante et réparation du serveur sans nouveau consentement',()=>{
@@ -640,158 +640,4 @@ test('Notifications iPhone : préférence persistante et réparation du serveur 
  assert.match(html,/await api\('\/api\/push\/subscriptions','POST',sub.toJSON\(\)\)/);
  assert.match(html,/if\(!sub&&wantsPushNotifications\(\)\)/);
  assert.match(html,/await restorePushOnAppLaunch\(\)/);
-});
-
-test('Réception : choix de catégorie et fiche ordinateur sans détail obligatoire',()=>{
- receive.reset();
- let html=receive.entry(context);
- assert.match(html,/id="rx-category"/);
- for(const category of ['Matériel','Ordinateur portable','Ordinateur fixe','Écran','Imprimante','Réseau','Périphérique','Téléphone \/ tablette','Composant','Autre']){
-  assert.ok(html.includes('<option value="'+category+'"'),category);
- }
- assert.doesNotMatch(html,/id="rx-spec-ram_gb"/);
- const updates=[];
- const change={target:{id:'rx-category',value:'Ordinateur portable'}};
- assert.equal(receive.onChange(change,{renderContent:()=>updates.push(1)}),true);
- assert.equal(updates.length,1);
- html=receive.entry(context);
- assert.match(html,/id="rx-spec-cpu"/);
- assert.match(html,/id="rx-spec-cores"/);
- assert.match(html,/id="rx-spec-ram_gb"/);
- assert.match(html,/id="rx-spec-storage"/);
- assert.match(html,/id="rx-spec-os"/);
- assert.match(html,/data-rx="prep" data-value="pending"/);
- assert.match(html,/En attente/);
- receive.onInput({target:{id:'rx-spec-ram_gb',value:'16'}},db);
- html=receive.entry(context);
- assert.match(html,/id="rx-spec-ram_gb"[^>]*value="16"/);
- receive.onChange({target:{id:'rx-category',value:'Matériel'}},{renderContent:()=>{}});
- html=receive.entry(context);
- assert.doesNotMatch(html,/id="rx-spec-ram_gb"/);
- assert.doesNotMatch(html,/data-rx="prep"/);
- receive.reset();
-});
-test('Fiche de stock : code STK, prépa par unité et popup sans navigation inutile',()=>{
- const computer={...product,cat:'Ordinateur portable'};
- const pcItem={...item,prepStatus:'pending',specs:{ram_gb:16,cores:6,cpu:'Intel Core i5'}};
- const ctx={...context,db:{...db,catalog:[computer],items:[pcItem]},
-  modal:{id:computer.id},product:id=>id===computer.id?computer:null};
- const html=basic.stockProductModal(ctx);
- assert.match(html,/STK-000010/);
- assert.match(html,/En attente de préparation/);
- assert.match(html,/RAM \(Go\) : 16/);
- assert.match(html,/data-action="editunit"/);
- assert.match(html,/data-action="print"/);
- const edit=basic.unitPreparationModal({...ctx,modal:{id:pcItem.id}});
- assert.match(edit,/id="sp-unit-edit-form"/);
- assert.match(edit,/name="prep_status" value="pending" checked/);
- assert.match(edit,/name="spec_cores"/);
- assert.match(edit,/value="16"/);
- assert.match(edit,/name="serial"/);
- const material={...product,cat:'Matériel'};
- const misc=basic.unitPreparationModal({...ctx,db:{...ctx.db,catalog:[material]},modal:{id:pcItem.id}});
- assert.doesNotMatch(misc,/name="prep_status"/);
- assert.doesNotMatch(misc,/name="spec_cores"/);
-});
-test('Les fichiers de catégories sont embarqués avec le site et responsables sur mobile',()=>{
- const index=fs.readFileSync('static/index.html','utf8');
- const style=fs.readFileSync('static/product-types.css','utf8');
- const app=fs.readFileSync('app.py','utf8');
- assert.match(index,/\/static\/product-types\.css\?v=2/);
- assert.match(index,/\/static\/reception\.js\?v=15/);
- assert.match(index,/unitPreparationModal/);
- assert.match(index,/case'editunit'/);
- assert.match(index,/sp-unit-edit-form/);
- assert.match(style,/\.rx-category-select/);
- assert.match(style,/@media\(max-width:860px\)/);
- assert.match(style,/\.sp-unit-spec-grid/);
- assert.match(app,/CREATE TABLE IF NOT EXISTS sync_revision/);
- assert.match(app,/ALTER TABLE items ADD COLUMN prep_status/);
- assert.match(app,/ALTER TABLE items ADD COLUMN specs_json/);
- assert.match(app,/@app\.patch\('\/api\/items\/<item_id>\/preparation'\)/);
-});
-
-test('Filtre de préparation : n’affiche que les ordinateurs en attente',()=>{
- const old={...product,cat:'PC portable'};
- const pcPending={...item,id:'STK-000011',prepStatus:'pending'};
- const pcReady={...item,id:'STK-000012',prepStatus:'ready'};
- const material={id:'simple',brand:'',model:'Câble HDMI',cat:'Matériel',ref:'REF-HDMI',active:1};
- const extra={...item,id:'STK-000013',pid:'simple',prepStatus:'not_required'};
- const ctx={...context,db:{items:[pcPending,pcReady,extra],catalog:[old,material],events:[],shelves:[]},
-  tableStockFilter:'prep',tableType:'all'};
- const html=basic.inventory(ctx);
- assert.match(html,/data-action="stockproduct" data-id="terra1"/);
- assert.match(html,/1 à préparer/);
- assert.doesNotMatch(html,/data-action="stockproduct" data-id="simple"/);
- assert.match(html,/À préparer \(1\)/);
- const style=fs.readFileSync('static/product-types.css','utf8');
- assert.match(style,/grid-template-columns:repeat\(2,minmax\(0,1fr\)\)!important/);
-});
-
-test('Configurations PC : deux performances du même modèle créent deux fiches séparées',()=>{
- const p={...product,cat:'Ordinateur portable'};
- const variants=[
-  {id:'variant16',pid:p.id,specs:{cpu:'Intel Core i5',ram_gb:16,storage:'SSD 512 Go'},createdAt:1},
-  {id:'variant32',pid:p.id,specs:{cpu:'Intel Core i7',ram_gb:32,storage:'SSD 1 To'},createdAt:2}
- ];
- const units=[
-  {...item,id:'STK-000010',variantId:'variant16',specs:variants[0].specs,prepStatus:'ready'},
-  {...item,id:'STK-000011',variantId:'variant16',specs:variants[0].specs,prepStatus:'pending'},
-  {...item,id:'STK-000012',variantId:'variant32',specs:variants[1].specs,prepStatus:'ready'}
- ];
- const ctx={...context,db:{...db,catalog:[p],items:units,variants},modal:{id:p.id,variantId:'variant16'},
-  product:id=>id===p.id?p:null};
- const html=basic.inventory(ctx);
- assert.match(html,/data-variant="variant16"/);
- assert.match(html,/data-variant="variant32"/);
- assert.match(html,/16 Go RAM/);
- assert.match(html,/32 Go RAM/);
- assert.match(html,/2 configurations/);
- const groups=basic.stockGroups(ctx.db);
- assert.equal(groups.length,2);
- assert.equal(groups.find(g=>g.v.id==='variant16').qty,2);
- assert.equal(groups.find(g=>g.v.id==='variant32').qty,1);
- const modal16=basic.stockProductModal(ctx);
- assert.match(modal16,/STK-000010/);
- assert.match(modal16,/STK-000011/);
- assert.doesNotMatch(modal16,/STK-000012/);
- const modal32=basic.stockProductModal({...ctx,modal:{id:p.id,variantId:'variant32'}});
- assert.match(modal32,/STK-000012/);
- assert.doesNotMatch(modal32,/STK-000010/);
-});
-test('Réception : la fiche technique mémorisée revient et peut être personnalisée',()=>{
- const p={...product,cat:'PC portable'};
- const variants=[
-  {id:'v16',pid:p.id,specs:{cpu:'Intel Core i5',ram_gb:16,storage:'SSD 512 Go'},createdAt:1},
-  {id:'v32',pid:p.id,specs:{cpu:'Intel Core i7',ram_gb:32,storage:'SSD 1 To'},createdAt:2}
- ];
- const stock={...db,catalog:[p],variants};
- receive.prefill(p,stock);
- let html=receive.entry({...context,db:stock});
- assert.match(html,/id="rx-variant-picker"/);
- assert.match(html,/data-rx="variant" data-id="v16"/);
- assert.match(html,/data-rx="variant" data-id="v32"/);
- assert.match(html,/id="rx-spec-ram_gb"[^>]*value="32"/);
- receive.onClick({target:{closest:()=>({dataset:{rx:'variant',id:'v16'}})}},
-  {db:stock,renderContent:()=>{}});
- html=receive.entry({...context,db:stock});
- assert.match(html,/id="rx-spec-ram_gb"[^>]*value="16"/);
- receive.onClick({target:{closest:()=>({dataset:{rx:'customvariant'}})}},
-  {db:stock,renderContent:()=>{}});
- html=receive.entry({...context,db:stock});
- assert.match(html,/id="rx-spec-ram_gb"[^>]*value=""/);
- receive.reset();
-});
-test('Synchronisation multi-appareils : listes et popups se mettent à jour sans rafraîchir la page',()=>{
- const html=fs.readFileSync('static/index.html','utf8');
- assert.match(html,/SPV3\.refreshVariants\(db\)/);
- assert.match(html,/SPV3\.refreshSuggestions\(db\)/);
- assert.match(html,/\.si-modal-summary','\.si-modal-subtitle','\.si-modal-units'/);
- assert.match(html,/\.sp-scan-result/);
- assert.match(html,/\.basic-manual-list/);
- assert.match(html,/\.basic-catalog/);
- assert.match(html,/data\.baseline\?JSON\.parse\(data\.baseline\)/);
- assert.match(html,/variantId:a\.dataset\.variant\|\|null/);
- const modal=basic.unitPreparationModal({...context,db:{...db,variants:[]},modal:{id:item.id}});
- assert.match(modal,/name="baseline"/);
 });
