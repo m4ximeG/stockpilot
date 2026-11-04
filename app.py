@@ -124,6 +124,10 @@ def initialize():
           note TEXT NOT NULL DEFAULT ''
         );
         ''')
+        # Plusieurs workers Gunicorn peuvent démarrer simultanément.
+        # Une transaction d'écriture sérialise la migration et le rattachement
+        # des anciens articles, sans perte ni double affectation.
+        con.execute('BEGIN IMMEDIATE')
         # Détection automatique de TOUS les changements de stock (y compris les routes
         # historiques) sans mémoire locale : fonctionnement multi-workers / multi-appareils.
         for table in ('products', 'items', 'events', 'shelf_levels', 'users', 'product_variants'):
@@ -182,6 +186,7 @@ def initialize():
                 seed_stock(con)
         if not DEMO_SEED:
             purge_original_demo_stock(con)
+        con.commit()
 
 
 def purge_original_demo_stock(con):
