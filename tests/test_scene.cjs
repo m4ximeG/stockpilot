@@ -490,7 +490,8 @@ test('Docker embarque les modules nécessaires au démarrage de Gunicorn',()=>{
  const docker=fs.readFileSync('Dockerfile','utf8');
  const app=fs.readFileSync('app.py','utf8');
  assert.match(app,/^import push_service$/m);
- assert.match(docker,/COPY app\.py push_service\.py \.\//);
+ assert.ok(docker.includes('COPY app.py push_service.py backup_service.py gunicorn_conf.py ./'));
+ assert.ok(docker.includes('"--config", "gunicorn_conf.py"'));
  assert.match(docker,/python -c "import app; assert app\.app\.test_client\(\)\.get\('\/healthz'\)\.status_code == 200"/);
  assert.match(docker,/USER stockpilot/);
  assert.match(docker,/VOLUME \["\/data"\]/);
@@ -640,4 +641,22 @@ test('Notifications iPhone : préférence persistante et réparation du serveur 
  assert.match(html,/await api\('\/api\/push\/subscriptions','POST',sub.toJSON\(\)\)/);
  assert.match(html,/if\(!sub&&wantsPushNotifications\(\)\)/);
  assert.match(html,/await restorePushOnAppLaunch\(\)/);
+});
+
+test('Sauvegardes PC : fenêtre de gestion et restauration confirmée',()=>{
+ const html=fs.readFileSync('static/index.html','utf8');
+ const basic=fs.readFileSync('static/barcode-only.js','utf8');
+ const app=fs.readFileSync('app.py','utf8');
+ const css=fs.readFileSync('static/backup-ui.css','utf8');
+ assert.match(basic,/data-action="managebackups"/);
+ assert.match(html,/\/static\/backup-ui\.css\?v=1/);
+ assert.match(html,/modal\.type==='backups'/);
+ assert.match(html,/modal\.type==='backuprestore'/);
+ assert.match(html,/data-action="restorebackup"/);
+ assert.match(html,/RESTAURER LE STOCK/);
+ assert.match(html,/data-action="createbackup"/);
+ assert.match(app,/@app\.get\('\/api\/admin\/backups'\)/);
+ assert.match(app,/@app\.post\('\/api\/admin\/backups'\)/);
+ assert.match(app,/@app\.post\('\/api\/admin\/backups\/<name>\/restore'\)/);
+ assert.match(css,/\.sp-backups-modal/);
 });
