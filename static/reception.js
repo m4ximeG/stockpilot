@@ -20,12 +20,46 @@ const categoryOf=p=>{
   'Laptop':'Ordinateur portable','Moniteur':'Écran','Téléphone':'Téléphone / tablette'})[raw]||(TYPES.includes(raw)?raw:'Matériel');
 };
 const isPc=type=>type==='Ordinateur portable'||type==='Ordinateur fixe';
-const blank=()=>({name:'',pid:'',category:'Matériel',serial:'',condition:'Neuf',prep_status:'not_required',specs:{},saving:false,suggestions:true,received:null});
+const blank=()=>({name:'',pid:'',category:'Matériel',serial:'',condition:'Neuf',prep_status:'not_required',specs:{},variantId:'',saving:false,suggestions:true,received:null});
 let state=blank();
 const choices=db=>{const needle=state.name.trim().toLocaleLowerCase('fr');return needle?db.catalog.filter(p=>p.active&&(name(p).toLocaleLowerCase('fr').includes(needle)||(p.ref||'').toLocaleLowerCase('fr').includes(needle))).slice(0,6):[]};
+const savedVariants=(db,pid)=>(db.variants||[]).filter(v=>v.pid===pid&&Object.keys(v.specs||{}).length>0)
+ .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+function variantDescription(specs){
+ const labels={cpu:'CPU',cores:'cœurs',ram_gb:'Go RAM',storage:'',gpu:'GPU',os:'OS',
+  size_inches:'pouces',resolution:'',connection:'',technology:'',ip:'IP',mac:'MAC',model_detail:''};
+ return Object.entries(specs||{}).map(([key,value])=>
+   key==='ram_gb'?String(value)+' Go RAM':key==='cores'?String(value)+' cœurs':
+   (labels[key]?(labels[key]+' ')+' : ':'')+String(value)).slice(0,5).join(' · ')||'Configuration non renseignée';
+}
+function chooseVariantForProduct(db,p){
+ const variants=savedVariants(db,p.id);
+ const selected=variants[0];
+ state.specs=selected?{...selected.specs}:{};
+ state.variantId=selected?selected.id:'';
+ state.prep_status=isPc(state.category)?'pending':'not_required';
+}
+function variantsPicker(db,p){
+ if(!p)return '';
+ const variants=savedVariants(db,p.id);
+ if(!variants.length)return '';
+ return '<section class="rx-variants"><div class="rx-tech-title"><strong>Configurations déjà enregistrées</strong>'+
+ '<small>Sélectionnez une configuration pour retrouver automatiquement ses caractéristiques, ou créez-en une autre.</small></div>'+
+ '<div class="rx-variant-choices">'+variants.map(v=>
+ '<button type="button" class="rx-variant-choice'+(state.variantId===v.id?' active':'')+
+ '" data-rx="variant" data-id="'+esc(v.id)+'" title="'+esc(variantDescription(v.specs))+'">'+
+ '<span>'+esc(variantDescription(v.specs))+'</span><small>'+db.items.filter(i=>i.variantId===v.id).length+' en stock</small></button>').join('')+
+ '<button type="button" class="rx-variant-choice rx-variant-new'+(!state.variantId?' active':'')+
+ '" data-rx="customvariant"><span>＋ Nouvelle configuration</span></button></div></section>';
+}
+function refreshSuggestions(db){
+ if(state.received||!state.suggestions)return;
+ const hintsEl=document.getElementById('rx-suggestions');
+ if(hintsEl)hintsEl.innerHTML=hints(db);
+}
 function hints(db){
  if(!state.name.trim()||!state.suggestions)return '';
- const matches=choices(db),exact=matches.some(p=>name(p).toLocaleLowerCase('fr')===state.name.trim().toLocaleLowerCase('fr'));
+ const matches=choices(db).filter(p=>categoryOf(p)===state.category),exact=matches.some(p=>name(p).toLocaleLowerCase('fr')===state.name.trim().toLocaleLowerCase('fr'));
  return '<div class="basic-suggest-title">Références existantes</div>'+matches.map(p=>'<button type="button" class="basic-suggestion" data-rx="choose" data-id="'+esc(p.id)+'"><span class="basic-suggestion-icon">▣</span><span><strong>'+esc(name(p))+'</strong><small>'+esc(p.ref)+' · '+db.items.filter(i=>i.pid===p.id).length+' en stock</small></span><b>Choisir</b></button>').join('')+
  (!exact?'<button type="button" class="basic-create" data-rx="newproduct"><span>＋</span><div><strong>Créer « '+esc(state.name.trim())+' »</strong><small>Nouvelle référence ajoutée à la réception</small></div></button>':'');
 }
@@ -53,7 +87,7 @@ function entry(ctx){
  if(state.received){
   const item=state.received,product=db.catalog.find(p=>p.id===item.pid);
   const prep=isPc(categoryOf(product))?'<p>Préparation : <strong>'+({'pending':'En attente','in_progress':'En préparation','ready':'Prête'})[item.prepStatus||'pending']+'</strong></p>':'';
-  return '<div class="basic-entry"><div class="basic-entry-heading"><div><span>RÉCEPTION VALIDÉE</span><h1>Produit ajouté au stock</h1><p>L’article et son étiquette sont prêts.</p></div></div><section class="card basic-result"><div class="basic-result-icon">✓</div><h2>'+esc(product?name(product):state.name)+'</h2><p>Identifiant : <strong>'+esc(item.id)+'</strong></p><p>État : '+esc(item.condition||state.condition)+'</p>'+prep+'<div class="basic-result-actions"><button type="button" class="basic-btn primary" data-rx="print" data-id="'+esc(item.id)+'">Imprimer l’étiquette</button><button type="button" class="basic-btn" data-rx="again">Ajouter un autre produit</button></div></section></div>';
+  return '<div class="basic-entry"><div class="basic-entry-heading"><div><span>RÉCEPTION VALIDÉE</span><h1>Produit ajouté au stock</h1><p>L’article et son étiquette sont prêts.</p></div></div><section class="card basic-result"><div class="basic-result-icon">✓</div><h2>'+esc(product?name(product):state.name)+'</h2><p>Identifiant : <strong>'+esc(item.id)+'</strong></p><p>État : '+esc(item.condition||state.condition)+'</p>'+prep+'<div class="basic-result-actions"><button type="button" class="basic-btn primary" data-rx="print" data-id="'+esc(item.id)+'">Imprimer l’étiquette</button><button type="button" class="basic-btn" data-rx="repeat">Recevoir un autre exemplaire</button><button type="button" class="basic-btn" data-rx="again">Nouveau produit</button></div></section></div>';
  }
  const p=db.catalog.find(p=>p.id===state.pid);
  const category=p?categoryOf(p):state.category;
@@ -61,6 +95,7 @@ function entry(ctx){
  return '<div class="basic-entry"><div class="basic-entry-heading"><div><span>NOUVELLE RÉCEPTION</span><h1>Entrée en stock</h1><p>Enregistrez un article, puis imprimez son étiquette pour le retrouver au scanner.</p></div><span class="basic-entry-tag">Code-barres individuel</span></div><div class="basic-entry-grid"><section class="card basic-entry-form"><h2>Informations du produit</h2><p class="basic-intro">Choisissez une catégorie : les champs s’adaptent automatiquement au type d’article.</p>'+
  '<div class="basic-field"><label for="rx-category">Type de matériel *</label><select id="rx-category" class="rx-category-select">'+typeOptions+'</select></div>'+
  '<div class="basic-field"><label for="rx-name">Nom du produit *</label><input id="rx-name" maxlength="120" autocomplete="off" value="'+esc(state.name)+'" placeholder="Ex. TERRA Mobile 1517, souris Logitech…" /><div id="rx-suggestions" class="basic-suggestions">'+hints(db)+'</div>'+(p?'<span class="basic-reused">✓ Référence existante : '+esc(p.ref)+'</span>':'')+'</div>'+
+ variantsPicker(db,p)+
  '<div class="basic-dual-fields"><div class="basic-field"><label for="rx-serial">Numéro de série <small>(facultatif)</small></label><input id="rx-serial" maxlength="100" autocomplete="off" value="'+esc(state.serial)+'" placeholder="À laisser vide si inutile"></div>'+
  '<div class="basic-field"><label>État de l’article</label><div class="basic-conditions">'+['Neuf','Retour SAV','Réparation'].map(c=>'<button type="button" data-rx="condition" data-value="'+esc(c)+'" class="'+(state.condition===c?'active':'')+'">'+esc(c)+'</button>').join('')+'</div></div></div>'+
  specsFields(category,state.specs)+(isPc(category)?prepButtons(state.prep_status):'')+
@@ -70,35 +105,48 @@ function entry(ctx){
 }
 function onInput(ev,db){
  if(ev.target.id==='rx-name'){
-  state.name=ev.target.value;state.pid='';state.suggestions=true;
+  state.name=ev.target.value;state.pid='';state.variantId='';state.suggestions=true;
   const hintsEl=document.getElementById('rx-suggestions');if(hintsEl)hintsEl.innerHTML=hints(db);
   const save=document.querySelector('[data-rx="save"]');if(save)save.disabled=!state.name.trim();
   document.querySelector('.basic-reused')?.remove();
   return true;
  }
  if(ev.target.id==='rx-serial'){state.serial=ev.target.value;return true;}
- if(ev.target.id?.startsWith('rx-spec-')){state.specs[ev.target.id.slice(8)]=ev.target.value;return true;}
+ if(ev.target.id?.startsWith('rx-spec-')){state.specs[ev.target.id.slice(8)]=ev.target.value;state.variantId='';return true;}
  return false;
 }
 function onClick(ev,ctx){
  const el=ev.target.closest('[data-rx]');if(!el)return false;
  const action=el.dataset.rx,db=ctx.db;
- if(action==='choose'){const p=db.catalog.find(p=>p.id===el.dataset.id);if(p){state.name=name(p);state.pid=p.id;state.category=categoryOf(p);state.prep_status=isPc(state.category)?'pending':'not_required';state.specs={};state.suggestions=false;ctx.renderContent();}}
- else if(action==='newproduct'){state.pid='';state.suggestions=false;ctx.renderContent();}
+ if(action==='choose'){const p=db.catalog.find(p=>p.id===el.dataset.id);if(p){state.name=name(p);state.pid=p.id;state.category=categoryOf(p);chooseVariantForProduct(db,p);state.suggestions=false;ctx.renderContent();}}
+ else if(action==='newproduct'){state.pid='';state.variantId='';state.suggestions=false;ctx.renderContent();}
+ else if(action==='variant'){
+  const profile=(db.variants||[]).find(v=>v.id===el.dataset.id&&v.pid===state.pid);
+  if(profile){state.specs={...profile.specs};state.variantId=profile.id;ctx.renderContent();}
+ }
+ else if(action==='customvariant'){state.specs={};state.variantId='';ctx.renderContent();}
  else if(action==='condition'){state.condition=el.dataset.value;ctx.renderContent();}
  else if(action==='prep'){state.prep_status=el.dataset.value;ctx.renderContent();}
  else if(action==='again'){state=blank();ctx.renderContent();}
+ else if(action==='repeat'){
+  const old=state;state=blank();state.name=old.name;state.pid=old.pid;state.category=old.category;
+  state.specs={...old.specs};state.variantId=old.variantId;state.suggestions=false;
+  state.prep_status=isPc(state.category)?'pending':'not_required';
+  ctx.renderContent();
+ }
  else if(action==='print'){ctx.printLabel(el.dataset.id);}
  else if(action==='save'){
   if(!state.name.trim()||state.saving)return true;
   state.saving=true;
   const data={name:state.name.trim(),product_id:state.pid,category:state.category,
    serial:state.serial.trim(),condition:state.condition,
-   specs:state.specs,prep_status:isPc(state.category)?state.prep_status:'not_required'};
+   specs:state.specs,variant_id:state.variantId||undefined,prep_status:isPc(state.category)?state.prep_status:'not_required'};
   ctx.renderContent();
   (async()=>{try{
    const response=await ctx.api('/api/receive','POST',data);
    state.received=response.item;
+   state.pid=response.item.pid;
+   state.variantId=response.item.variantId||'';
    await ctx.refreshState(true);
    ctx.renderContent();
    ctx.toast('Produit ajouté au stock');
@@ -107,19 +155,20 @@ function onClick(ev,ctx){
  return true;
 }
 function reset(){state=blank();}
-function prefill(product){
+function prefill(product,db){
  state=blank();
  if(product){state.name=name(product);state.pid=product.id;state.category=categoryOf(product);
-   state.prep_status=isPc(state.category)?'pending':'not_required';state.suggestions=false;}
+   state.prep_status=isPc(state.category)?'pending':'not_required';state.suggestions=false;
+   if(db)chooseVariantForProduct(db,product);}
 }
 function onChange(ev,ctx){
  if(ev.target.id!=='rx-category')return false;
  if(!TYPES.includes(ev.target.value))return true;
- state.category=ev.target.value;state.pid='';state.specs={};
+ state.category=ev.target.value;state.pid='';state.variantId='';state.specs={};
  state.prep_status=isPc(state.category)?'pending':'not_required';
  state.suggestions=false;
  ctx.renderContent();
  return true;
 }
-window.SPV3={entry,onInput,onClick,onChange,reset,prefill,selectSlot(){}};
+window.SPV3={entry,onInput,onClick,onChange,reset,prefill,refreshSuggestions,selectSlot(){}};
 })();
