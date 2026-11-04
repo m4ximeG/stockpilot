@@ -261,6 +261,40 @@ function renderModal(){
   return '<div class="overlay" data-action="backdrop"><div class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Confirmer la sortie</h2><button class="closebtn" data-action="closemodal">×</button></div><div class="modal-body"><p>Ce produit sera retiré des articles disponibles. La sortie restera enregistrée dans l’historique.</p><div class="productpick"><div class="prodicon">'+ico('package',23)+'</div><div><strong>'+esc(displayName(product(item.pid)))+'</strong><small>'+esc(item.id)+'</small></div></div></div><div class="modal-foot"><button class="btn" data-action="closemodal">Annuler</button><button class="btn negative" data-action="remove" data-id="'+esc(item.id)+'">Confirmer la sortie</button></div></div></div>';
  }
  if(modal.type==='users')return '<div class="overlay" data-action="backdrop"><div class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Comptes utilisateurs</h2><button class="closebtn" data-action="closemodal">×</button></div><div class="modal-body">'+(users.map(u=>'<div class="ruleitem"><div><strong>'+esc(u.username)+'</strong><small>'+(u.role==='admin'?'Administrateur':'Employé')+' · '+(u.enabled?'Actif':'Désactivé')+'</small></div><button class="btn" data-action="toggleuser" data-id="'+u.id+'" '+(u.id===me.id?'disabled':'')+'>'+(u.enabled?'Désactiver':'Activer')+'</button></div>').join('')||'Aucun compte')+'</div><div class="modal-foot"><button class="btn" data-action="closemodal">Fermer</button></div></div></div>';
+ if(modal.type==='backups'){
+  const items=modal.items||[];
+  const rows=items.map(item=>{
+   const date=new Date(item.createdAt).toLocaleString('fr-FR',{dateStyle:'medium',timeStyle:'short'});
+   const size=(item.size/1048576).toFixed(1).replace('.',',')+' Mo';
+   const kind=item.kind==='auto'?'Automatique':item.kind==='before_restore'?'Avant restauration':'Manuelle';
+   return '<div class="sp-backup-item"><div><strong>'+esc(date)+'</strong>'+
+    '<small>'+kind+' · '+size+'</small></div><div class="sp-backup-actions">'+
+    '<a class="btn" href="/api/admin/backups/'+encodeURIComponent(item.name)+'/download">Télécharger</a>'+
+    '<button type="button" class="btn" data-action="confirmbackuprestore" data-name="'+esc(item.name)+'">Restaurer</button>'+
+    '</div></div>';
+  }).join('')||'<p class="sp-backup-empty">Aucune sauvegarde disponible pour le moment.</p>';
+  return '<div class="overlay" data-action="backdrop"><div class="modal sp-backups-modal" role="dialog" aria-modal="true" aria-label="Sauvegardes du stock">'+
+   '<div class="modal-head"><h2>Sauvegardes du stock</h2><button class="closebtn" data-action="closemodal">×</button></div>'+
+   '<div class="modal-body"><p class="sp-backup-intro">Sauvegarde automatique quotidienne, 30 dernières conservées sur le volume de données.</p>'+
+   '<button type="button" class="btn primary" data-action="createbackup">Créer une sauvegarde maintenant</button>'+
+   '<div class="sp-backup-list">'+rows+'</div>'+
+   '<p class="sp-backup-note">Les sauvegardes sont sur ce serveur : une copie hors du NAS reste conseillée en cas de panne du disque.</p></div>'+
+   '<div class="modal-foot"><button class="btn" data-action="closemodal">Fermer</button></div></div></div>';
+ }
+ if(modal.type==='backuprestore'){
+  const label=esc(modal.name||'');
+  return '<div class="overlay" data-action="backdrop"><div class="modal sp-backups-modal" role="dialog" aria-modal="true" aria-label="Confirmer une restauration">'+
+   '<div class="modal-head"><h2>Restaurer un inventaire</h2><button class="closebtn" data-action="closemodal">×</button></div>'+
+   '<div class="modal-body"><p class="sp-backup-warning">La restauration remet le stock, les comptes et l’historique à l’état de cette sauvegarde. Une copie de l’état actuel sera créée avant toute modification.</p>'+
+   '<p>Fichier sélectionné : <strong>'+label+'</strong></p>'+
+   '<div class="field"><label for="backup-restore-confirm">Saisissez RESTAURER LE STOCK</label>'+
+   '<input id="backup-restore-confirm" autocomplete="off" placeholder="RESTAURER LE STOCK"></div>'+
+   '<div class="field"><label for="backup-restore-password">Mot de passe administrateur</label>'+
+   '<input id="backup-restore-password" type="password" autocomplete="current-password"></div>'+
+   '</div><div class="modal-foot"><button class="btn" data-action="managebackups">Annuler</button>'+
+   '<button class="btn negative" data-action="restorebackup" data-name="'+label+'">Restaurer cette sauvegarde</button>'+
+   '</div></div></div>';
+ }
  if(modal.type==='clearstock')return '<div class="overlay" data-action="backdrop"><div class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Vider totalement le stock ?</h2><button class="closebtn" data-action="closemodal">×</button></div><div class="modal-body"><p>Attention : cette opération supprime tous les articles, références et mouvements, y compris les vrais. Une sauvegarde de la base est créée avant suppression sur le NAS.</p><div class="field"><label for="clear-confirm">Écrire VIDER LE STOCK pour confirmer</label><input id="clear-confirm" autocomplete="off" placeholder="VIDER LE STOCK"></div></div><div class="modal-foot"><button class="btn" data-action="closemodal">Annuler</button><button class="btn negative" data-action="doclearstock">Vider le stock</button></div></div></div>';
  return '';
 }
@@ -626,7 +660,45 @@ case'stockthreshold':(async()=>{
   toast(value?'Alerte enregistrée.':'Alerte désactivée pour ce produit.');
  }catch(e){toast(e.message,true)}
 })();break;
-case'camera':startCamera();break;case'installapp':installMobileApp();break;case'selectscan':scanResult=itemById(id);renderContent();break;case'confirmout':case'outfrommodal':openModal({type:'confirmout',id});break;case'remove':removeItem(id);break;case'details':openModal({type:'details',id});break;case'closemodal':closeModal();break;case'entryslot':selectedProduct=db.catalog.find(p=>p.zone===a.dataset.slot[0])?.id||db.catalog[0]?.id||null;chosenSlot=a.dataset.slot;lastAdded=null;nav('entry');SPV3.selectSlot(a.dataset.slot);renderContent();break;case'zone':selectedSlot=`${a.dataset.zone}-1`;renderContent();break;case'pickslot':setSlot(a.dataset.slot);break;case'export':exportStock();break;case'exporthistory':exportHistory();break;case'clearstock':openModal({type:'clearstock'});break;case'reset':openModal({type:'reset'});break;case'doreset':(async()=>{try{await api('/api/admin/reset','POST',{});formSerial='';lastAdded=null;scanResult=null;selectedSlot='A-1';modal=null;await refreshState(true);nav('dashboard');toast('Stock fictif réinitialisé')}catch(e){toast(e.message,true)}})();break;case'movemodal':openModal({type:'move',id});break;case'confirmmove':(async()=>{try{await api('/api/items/'+encodeURIComponent(id)+'/move','POST',{slot:$('#move-slot')?.value});modal=null;await refreshState(true);renderApp();toast('Article déplacé')}catch(e){toast(e.message,true)}})();break;case'editproduct':openModal({type:'editproduct',id});break;case'listusers':(async()=>{try{users=(await api('/api/users')).users;openModal({type:'users'})}catch(e){toast(e.message,true)}})();break;case'toggleuser':(async()=>{const u=users.find(x=>String(x.id)===String(id));if(!u)return;try{await api('/api/users/'+id,'PATCH',{enabled:!u.enabled});users=(await api('/api/users')).users;openModal({type:'users'});toast('Compte mis à jour')}catch(e){toast(e.message,true)}})();break;case'backup':window.open('/api/backup','_blank');break;}});
+case'camera':startCamera();break;case'installapp':installMobileApp();break;case'selectscan':scanResult=itemById(id);renderContent();break;case'confirmout':case'outfrommodal':openModal({type:'confirmout',id});break;case'remove':removeItem(id);break;case'details':openModal({type:'details',id});break;case'closemodal':closeModal();break;case'entryslot':selectedProduct=db.catalog.find(p=>p.zone===a.dataset.slot[0])?.id||db.catalog[0]?.id||null;chosenSlot=a.dataset.slot;lastAdded=null;nav('entry');SPV3.selectSlot(a.dataset.slot);renderContent();break;case'zone':selectedSlot=`${a.dataset.zone}-1`;renderContent();break;case'pickslot':setSlot(a.dataset.slot);break;case'export':exportStock();break;case'exporthistory':exportHistory();break;case'clearstock':openModal({type:'clearstock'});break;case'reset':openModal({type:'reset'});break;case'doreset':(async()=>{try{await api('/api/admin/reset','POST',{});formSerial='';lastAdded=null;scanResult=null;selectedSlot='A-1';modal=null;await refreshState(true);nav('dashboard');toast('Stock fictif réinitialisé')}catch(e){toast(e.message,true)}})();break;case'movemodal':openModal({type:'move',id});break;case'confirmmove':(async()=>{try{await api('/api/items/'+encodeURIComponent(id)+'/move','POST',{slot:$('#move-slot')?.value});modal=null;await refreshState(true);renderApp();toast('Article déplacé')}catch(e){toast(e.message,true)}})();break;case'editproduct':openModal({type:'editproduct',id});break;case'listusers':(async()=>{try{users=(await api('/api/users')).users;openModal({type:'users'})}catch(e){toast(e.message,true)}})();break;case'toggleuser':(async()=>{const u=users.find(x=>String(x.id)===String(id));if(!u)return;try{await api('/api/users/'+id,'PATCH',{enabled:!u.enabled});users=(await api('/api/users')).users;openModal({type:'users'});toast('Compte mis à jour')}catch(e){toast(e.message,true)}})();break;case'managebackups':(async()=>{
+ if(me.role!=='admin')return;
+ try{
+  const result=await api('/api/admin/backups');
+  openModal({type:'backups',items:result.backups||[]});
+ }catch(e){toast(e.message,true)}
+})();break;
+case'createbackup':(async()=>{
+ if(me.role!=='admin')return;
+ try{
+  await api('/api/admin/backups','POST',{});
+  const result=await api('/api/admin/backups');
+  openModal({type:'backups',items:result.backups||[]});
+  toast('Sauvegarde créée et vérifiée.');
+ }catch(e){toast(e.message,true)}
+})();break;
+case'confirmbackuprestore':
+ if(me.role==='admin')openModal({type:'backuprestore',name:a.dataset.name});
+ break;
+case'restorebackup':(async()=>{
+ if(me.role!=='admin')return;
+ const confirmation=document.getElementById('backup-restore-confirm')?.value||'';
+ const password=document.getElementById('backup-restore-password')?.value||'';
+ if(confirmation!=='RESTAURER LE STOCK'||!password){
+  toast('Saisissez la confirmation exacte et votre mot de passe.',true);return;
+ }
+ const button=a;
+ button.disabled=true;
+ try{
+  const result=await api('/api/admin/backups/'+encodeURIComponent(a.dataset.name)+'/restore',
+   'POST',{confirmation,password});
+  modal=null;
+  stockRevision=-1;
+  await refreshState();
+  toast('Inventaire restauré. Copie de sécurité créée : '+result.previousStateBackup);
+ }catch(e){toast(e.message,true)}
+ finally{button.disabled=false}
+})();break;
+case'backup':window.open('/api/backup','_blank');break;}});
 window.addEventListener('submit',async e=>{const f=e.target;if(!['catalog-form','user-form','password-form','mobile-password-form','edit-product-form'].includes(f.id))return;e.preventDefault();const data=Object.fromEntries(new FormData(f).entries());try{if(f.id==='catalog-form'){await api('/api/products','POST',data);toast('Référence ajoutée')}else if(f.id==='user-form'){await api('/api/users','POST',data);toast('Compte employé créé')}else if(f.id==='edit-product-form'){data.active=!!f.querySelector('[name=active]').checked;await api('/api/products/'+encodeURIComponent(f.dataset.id),'PATCH',data);modal=null;toast('Produit modifié')}else{await api('/api/me/password','POST',data);toast('Mot de passe modifié')}f.reset();await refreshState(true);renderApp()}catch(err){toast(err.message,true)}});
 window.addEventListener('change',e=>{if(SPV3.onChange(e,{refreshState,renderContent,toast}))return;if(e.target.id==='label-size'){
  try{window.localStorage.setItem('stockpilot-label-size',e.target.value)}catch(err){}
