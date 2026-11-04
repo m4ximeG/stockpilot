@@ -84,7 +84,7 @@ test('Aurora est chargé et reproduit la structure sans supprimer les fonctions'
  const html=fs.readFileSync('static/index.html','utf8');
  const css=fs.readFileSync('static/aurora.css','utf8');
  assert.match(html,/aurora\.css\?v=aurora-20261102-2/);
- assert.match(html,/barcode-only\.js\?v=mobile-20261103-3/);
+ assert.match(html,/barcode-only\.js\?v=stable-20261104-1/);
  assert.match(css,/\.aurora-dashboard/);
  assert.match(css,/\.aur-rail-main/);
  assert.match(css,/\.aur-metrics/);
@@ -207,7 +207,7 @@ test('Les autres pages réutilisent exactement les animations d\'accueil en casc
 
 test('L’actualisation périodique de l’accueil conserve les éléments animés',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
- assert.ok(html.includes("else if(page==='dashboard')syncDashboardData()"));
+ assert.ok(html.includes("if(page==='dashboard'){syncDashboardData();return}"));
  assert.ok(html.includes('function syncDashboardData()'));
  assert.ok(html.includes("syncText('.aur-metric-value strong"));
  assert.ok(html.includes("syncInlineText('.aur-chart-label"));
@@ -215,7 +215,7 @@ test('L’actualisation périodique de l’accueil conserve les éléments anim�
  assert.ok(!html.includes("if(!silent||['dashboard'"));
  assert.ok(html.includes("setInterval(syncStockAcrossDevices,1200)"));
  assert.ok(html.includes("function patchLiveStockView()"));
- assert.ok(html.includes("patch('.si-summary')"));
+ assert.ok(html.includes("'.si-summary','.si-list','.si-footer'"));
 });
 test('Les liens du rail possèdent des icônes explicites et une déconnexion identifiable',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
@@ -463,8 +463,8 @@ test('Réception depuis le stock : produit existant déjà sélectionné',()=>{
 });
 test('Assets inventaire récents : Safari ne garde pas les anciens styles et scripts',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
- assert.match(html,/\/static\/barcode-only\.js\?v=mobile-20261103-3/);
- assert.match(html,/\/static\/reception\.js\?v=12/);
+ assert.match(html,/\/static\/barcode-only\.js\?v=stable-20261104-1/);
+ assert.match(html,/\/static\/reception\.js\?v=13/);
  assert.match(html,/\/static\/inventory-ui\.css\?v=4/);
  assert.match(html,/\/static\/mobile-layout\.css\?v=5/);
 });
@@ -629,7 +629,7 @@ test('Historique mobile : animation uniquement à la navigation',()=>{
  assert.match(css,/@keyframes spHistoryJournalEnter/);
  assert.match(css,/#content\.sp-route-in \.sp-history-page \.sp-mobile-pagehead/);
  assert.match(css,/#content\.sp-route-in \.sp-history-page \.sp-mobile-history/);
- assert.match(js,/patch\('\.sp-mobile-history \.sp-mh-list'\)/);
+ assert.match(js,/\.sp-mobile-history \.sp-mh-list/);
  assert.doesNotMatch(js,/setInterval\(\(\)=>\{if\(!document.hidden&&!modal&&page!=='entry'/);
 });
 test('Notifications iPhone : préférence persistante et réparation du serveur sans nouveau consentement',()=>{
@@ -659,4 +659,20 @@ test('Sauvegardes PC : fenêtre de gestion et restauration confirmée',()=>{
  assert.match(app,/@app\.post\('\/api\/admin\/backups'\)/);
  assert.match(app,/@app\.post\('\/api\/admin\/backups\/<name>\/restore'\)/);
  assert.match(css,/\.sp-backups-modal/);
+});
+
+test('Synchronisation ciblée : conserve les saisies et réactualise le scan et les popups',()=>{
+ const html=fs.readFileSync('static/index.html','utf8');
+ const reception=fs.readFileSync('static/reception.js','utf8');
+ const exit=fs.readFileSync('static/barcode-only.js','utf8');
+ assert.match(html,/function patchLiveStockView\(\)/);
+ assert.match(html,/SPV3\.refreshSuggestions\(db\)/);
+ assert.match(html,/\.sp-scan-result/);
+ assert.match(html,/\.si-modal-units/);
+ assert.match(html,/\.basic-manual-list/);
+ assert.match(html,/old\.contains\(document\.activeElement\)/);
+ assert.match(reception,/function refreshSuggestions\(db\)/);
+ assert.match(exit,/class="sp-scan-result"/);
+ assert.doesNotMatch(html,/else if\(!modal && \['products','history','settings'\]/);
+ assert.match(html,/setInterval\(syncStockAcrossDevices,1200\)/);
 });
