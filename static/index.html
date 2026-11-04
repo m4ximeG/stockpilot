@@ -386,20 +386,15 @@ async function recordEntry(){
 function downloadCSV(name,rows){let csv='\ufeff'+rows.map(cols=>cols.map(x=>'"'+String(x??'').replace(/"/g,'""')+'"').join(';')).join('\r\n');let url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));let a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),600)}
 function exportStock(){downloadCSV('stockpilot-inventaire.csv',[['Identifiant','Marque','Modèle','Catégorie','N° de série','État','Date entrée'],...db.items.map(i=>{let p=product(i.pid);return [i.id,p?.brand,p?.model,p?.cat,i.serial,i.condition,new Date(i.inAt).toLocaleString('fr-FR')]})]);toast('Inventaire CSV téléchargé')}
 function exportStockSummary(){
- const counts=new Map(),pending=new Map();
- db.items.forEach(i=>{
-  const available=!/(sav|répar|repar)/i.test(i.condition||'Neuf');
-  const target=available?counts:pending;
-  target.set(i.pid,(target.get(i.pid)||0)+1);
- });
- const rows=[['Produit','Référence','Catégorie','Quantité disponible','SAV ou réparation','Seuil alerte','Statut']];
- db.catalog.forEach(p=>{
-  const qty=counts.get(p.id)||0,minimum=Number(p.min_stock)||0;
-  const status=qty===0?'Rupture':minimum>0&&qty<=minimum?'À réapprovisionner':'En stock';
-  rows.push([displayName(p),p.ref,p.cat,qty,pending.get(p.id)||0,minimum,status]);
+ const groups=SPBasic.stockGroups(db);
+ const rows=[['Produit','Référence','Catégorie','Configuration','Quantité disponible','SAV ou réparation','En attente de préparation','Seuil alerte (référence globale)','Statut']];
+ groups.forEach(g=>{
+  const specs=Object.entries(g.v.specs||{}).map(([k,v])=>k+': '+v).join(' · ')||'Non renseignée';
+  const status=g.productTotal===0?'Rupture':g.alert?'À réapprovisionner':'En stock';
+  rows.push([displayName(g.p),g.p.ref,g.p.cat,specs,g.qty,g.pending,g.prepPending,g.min,status]);
  });
  downloadCSV('stockpilot-quantites.csv',rows);
- toast('Quantités exportées');
+ toast('Quantités exportées par configuration');
 }
 function exportHistory(){downloadCSV('stockpilot-historique.csv',[['Date','Type','Produit','Identifiant','Opérateur'],...db.events.filter(e=>e.type==='in'||e.type==='out').map(e=>[new Date(e.at).toLocaleString('fr-FR'),e.type==='in'?'Entrée':'Sortie',displayName(product(e.pid)),e.itemId,e.actor])]);toast('Journal CSV téléchargé')}
 function openModal(m){modal=m;document.body.classList.toggle('si-modal-open',m?.type==='stockproduct');renderApp();
