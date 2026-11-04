@@ -311,6 +311,68 @@ class StockPilotTests(unittest.TestCase):
         self.assertEqual(item.status_code,201,item.text)
         self.assertEqual(len(self.client.get('/api/state').json['items']),1)
 
+    def test_saved_variants_are_reused_and_separated_by_configuration(self):
+        base={'name':'TERRA 1552','category':'Ordinateur portable',
+              'condition':'Neuf','prep_status':'pending'}
+        fast={'cpu':'Intel Core i7','ram_gb':32,'cores':10,'storage':'SSD 1 To'}
+        standard={'cpu':'Intel Core i5','ram_gb':16,'cores':8,'storage':'SSD 512 Go'}
+        first=self.client.post('/api/receive',json={**base,'specs':standard},headers=self.headers)
+        self.assertEqual(first.status_code,201,first.text)
+        second=self.client.post('/api/receive',json={**base,'specs':fast},headers=self.headers)
+        self.assertEqual(second.status_code,201,second.text)
+        third=self.client.post('/api/receive',json={**base,'specs':standard},headers=self.headers)
+        self.assertEqual(third.status_code,201,third.text)
+        p=first.json['item']['pid']
+        self.assertEqual(second.json['item']['pid'],p)
+        self.assertEqual(third.json['item']['pid'],p)
+        id16=first.json['item']['variantId']
+        id32=second.json['item']['variantId']
+        self.assertNotEqual(id16,id32)
+        self.assertEqual(third.json['item']['variantId'],id16)
+        snapshot=self.client.get('/api/state')
+        self.assertEqual(snapshot.status_code,200,snapshot.text)
+        variants=[v for v in snapshot.json['variants'] if v['pid']==p]
+        self.assertEqual(len(variants),2)
+        self.assertEqual(next(v for v in variants if v['id']==id16)['specs']['ram_gb'],16)
+        self.assertEqual(next(v for v in variants if v['id']==id32)['specs']['ram_gb'],32)
+        self.assertEqual(sum(1 for i in snapshot.json['items'] if i['variantId']==id16),2)
+        self.assertEqual(sum(1 for i in snapshot.json['items'] if i['variantId']==id32),1)
+        # La fiche est réutilisable même une fois tous les exemplaires vendus.
+        self.client.post(f"/api/items/{second.json['item']['id']}/out",
+                         json={},headers=self.headers)
+        self.assertTrue(any(v['id']==id32 for v in self.client.get('/api/state').json['variants']))
+        reuse=self.client.post('/api/receive',json={**base,'product_id':p,
+            'variant_id':id32},headers=self.headers)
+        self.assertEqual(reuse.status_code,201,reuse.text)
+        self.assertEqual(reuse.json['item']['variantId'],id32)
+        self.assertEqual(reuse.json['item']['specs']['ram_gb'],32)
+        self.assertEqual(self.client.post('/api/receive',json={**base,'product_id':p,
+            'variant_id':'v_invalide'},headers=self.headers).status_code,400)
+
+    def test_preparation_change_creates_new_variant_and_rejects_stale_write(self):
+        start=self.client.post('/api/receive',json={
+            'name':'TERRA en préparation','category':'Ordinateur portable',
+            'specs':{'ram_gb':16},'condition':'Neuf'
+        },headers=self.headers)
+        self.assertEqual(start.status_code,201,start.text)
+        item=start.json['item']
+        baseline={'serial':'','prep_status':'pending','specs':{'ram_gb':16}}
+        update=self.client.patch(f"/api/items/{item['id']}/preparation",json={
+            'expected':baseline,
+            'prep_status':'ready','specs':{'ram_gb':32,'cpu':'Intel Core i7'}
+        },headers=self.headers)
+        self.assertEqual(update.status_code,200,update.text)
+        self.assertNotEqual(update.json['item']['variantId'],item['variantId'])
+        stale=self.client.patch(f"/api/items/{item['id']}/preparation",json={
+            'expected':baseline,'specs':{'ram_gb':64}
+        },headers=self.headers)
+        self.assertEqual(stale.status_code,409,stale.text)
+        changed=next(x for x in self.client.get('/api/state').json['items'] if x['id']==item['id'])
+        self.assertEqual(changed['specs']['ram_gb'],32)
+        self.assertEqual(changed['prepStatus'],'ready')
+        self.assertEqual(len([v for v in self.client.get('/api/state').json['variants']
+                              if v['pid']==item['pid']]),2)
+
     def test_reception_types_and_deferred_computer_preparation(self):
         # Aucun détail de RAM / processeur obligatoire à la réception.
         reception=self.client.post('/api/receive', json={
