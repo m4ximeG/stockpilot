@@ -23,6 +23,101 @@ class StockPilotTests(unittest.TestCase):
         self.headers = {'X-Requested-With': 'StockPilot'}
         self.assertEqual(self.client.post('/api/admin/reset', json={}, headers=self.headers).status_code, 200)
 
+    def test_managed_daily_backups_retention_and_integrity(self):
+        import backup_service
+        from datetime import datetime, timedelta, timezone
+        data_dir=Path(stock.DATA_DIR)
+        self.assertFalse(self.client.get('/api/admin/backups').status_code != 200)
+        # La première sauvegarde est un instantané SQLite binaire cohérent.
+        now=datetime(2026, 11, 4, tzinfo=timezone.utc)
+        daily=backup_service.ensure_daily_backup(stock.DB_FILE,data_dir,now=now)
+        self.assertEqual(daily.name,'daily-2026-11-04.sqlite3')
+        self.assertTrue(daily.is_file())
+        with stock.connect() as live:
+            before_count=live.execute('SELECT COUNT(*) FROM items WHERE out_at IS NULL').fetchone()[0]
+        import sqlite3
+        with sqlite3.connect(daily) as snapshot:
+            backup_service.validate_database(snapshot)
+            self.assertEqual(snapshot.execute('SELECT COUNT(*) FROM items WHERE out_at IS NULL').fetchone()[0],
+                             before_count)
+        product=self.client.post('/api/receive',json={'name':'Produit à ne pas sauvegarder'},
+                                 headers=self.headers)
+        self.assertEqual(product.status_code,201,product.text)
+        again=backup_service.ensure_daily_backup(stock.DB_FILE,data_dir,now=now)
+        self.assertEqual(again,daily)
+        with sqlite3.connect(again) as saved:
+            self.assertEqual(saved.execute('SELECT COUNT(*) FROM items WHERE out_at IS NULL').fetchone()[0],
+                             before_count)
+        for days in range(1,33):
+            backup_service.ensure_daily_backup(stock.DB_FILE,data_dir,
+                now=now+timedelta(days=days))
+        auto=[item for item in backup_service.list_backups(data_dir)
+              if item['kind']=='auto']
+        self.assertEqual(len(auto),30)
+        self.assertFalse((data_dir/'backups'/'managed'/'daily-2026-11-04.sqlite3').exists())
+        self.assertFalse((data_dir/'backups'/'managed'/'daily-2026-11-05.sqlite3').exists())
+        self.assertTrue((data_dir/'backups'/'managed'/'daily-2026-12-06.sqlite3').exists())
+
+    def test_admin_manual_backup_and_restore_with_confirmation(self):
+        import sqlite3
+        from unittest.mock import patch
+        import backup_service
+        info=self.client.get('/api/admin/backups')
+        self.assertEqual(info.status_code,200,info.text)
+        self.assertIn('retentionDays',info.json)
+        manual=self.client.post('/api/admin/backups',headers=self.headers,json={})
+        self.assertEqual(manual.status_code,201,manual.text)
+        name=manual.json['name']
+        self.assertTrue(name.startswith('manual-'))
+        download=self.client.get(f'/api/admin/backups/{name}/download')
+        self.assertEqual(download.status_code,200,download.text)
+        self.assertIn(b'SQLite format 3',download.data[:30])
+        self.assertEqual(self.client.get('/api/admin/backups/../../etc/passwd/download').status_code,404)
+        self.assertEqual(self.client.get('/api/admin/backups/fake.sqlite3/download').status_code,404)
+        db_before=self.client.get('/api/state').json
+        product=self.client.post('/api/receive',headers=self.headers,
+            json={'name':'Produit ajouté après sauvegarde'})
+        self.assertEqual(product.status_code,201,product.text)
+        rev=self.client.get('/api/sync/revision').json['revision']
+        self.assertGreater(len(self.client.get('/api/state').json['items']),len(db_before['items']))
+        endpoint=f'/api/admin/backups/{name}/restore'
+        self.assertEqual(self.client.post(endpoint,headers=self.headers,
+            json={'confirmation':'non','password':'UnMotDePasseTestTresLong#42'}).status_code,400)
+        self.assertEqual(self.client.post(endpoint,headers=self.headers,
+            json={'confirmation':'RESTAURER LE STOCK','password':'erreur'}).status_code,403)
+        self.assertEqual(self.client.post(endpoint,json={
+            'confirmation':'RESTAURER LE STOCK',
+            'password':'UnMotDePasseTestTresLong#42'}).status_code,403)
+        restored=self.client.post(endpoint,headers=self.headers,json={
+            'confirmation':'RESTAURER LE STOCK',
+            'password':'UnMotDePasseTestTresLong#42'
+        })
+        self.assertEqual(restored.status_code,200,restored.text)
+        self.assertEqual(len(self.client.get('/api/state').json['items']),len(db_before['items']))
+        self.assertGreater(self.client.get('/api/sync/revision').json['revision'],rev)
+        safeguard=restored.json['previousStateBackup']
+        path=backup_service.resolve_backup(stock.DATA_DIR,safeguard)
+        with sqlite3.connect(path) as previous:
+            self.assertTrue(backup_service.validate_database(previous))
+            self.assertEqual(previous.execute('SELECT COUNT(*) FROM items WHERE out_at IS NULL').fetchone()[0],
+                             len(db_before['items'])+1)
+
+    def test_backups_are_admin_only_and_inaccessible_to_employees(self):
+        employee=self.client.post('/api/users',headers=self.headers,json={
+            'username':'backup_employee','password':'BackupTestPassword#4242','role':'employee'
+        })
+        self.assertEqual(employee.status_code,201,employee.text)
+        other=stock.app.test_client()
+        self.assertEqual(other.post('/login',data={
+            'username':'backup_employee','password':'BackupTestPassword#4242'
+        }).status_code,302)
+        for path in ['/api/admin/backups','/api/admin/backups/test/download']:
+            self.assertEqual(other.get(path).status_code,403,path)
+        self.assertEqual(other.post('/api/admin/backups',
+                                   headers=self.headers,json={}).status_code,403)
+        self.assertEqual(other.post('/api/admin/backups/test/restore',
+                                   headers=self.headers,json={}).status_code,403)
+
     def test_realtime_sync_revision_is_transactional_and_shared(self):
         # Les anciens terminaux voient les écritures d'un autre client sans redémarrage.
         first = self.client.get('/api/sync/revision')
