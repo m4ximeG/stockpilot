@@ -84,7 +84,7 @@ test('Aurora est chargé et reproduit la structure sans supprimer les fonctions'
  const html=fs.readFileSync('static/index.html','utf8');
  const css=fs.readFileSync('static/aurora.css','utf8');
  assert.match(html,/aurora\.css\?v=aurora-20261102-2/);
- assert.match(html,/barcode-only\.js\?v=categories-20261103-2/);
+ assert.match(html,/barcode-only\.js\?v=variants-20261104-1/);
  assert.match(css,/\.aurora-dashboard/);
  assert.match(css,/\.aur-rail-main/);
  assert.match(css,/\.aur-metrics/);
@@ -325,7 +325,7 @@ test('Inventaire : popup produit au lieu de menu déroulant, seuil facultatif en
  assert.match(html,/si-inventory/);
  assert.match(html,/si-is-alert/);
  assert.match(html,/Stock faible · à commander/);
- assert.match(html,/Minimum : 3/);
+ assert.match(html,/Seuil de référence : 3/);
  assert.match(html,/data-action="stockproduct"/);
  assert.doesNotMatch(html,/data-action="newentryproduct"/);
  assert.doesNotMatch(html,/data-action="newentry"/);
@@ -463,8 +463,8 @@ test('Réception depuis le stock : produit existant déjà sélectionné',()=>{
 });
 test('Assets inventaire récents : Safari ne garde pas les anciens styles et scripts',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
- assert.match(html,/\/static\/barcode-only\.js\?v=categories-20261103-2/);
- assert.match(html,/\/static\/reception\.js\?v=13/);
+ assert.match(html,/\/static\/barcode-only\.js\?v=variants-20261104-1/);
+ assert.match(html,/\/static\/reception\.js\?v=14/);
  assert.match(html,/\/static\/inventory-ui\.css\?v=4/);
  assert.match(html,/\/static\/mobile-layout\.css\?v=5/);
 });
@@ -698,7 +698,7 @@ test('Les fichiers de catégories sont embarqués avec le site et responsables s
  const style=fs.readFileSync('static/product-types.css','utf8');
  const app=fs.readFileSync('app.py','utf8');
  assert.match(index,/\/static\/product-types\.css\?v=1/);
- assert.match(index,/\/static\/reception\.js\?v=13/);
+ assert.match(index,/\/static\/reception\.js\?v=14/);
  assert.match(index,/unitPreparationModal/);
  assert.match(index,/case'editunit'/);
  assert.match(index,/sp-unit-edit-form/);
@@ -726,4 +726,72 @@ test('Filtre de préparation : n’affiche que les ordinateurs en attente',()=>{
  assert.match(html,/À préparer \(1\)/);
  const style=fs.readFileSync('static/product-types.css','utf8');
  assert.match(style,/grid-template-columns:repeat\(2,minmax\(0,1fr\)\)!important/);
+});
+
+test('Configurations PC : deux performances du même modèle créent deux fiches séparées',()=>{
+ const p={...product,cat:'Ordinateur portable'};
+ const variants=[
+  {id:'variant16',pid:p.id,specs:{cpu:'Intel Core i5',ram_gb:16,storage:'SSD 512 Go'},createdAt:1},
+  {id:'variant32',pid:p.id,specs:{cpu:'Intel Core i7',ram_gb:32,storage:'SSD 1 To'},createdAt:2}
+ ];
+ const units=[
+  {...item,id:'STK-000010',variantId:'variant16',specs:variants[0].specs,prepStatus:'ready'},
+  {...item,id:'STK-000011',variantId:'variant16',specs:variants[0].specs,prepStatus:'pending'},
+  {...item,id:'STK-000012',variantId:'variant32',specs:variants[1].specs,prepStatus:'ready'}
+ ];
+ const ctx={...context,db:{...db,catalog:[p],items:units,variants},modal:{id:p.id,variantId:'variant16'},
+  product:id=>id===p.id?p:null};
+ const html=basic.inventory(ctx);
+ assert.match(html,/data-variant="variant16"/);
+ assert.match(html,/data-variant="variant32"/);
+ assert.match(html,/16 Go RAM/);
+ assert.match(html,/32 Go RAM/);
+ assert.match(html,/2 configurations/);
+ const groups=basic.stockGroups(ctx.db);
+ assert.equal(groups.length,2);
+ assert.equal(groups.find(g=>g.v.id==='variant16').qty,2);
+ assert.equal(groups.find(g=>g.v.id==='variant32').qty,1);
+ const modal16=basic.stockProductModal(ctx);
+ assert.match(modal16,/STK-000010/);
+ assert.match(modal16,/STK-000011/);
+ assert.doesNotMatch(modal16,/STK-000012/);
+ const modal32=basic.stockProductModal({...ctx,modal:{id:p.id,variantId:'variant32'}});
+ assert.match(modal32,/STK-000012/);
+ assert.doesNotMatch(modal32,/STK-000010/);
+});
+test('Réception : la fiche technique mémorisée revient et peut être personnalisée',()=>{
+ const p={...product,cat:'PC portable'};
+ const variants=[
+  {id:'v16',pid:p.id,specs:{cpu:'Intel Core i5',ram_gb:16,storage:'SSD 512 Go'},createdAt:1},
+  {id:'v32',pid:p.id,specs:{cpu:'Intel Core i7',ram_gb:32,storage:'SSD 1 To'},createdAt:2}
+ ];
+ const stock={...db,catalog:[p],variants};
+ receive.prefill(p,stock);
+ let html=receive.entry({...context,db:stock});
+ assert.match(html,/id="rx-variant-picker"/);
+ assert.match(html,/data-rx="variant" data-id="v16"/);
+ assert.match(html,/data-rx="variant" data-id="v32"/);
+ assert.match(html,/id="rx-spec-ram_gb"[^>]*value="32"/);
+ receive.onClick({target:{closest:()=>({dataset:{rx:'variant',id:'v16'}})}},
+  {db:stock,renderContent:()=>{}});
+ html=receive.entry({...context,db:stock});
+ assert.match(html,/id="rx-spec-ram_gb"[^>]*value="16"/);
+ receive.onClick({target:{closest:()=>({dataset:{rx:'customvariant'}})}},
+  {db:stock,renderContent:()=>{}});
+ html=receive.entry({...context,db:stock});
+ assert.match(html,/id="rx-spec-ram_gb"[^>]*value=""/);
+ receive.reset();
+});
+test('Synchronisation multi-appareils : listes et popups se mettent à jour sans rafraîchir la page',()=>{
+ const html=fs.readFileSync('static/index.html','utf8');
+ assert.match(html,/SPV3\.refreshVariants\(db\)/);
+ assert.match(html,/SPV3\.refreshSuggestions\(db\)/);
+ assert.match(html,/\.si-modal-summary','\.si-modal-subtitle','\.si-modal-units'/);
+ assert.match(html,/\.sp-scan-result/);
+ assert.match(html,/\.basic-manual-list/);
+ assert.match(html,/\.basic-catalog/);
+ assert.match(html,/data\.baseline\?JSON\.parse\(data\.baseline\)/);
+ assert.match(html,/variantId:a\.dataset\.variant\|\|null/);
+ const modal=basic.unitPreparationModal({...context,db:{...db,variants:[]},modal:{id:item.id}});
+ assert.match(modal,/name="baseline"/);
 });
