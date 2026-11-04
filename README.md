@@ -29,6 +29,16 @@ StockPilot s'installe directement depuis **https://stockpilot.m4xim.eu**. L'appl
 
 **Important** : la publication d'une application native iOS sur l'App Store requiert l'Apple Developer Program payant. La PWA ci-dessus est la solution iPhone gratuite et installable, sans App Store. Le déploiement Docker habituel met à jour l'application sur les deux systèmes.
 
+## Configurations réutilisables et synchronisation détaillée (4 novembre 2026)
+
+- Les caractéristiques saisies pendant une réception (RAM, CPU, cœurs, SSD, etc.) sont enregistrées durablement dans `product_variants`, une table SQLite liée au **modèle**. Chaque configuration possède un identifiant stable, partagé entre tous les postes. Le nom du modèle n'est jamais dupliqué pour fabriquer artificiellement un nouveau produit.
+- À la réception suivante, sélectionner le modèle propose ses **configurations enregistrées**. La plus récente est préremplie ; les autres peuvent être choisies, ou « Nouvelle configuration » remet uniquement les champs techniques à vide. Un autre exemplaire utilise la même configuration sans ressaisie du nom et des caractéristiques.
+- Les unités physiques `STK-...` conservent chacune leur `variant_id`, leur numéro de série, leurs propres caractéristiques et leur statut de préparation. Modifier la fiche d'un PC peut créer une nouvelle configuration sans réécrire les autres exemplaires.
+- L'**inventaire** affiche une ligne séparée par configuration et des quantités séparées, puis la popup montre exclusivement les unités correspondant à cette configuration et leurs étiquettes réimprimables. Les anciennes unités sont rattachées automatiquement à une configuration lors de la migration. Les configurations restent disponibles après la sortie du dernier exemplaire.
+- Les seuils de réapprovisionnement restent appliqués à la référence globale, pas à chaque variante, pour conserver le fonctionnement antérieur des alertes.
+- Le compteur de synchronisation transactionnel prend également en compte les configurations enregistrées. Les pages **Accueil, Stock, Historique, Scanner, Paramètres** et les **popups de stock** actualisent leurs portions de données sans reconstruire le document. Pendant la réception, seuls les menus de suggestions/profils sont mis à jour, jamais les champs techniques saisis.
+- Si une fiche technique est modifiée à distance pendant qu'une personne la complète, son formulaire n'est pas effacé. L'enregistrement utilise une comparaison optimiste de l'état initial et **renvoie une erreur 409 en cas de conflit** au lieu d'écraser silencieusement la modification distante.
+
 ## Réception par type et préparation des ordinateurs (3 novembre 2026)
 
 Dans **Entrée en stock**, choisissez un type d'article avant son nom : **Matériel, Ordinateur portable, Ordinateur fixe, Écran, Imprimante, Réseau, Périphérique, Téléphone / tablette, Composant ou Autre**. La réception n'exige que le nom et le type ; les caractéristiques supplémentaires sont facultatives.
