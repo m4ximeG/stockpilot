@@ -55,11 +55,18 @@ function onClick(ev,ctx){
  }
  return true;
 }
+function refreshSuggestions(db){
+ if(state.received||!state.suggestions)return;
+ const panel=document.getElementById('rx-suggestions');
+ if(!panel||panel.contains(document.activeElement))return;
+ const next=hints(db);
+ if(panel.innerHTML!==next)panel.innerHTML=next;
+}
 function reset(){state=blank();}
 function prefill(product){
  state=blank();
  if(product){state.name=name(product);state.pid=product.id;state.suggestions=false;}
 }
 function onChange(){return false;}
-window.SPV3={entry,onInput,onClick,onChange,reset,prefill,selectSlot(){}};
+window.SPV3={entry,onInput,onClick,onChange,reset,prefill,refreshSuggestions,selectSlot(){}};
 })();
