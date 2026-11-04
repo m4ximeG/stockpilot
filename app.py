@@ -1,5 +1,7 @@
 """StockPilot — serveur multi-utilisateurs à stockage SQLite persistant."""
 import io
+import fcntl
+import backup_service
 import os
 import re
 import secrets
@@ -208,14 +210,26 @@ initialize()
 
 @app.before_request
 def before_request():
-    g.db = connect()
-    if request.method not in ('GET', 'HEAD', 'OPTIONS') and request.endpoint not in ('login',):
+    mutation = request.method not in ('GET', 'HEAD', 'OPTIONS')
+    if mutation and request.endpoint not in ('login',):
         # Header non-simple + same-origin session cookie to mitigate cross-site form submissions.
         if request.headers.get('X-Requested-With') != 'StockPilot':
             abort(403)
         origin = request.headers.get('Origin')
         if origin and origin.rstrip('/') != request.host_url.rstrip('/'):
             abort(403)
+    if mutation:
+        # Verrou global pendant les écritures : une restauration ne peut pas
+        # remplacer la base au milieu d'un enregistrement sur un autre poste.
+        lock = (DATA_DIR / '.stockpilot-write.lock').open('a+b')
+        try:
+            os.chmod(DATA_DIR / '.stockpilot-write.lock', 0o600)
+            fcntl.flock(lock, fcntl.LOCK_EX)
+        except Exception:
+            lock.close()
+            raise
+        g.write_lock = lock
+    g.db = connect()
 
 
 @app.teardown_request
@@ -223,6 +237,10 @@ def teardown_request(_exc):
     db = getattr(g, 'db', None)
     if db is not None:
         db.close()
+    lock = getattr(g, 'write_lock', None)
+    if lock is not None:
+        fcntl.flock(lock, fcntl.LOCK_UN)
+        lock.close()
 
 
 def logged_in():
@@ -988,6 +1006,61 @@ def download_backup():
     temp.write(script)
     temp.seek(0)
     return send_file(temp,mimetype='application/sql',as_attachment=True,download_name=f'stockpilot-{datetime.now(timezone.utc):%Y%m%d-%H%M}.sql')
+
+
+@app.get('/api/admin/backups')
+@protected(admin=True)
+def list_managed_backups():
+    result = jsonify(backups=backup_service.list_backups(DATA_DIR),
+                     retentionDays=backup_service.BACKUP_KEEP_DAYS)
+    result.headers['Cache-Control'] = 'private, no-store'
+    return result
+
+
+@app.post('/api/admin/backups')
+@protected(admin=True)
+def create_managed_backup():
+    path = backup_service.create_manual_backup(DB_FILE, DATA_DIR)
+    return jsonify(ok=True, name=path.name), 201
+
+
+@app.get('/api/admin/backups/<name>/download')
+@protected(admin=True)
+def download_managed_backup(name):
+    try:
+        path = backup_service.resolve_backup(DATA_DIR, name)
+    except (ValueError, FileNotFoundError):
+        return bad('Sauvegarde introuvable.', 404)
+    response = send_file(path, mimetype='application/vnd.sqlite3', as_attachment=True,
+                         download_name=path.name, max_age=0)
+    response.headers['Cache-Control'] = 'private, no-store'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    return response
+
+
+@app.post('/api/admin/backups/<name>/restore')
+@protected(admin=True)
+def restore_managed_backup(name):
+    try:
+        data = json_body()
+        if data.get('confirmation') != 'RESTAURER LE STOCK':
+            return bad('Écrivez RESTAURER LE STOCK pour confirmer.', 400)
+        password = data.get('password')
+        if not isinstance(password, str) or not check_password_hash(
+            g.db.execute('SELECT password_hash FROM users WHERE id=?',
+                         (g.user['id'],)).fetchone()['password_hash'], password
+        ):
+            return bad('Mot de passe administrateur incorrect.', 403)
+        try:
+            backup_service.resolve_backup(DATA_DIR, name)
+        except (ValueError, FileNotFoundError):
+            return bad('Sauvegarde introuvable.', 404)
+        safeguard = backup_service.restore_backup(g.db, DB_FILE, DATA_DIR, name)
+        return jsonify(ok=True, previousStateBackup=safeguard,
+                       message='Stock restauré. Les autres appareils se synchroniseront automatiquement.')
+    except (ValueError, sqlite3.DatabaseError, OSError) as exc:
+        app.logger.exception('Échec restauration sauvegarde StockPilot')
+        return bad('Restauration impossible : ' + str(exc), 409)
 
 
 @app.post('/api/admin/reset')
