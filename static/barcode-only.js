@@ -265,7 +265,10 @@ function unitPreparationModal(c){
  '<header class="modal-head"><div><div class="si-modal-kicker">'+escape(item.id)+'</div><h2 id="sp-unit-edit-title">'+
  (pc?'Préparation de l’ordinateur':'Fiche de l’article')+'</h2><p>'+escape(name(p))+'</p></div>'+
  '<button class="closebtn" type="button" data-action="returnproduct" aria-label="Retour à la fiche produit">×</button></header>'+
- '<form id="sp-unit-edit-form" data-id="'+escape(item.id)+'"><div class="modal-body sp-unit-edit-body">'+
+ '<form id="sp-unit-edit-form" data-id="'+escape(item.id)+'">'+
+ '<input type="hidden" name="baseline" value="'+escape(JSON.stringify({
+  serial:item.serial||'',prep_status:item.prepStatus||'not_required',specs:item.specs||{}
+ }))+'"><div class="modal-body sp-unit-edit-body">'+
  '<p class="sp-unit-hint">Complétez les informations connues. Les champs laissés vides pourront être remplis plus tard.</p>'+
  '<label class="sp-unit-field">Numéro de série<input name="serial" maxlength="100" value="'+escape(item.serial||'')+'" placeholder="Facultatif"></label>'+
  choices+(fields?'<div class="sp-unit-spec-grid">'+fields+'</div>':'')+
@@ -335,7 +338,7 @@ function exit(c){
  const card=i?'<div class="productpick"><div class="prodicon">'+c.ico(p?.kind||'package',25)+'</div><div><strong>'+escape(name(p))+'</strong><small>'+escape(i.id)+' · '+escape(p?.ref||'')+'</small></div></div><div class="basic-scanned"><div><span>Numéro de série</span><strong>'+escape(i.serial||'Non renseigné')+'</strong></div><div><span>État</span><strong>'+escape(i.condition||'Neuf')+'</strong></div></div><button class="btn negative full" data-action="confirmout" data-id="'+escape(i.id)+'">'+c.ico('out',18)+' Confirmer la sortie du stock</button>':'<div class="basic-scan-empty">'+c.ico('package',34)+'<p>Aucun article scanné pour le moment.</p></div>';
  return c.heading('SORTIE DU STOCK','Scanner une étiquette','Scannez le code-barres ou le QR code d’un article pour le retirer de l’inventaire.')+
  '<div class="flowgrid"><section class="card formcard"><h2>Scanner un article</h2><p class="intro">Utilisez une douchette USB/Bluetooth, votre caméra ou saisissez l’identifiant manuellement.</p><div class="scan-panel" id="scan-panel">'+c.ico('barcode',55)+'<strong>Prêt pour un scan</strong><p>Exemple : STK-000001</p></div><div class="basic-scan-buttons"><button class="btn" data-action="camera">'+c.ico('camera',17)+' Activer la caméra</button></div><label for="scan-code">Identifiant du produit</label><div class="scan-input"><input id="scan-code" placeholder="STK-000001" autocomplete="off"><button class="btn primary" data-action="lookup">Rechercher</button></div></section>'+
- '<section class="card formcard"><h2>Produit identifié</h2><p class="intro">Vérifiez le produit avant de confirmer la sortie.</p>'+card+'<div class="basic-manual-list"><h3>Derniers articles en stock</h3>'+c.db.items.slice(-7).reverse().map(i=>'<button type="button" data-action="selectscan" data-id="'+escape(i.id)+'"><span>'+escape(name(c.product(i.pid)))+'</span><strong>'+escape(i.id)+'</strong></button>').join('')+'</div></section></div>';
+ '<section class="card formcard"><h2>Produit identifié</h2><p class="intro">Vérifiez le produit avant de confirmer la sortie.</p><div class="sp-scan-result">'+card+'</div><div class="basic-manual-list"><h3>Derniers articles en stock</h3>'+c.db.items.slice(-7).reverse().map(i=>'<button type="button" data-action="selectscan" data-id="'+escape(i.id)+'"><span>'+escape(name(c.product(i.pid)))+'</span><strong>'+escape(i.id)+'</strong></button>').join('')+'</div></section></div>';
 }
 function detailModal(c){
  const i=c.itemById(c.modal?.id);if(!i)return '';
