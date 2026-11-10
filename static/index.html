@@ -26,7 +26,7 @@
 
 
 
-<script src="/static/barcode-only.js?v=stable-20261104-1"></script>
+<script src="/static/barcode-only.js?v=henrri-20261110-1"></script>
 <script src="/static/reception.js?v=13"></script>
 <link rel="stylesheet" href="/static/barcode-only.css?v=aurora-20261102-2" />
 
@@ -38,6 +38,7 @@
 <link rel="stylesheet" href="/static/mobile-layout.css?v=5" />
 <link rel="stylesheet" href="/static/inventory-ui.css?v=4" />
 <link rel="stylesheet" href="/static/backup-ui.css?v=1" />
+<link rel="stylesheet" href="/static/henrri.css?v=1" />
 
 
 
@@ -73,12 +74,15 @@ if(/(?:^\\?|&)page=products(?:&|$)/.test(String(window.location?.search||'')))pa
 function save(){} // Les données sont toujours écrites par le serveur et jamais dans localStorage.
 async function api(path,method='GET',data=null){const opts={method,credentials:'same-origin',headers:{'X-Requested-With':'StockPilot'}};if(data!==null){opts.headers['Content-Type']='application/json';opts.body=JSON.stringify(data)}let r;try{r=await fetch(path,opts)}catch(e){throw new Error('Serveur inaccessible. Vérifiez le réseau.')}if(r.status===401){window.location='/login';throw new Error('Session expirée')}const contentType=r.headers.get('content-type')||'';const result=contentType.includes('json')?await r.json():{};if(!r.ok)throw new Error(result.error||'Erreur du serveur');return result}
 let me={username:'...',role:'employee'},allowReset=false,users=[],locationMode='optional';
+let henrri={status:'loading'},henrriLoading=false,henrriConfigured=false;
 let stockRevision=-1,liveSyncBusy=false,liveSyncActive=true,liveSyncLastCheck=0;
 function receiveStockSnapshot(data){
  if(typeof data.revision==='number' && stockRevision>=0 && data.revision<stockRevision)return false;
  db={items:data.items,events:data.events,catalog:data.catalog,shelves:data.shelves||[],
   warehousePhoto:!!data.warehousePhoto,counter:data.counter};
  me=data.me;allowReset=data.allowReset;locationMode=data.locationMode||'optional';
+  henrriConfigured=me.role==='admin' && data.henrriConfigured===true;
+  if(!henrriConfigured)henrri={status:'not_configured'};
  if(typeof data.revision==='number')stockRevision=data.revision;
  if(!db.catalog.some(p=>p.id===selectedProduct&&p.active))selectedProduct=db.catalog.find(p=>p.active)?.id||null;
  return true;
@@ -86,7 +90,9 @@ function receiveStockSnapshot(data){
 async function refreshState(silent=false){
  try{
   const data=await api('/api/state');
+  const previousRevision=stockRevision;
   if(!receiveStockSnapshot(data))return true;
+  if(previousRevision>=0&&previousRevision!==stockRevision&&henrriConfigured)fetchHenrriValuation();
   if(!silent)renderApp();
   else patchLiveStockView();
   return true;
@@ -96,6 +102,31 @@ async function refreshState(silent=false){
   }else console.warn('StockPilot: actualisation du stock temporairement impossible');
   return false;
  }
+}
+function refreshHenrriDisplay(){
+ if(page==='dashboard'){
+  // N'actualise que la pastille Henrri, sans relancer les animations d'accueil.
+  const old=document.querySelector('#content .sp-henrri-pill');
+  if(!old)return;
+  const container=document.createElement('div');
+  container.innerHTML=renderDashboard();
+  const next=container.querySelector('.sp-henrri-pill');
+  if(next&&next.innerHTML!==old.innerHTML)old.innerHTML=next.innerHTML;
+ }else if(page==='settings')renderContent();
+}
+async function fetchHenrriValuation(force=false){
+ if(me.role!=='admin'||henrriLoading||document.hidden)return;
+ henrriLoading=true;
+ try{
+  const result=await api('/api/admin/henrri/valuation'+(force?'?refresh=1':''));
+  henrri=result;
+  refreshHenrriDisplay();
+  if(force)toast(result.status==='connected'?'Tarifs Henrri actualisés.':'Les clés Henrri ne sont pas encore configurées.',result.status!=='connected');
+ }catch(e){
+  henrri={status:'error',error:e.message};
+  refreshHenrriDisplay();
+  if(force)toast('Henrri : '+e.message,true);
+ }finally{henrriLoading=false}
 }
 function product(pid){return db.catalog.find(p=>p.id===pid)}function itemAt(slot){return db.items.find(i=>i.slot===slot)}function itemById(id){return db.items.find(i=>i.id.toUpperCase()===String(id).trim().toUpperCase())}function zoneOf(slot){return ZONES.find(z=>z.id===slot?.[0])}
 function firstFree(zone){return null}
@@ -197,7 +228,7 @@ function layout(){document.body.classList.toggle('aurora-on',page==='dashboard')
 function renderPage(){const views={dashboard:renderDashboard,entry:renderEntry,exit:renderExit,products:renderProducts,history:renderHistory,settings:renderSettings};return (views[page]||views.dashboard)();}
 function heading(kicker,title,subtitle,actions=''){return `<div class="pagehead"><div><div class="eyebrow">${kicker}</div><h1>${title}</h1><p>${subtitle}</p></div>${actions?`<div class="head-actions">${actions}</div>`:''}</div>`}
 const btn=(label,action,icon='arrow',cls='primary')=>`<button class="btn ${cls}" data-action="${action}">${ico(icon,16)} ${label}</button>`;
-function renderDashboard(){return SPBasic.dashboard({db,heading,btn,ico});}
+function renderDashboard(){return SPBasic.dashboard({db,me,henrri,heading,btn,ico});}
 // Mise à jour silencieuse : aucun remplacement des nœuds animés de l'accueil.
 function syncDashboardData(){
  const current=document.querySelector('#content .aurora-dashboard');
@@ -250,7 +281,7 @@ function renderExit(){return SPBasic.exit({db,heading,btn,ico,scanResult,itemByI
 function renderProducts(){return SPBasic.inventory({db,me,heading,btn,tableFilter,tableType,tableStockFilter,product});}
 function renderHistory(){return SPBasic.history({db,heading,btn,product});}
 function renderSettingsLegacy(){return SPBasic.settings({db,me,heading});}
-function renderSettings(){return SPBasic.settings({db,me,heading,labelSize:stockPilotLabelSize()});}
+function renderSettings(){return SPBasic.settings({db,me,henrri,heading,labelSize:stockPilotLabelSize()});}
 function renderModal(){
  if(!modal)return '';
  if(modal.type==='stockproduct')return SPBasic.stockProductModal({modal,db,me,product});
@@ -356,6 +387,7 @@ async function syncStockAcrossDevices(){
      try{users=(await api('/api/users')).users||users}catch(e){}
     }
     patchLiveStockView();
+    if(henrriConfigured)fetchHenrriValuation();
    }
   }
  }catch(e){
@@ -648,6 +680,7 @@ function searchGlobal(v){searchTerm=v;page='products';tableFilter=v;renderApp();
 window.addEventListener('click',ev=>{if(SPV3.onClick(ev,{db,api,refreshState,renderContent,toast,printLabel,page,setSlot}))return;const n=ev.target.closest('[data-nav]');if(n){nav(n.dataset.nav);return}const slot=ev.target.closest('[data-slot]');if(slot){setSlot(slot.dataset.slot);return}const a=ev.target.closest('[data-action]');if(!a)return;const act=a.dataset.action,id=a.dataset.id;if(act==='backdrop'){if(ev.target===a)closeModal();return}switch(act){case'save-shelf':(async()=>{if(me.role!=='admin')return;const slot=a.dataset.slot;try{await api('/api/shelves/'+encodeURIComponent(slot),'PATCH',{size:$('#shelf-size')?.value||'unknown',note:$('#shelf-note')?.value||''});await refreshState(true);renderContent();toast('Niveau '+slot+' mis à jour')}catch(e){toast(e.message,true)}})();break;case'clearstock':openModal({type:'clearstock'});break;case'doclearstock':(async()=>{if($('#clear-confirm')?.value!=='VIDER LE STOCK')return toast('Confirmation incorrecte',true);try{await api('/api/admin/clear-stock','POST',{confirmation:'VIDER LE STOCK'});lastAdded=null;scanResult=null;modal=null;selectedProduct=null;await refreshState(true);nav('dashboard');toast('Stock vidé. Sauvegarde créée sur le NAS.')}catch(e){toast(e.message,true)}})();break;case'save-rule':(async()=>{if(me.role!=='admin')return;const slot=$('#rule-'+id)?.value??'';try{await api('/api/products/'+encodeURIComponent(id),'PATCH',{preferred_slot:slot});await refreshState(true);renderContent();toast(slot?'Emplacement conseillé enregistré':'Suggestion de rangement effacée')}catch(e){toast(e.message,true)}})();break;case'setlocationmode':(async()=>{if(me.role!=='admin')return;try{const mode=a.dataset.mode;await api('/api/settings/location-mode','POST',{mode});locationMode=mode;await refreshState(true);renderApp();toast('Mode de rangement mis à jour')}catch(e){toast(e.message,true)}})();break;case'mobilemore':toggleMobileMore();break;case'closemobilemore':toggleMobileMore(false);break;case'menu':mobileNav=true;renderApp();break;case'closemenu':mobileNav=false;renderApp();break;case'newentry':goEntry();break;case'goexit':goExit();break;case'gomap':nav('map');break;case'saveentry':recordEntry();break;case'print':printLabel(id);break;case'lookup':lookup($('#scan-code')?.value);break;case'stockfilter':tableStockFilter=['all','low','in'].includes(a.dataset.status)?a.dataset.status:'all';renderContent();break;
 case'stockproduct':openModal({type:'stockproduct',id});break;case'pushsubscribe':togglePushSubscription(a);break;
 case'exportstocksummary':exportStockSummary();break;
+ case'refreshhenrri':fetchHenrriValuation(true);break;
 case'stockthreshold':(async()=>{
  if(me.role!=='admin')return toast('Réservé aux administrateurs.',true);
  const enabled=document.getElementById('si-alert-'+id)?.checked===true;
@@ -756,10 +789,12 @@ document.querySelector('#app').innerHTML='<div style="display:grid;place-items:c
 })();
 
 if('scrollRestoration' in history)history.scrollRestoration='manual';
-refreshState().then(()=>window.scrollTo(0,0));
+refreshState().then(ok=>{window.scrollTo(0,0);if(ok&&henrriConfigured)fetchHenrriValuation()});
 // Tous les appareils contrôlent une révision SQLite légère environ chaque seconde.
 // Pas de rafraîchissement visuel si rien n'a changé, et aucun reset de formulaire.
 setInterval(syncStockAcrossDevices,1200);
+// Prix mis en cache une heure côté serveur ; stock local recalculé à chaque lecture.
+setInterval(()=>{if(henrriConfigured)fetchHenrriValuation()},60*60*1000);
 window.addEventListener('focus',syncStockAcrossDevices);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncStockAcrossDevices()});
 if('serviceWorker' in navigator && location.protocol==='https:'){

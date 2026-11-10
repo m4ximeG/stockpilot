@@ -4,7 +4,7 @@ WORKDIR /app
 RUN useradd -r -u 10001 -m stockpilot && mkdir -p /data && chown -R stockpilot:stockpilot /data
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY app.py push_service.py backup_service.py gunicorn_conf.py ./
+COPY app.py push_service.py backup_service.py henrri_service.py gunicorn_conf.py ./
 COPY static/ ./static/
 # Vérifie pendant le build le même import que Gunicorn au démarrage.
 # Utilise une base éphémère séparée : jamais le volume de production.

@@ -112,3 +112,25 @@ python -m unittest discover -s tests -v
 Les tests sont exécutés automatiquement par GitHub Actions avant la construction de l'image Docker.
 
 Dépôt : https://github.com/m4ximeG/stockpilot
+
+## Intégration Henrri — valorisation du stock (lecture seule)
+
+StockPilot lit **uniquement le catalogue d'articles Henrri** pour estimer la valeur d'achat et la valeur de vente **HT** des références présentes en stock. L'application ne crée, ne modifie et ne supprime aucun document ni article chez Henrri. Seule l'authentification est faite en POST, puis la lecture des articles en GET. Aucun mouvement de stock n'est déclenché.
+
+Dans **Portainer → Stacks → stockpilot**, définir ces variables d'environnement (ou via `.env` en Docker Compose) :
+
+```env
+HENRRI_CLIENT_ID=identifiant_fourni_par_henrri
+HENRRI_CLIENT_SECRET=secret_fourni_par_henrri
+HENRRI_ENVIRONMENT=production
+```
+
+Utiliser `sandbox` pour une clé de test ; `production` uniquement avec des identifiants de production. Si les clés manquent, l'intégration reste inactive et le stock fonctionne normalement. **Ne jamais publier les vrais identifiants dans GitHub ou dans JavaScript.** Avec la stack `compose.yaml`, remplir les variables dans l'environnement Portainer.
+
+Les administrateurs voient sur le **tableau de bord** un aperçu de la valeur du stock HT, et dans **Paramètres → Henrri** le statut de connexion, le détail par référence et un bouton **Actualiser les tarifs**.
+
+Le rapprochement se fait **exclusivement par référence produit** (sans différence entre majuscules/minuscules et sans espaces en bordure). Les produits absents de Henrri, les prix manquants et les doublons ne sont pas valorisés arbitrairement : l'interface signale une estimation partielle. Les articles en **retour SAV** ou en **réparation** ne sont pas inclus dans la valeur de stock disponible.
+
+Les tarifs Henrri sont mis en cache pendant **une heure maximum** côté serveur ; les quantités sont recalculées à chaque consultation. Un administrateur peut forcer une actualisation. Les clés restent dans les variables du conteneur et ne sont jamais renvoyées au navigateur.
+
+**Prérequis** : obtenir une clé Henrri donnant accès au compte réel de l'entreprise. Les clés de sandbox ne montrent que les données fictives. Vérifier les champs des articles dès réception des identifiants de production, avant de se servir des montants pour une décision comptable.
