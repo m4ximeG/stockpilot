@@ -88,6 +88,60 @@ class HenrriReadOnlyTests(unittest.TestCase):
                 )
             self.assertEqual(cached["purchaseTotal"], 12.5)
 
+
+    def test_search_by_name_and_reference_returns_prices(self):
+        catalog = [
+            {"id": 1, "reference": "SOU-01", "description": "Souris Logitech sans fil",
+             "purchasePrice": 12.4, "sellingPriceWithoutTax": 21.5,
+             "sellingPriceWithTax": 25.8, "vatPercent": 20},
+            {"id": 2, "reference": "PC-888", "description": "TERRA PC fixe",
+             "purchasePrice": 500, "sellingPriceWithoutTax": 720},
+            {"id": 3, "reference": "SOUS-77", "description": "Sous-main bureau",
+             "purchasePrice": 4, "sellingPriceWithoutTax": 9},
+        ]
+        with patch.dict(os.environ, {"HENRRI_CLIENT_ID": "test", "HENRRI_CLIENT_SECRET": "test"}):
+            with patch.object(henrri, "_catalog", return_value=(catalog, 10)) as loader:
+                results = henrri.search_items("souris")
+                self.assertEqual(len(results), 1)
+                self.assertEqual(results[0]["reference"], "SOU-01")
+                self.assertEqual(results[0]["purchasePrice"], 12.4)
+                self.assertEqual(results[0]["sellingPrice"], 21.5)
+                self.assertEqual(results[0]["sellingPriceTtc"], 25.8)
+                self.assertEqual(henrri.search_items("pc-888")[0]["description"], "TERRA PC fixe")
+                self.assertEqual(henrri.search_items("sou")[0]["id"], "1")
+                loader.assert_called()
+                self.assertNotIn("test", repr(results))
+
+    def test_henrri_item_by_id_is_validated_on_server(self):
+        catalog = [
+            {"id": 17, "reference": "MON-17", "description": "Écran 27 pouces",
+             "purchasePrice": 99.0, "sellingPriceWithoutTax": 160.0},
+            {"id": 18, "reference": "", "description": "Adaptateur USB C",
+             "purchasePrice": 5, "sellingPriceWithoutTax": 12},
+        ]
+        with patch.dict(os.environ, {"HENRRI_CLIENT_ID": "test", "HENRRI_CLIENT_SECRET": "test"}):
+            with patch.object(henrri, "_catalog", return_value=(catalog, 10)):
+                self.assertEqual(henrri.find_item("17")["reference"], "MON-17")
+                self.assertEqual(henrri.find_item("18")["reference"], "HENRRI-ID-18")
+                with self.assertRaises(henrri.HenrriError):
+                    henrri.find_item("19")
+        self.assertEqual(henrri.calculate_valuation(
+            [{"id": "local-18", "brand": "", "model": "Adaptateur", "ref": "HENRRI-ID-18"}],
+            [{"pid": "local-18", "condition": "Neuf"}], catalog
+        )["matchedProducts"], 1)
+
+    def test_search_is_read_only_and_ignores_groups(self):
+        catalog = [
+            {"id": 40, "reference": "PACK", "description": "Pack imprimante", "isAGroup": True},
+            {"id": 41, "reference": "IMP-1", "description": "Imprimante laser",
+             "purchasePrice": 0, "sellingPriceWithoutTax": 95},
+        ]
+        with patch.dict(os.environ, {"HENRRI_CLIENT_ID": "test", "HENRRI_CLIENT_SECRET": "test"}):
+            with patch.object(henrri, "_catalog", return_value=(catalog, 3)):
+                results = henrri.search_items("imp")
+                self.assertEqual([r["id"] for r in results], ["41"])
+                self.assertEqual(results[0]["purchasePrice"], 0.0)
+
     def test_invalid_environment_never_calls_network(self):
         with patch.dict(os.environ, {
             "HENRRI_CLIENT_ID": "x", "HENRRI_CLIENT_SECRET": "y",

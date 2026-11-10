@@ -157,7 +157,7 @@ def calculate_valuation(products, stock_items, catalog):
     for item in catalog:
         if not isinstance(item, dict):
             continue
-        ref = _reference(item.get("reference"))
+        ref = _reference(_catalog_reference(item))
         if not ref:
             continue
         if ref in by_reference:
@@ -218,6 +218,87 @@ def calculate_valuation(products, stock_items, catalog):
         "rows": rows,
     }
 
+
+
+def _catalog_reference(item):
+    """Référence de facturation, ou clé locale stable si Henrri n'en fournit aucune."""
+    reference = str(item.get("reference") or "").strip()
+    if reference:
+        return reference[:80]
+    identifier = str(item.get("id") or "").strip()
+    if not identifier or len(identifier) > 60:
+        return ""
+    return "HENRRI-ID-" + identifier
+
+
+def _product_result(item):
+    """Exposition limitée aux attributs de l'article, sans jeton ni credentials."""
+    reference = _catalog_reference(item)
+    description = str(item.get("description") or "").strip()
+    if not reference or not description or item.get("isAGroup", item.get("is_a_group", False)):
+        return None
+    def price(*keys):
+        raw = next((item[key] for key in keys if key in item), None)
+        amount = _money(raw)
+        # Le prix zéro est un prix défini (article offert).
+        if amount is None and raw in (0, 0.0, "0", "0.00"):
+            return 0.0
+        return _amount(amount) if amount is not None else None
+    return {
+        "id": str(item.get("id") or ""),
+        "reference": reference,
+        "description": description[:120],
+        "purchasePrice": price("purchasePrice", "purchase_price"),
+        "sellingPrice": price("sellingPriceWithoutTax", "selling_price_without_tax"),
+        "sellingPriceTtc": price("sellingPriceWithTax", "selling_price_with_tax"),
+        "vatPercent": price("vatPercent", "vat_percent"),
+    }
+
+
+def search_items(query, limit=8):
+    """Recherche le catalogue Henrri sans l'écrire ni l'enregistrer en base."""
+    if not isinstance(query, str) or len(query.strip()) < 2 or len(query) > 120:
+        return []
+    settings = config()
+    if not settings["configured"]:
+        raise HenrriError("Henrri n'est pas configuré.")
+    catalog, _ = _catalog(settings)
+    needle = query.strip().casefold()
+    terms = needle.split()
+    ranked = []
+    for item in catalog:
+        if not isinstance(item, dict):
+            continue
+        result = _product_result(item)
+        if not result or not result["id"]:
+            continue
+        ref = result["reference"].casefold()
+        name = result["description"].casefold()
+        if not all(t in (ref + " " + name) for t in terms):
+            continue
+        rank = (0 if ref == needle else
+                1 if ref.startswith(needle) else
+                2 if name.startswith(needle) else
+                3 if needle in ref else 4)
+        ranked.append((rank, name, result))
+    ranked.sort(key=lambda value: (value[0], value[1]))
+    return [row[2] for row in ranked[:max(1, min(int(limit), 20))]]
+
+
+def find_item(identifier):
+    """Vérifie côté serveur la sélection du catalogue avant une entrée locale."""
+    settings = config()
+    if not settings["configured"]:
+        raise HenrriError("Henrri n'est pas configuré.")
+    if not identifier or len(str(identifier)) > 80:
+        raise HenrriError("Identifiant Henrri invalide.")
+    catalog, _ = _catalog(settings)
+    for item in catalog:
+        if isinstance(item, dict) and str(item.get("id")) == str(identifier):
+            result = _product_result(item)
+            if result:
+                return result
+    raise HenrriError("Article Henrri introuvable. Actualisez la recherche.")
 
 def valuation(products, stock_items, force=False):
     settings = config()
