@@ -450,7 +450,7 @@ def state():
         counter = int(db.execute("SELECT value FROM meta WHERE key='next_item'").fetchone()[0])
         location_mode = db.execute("SELECT value FROM meta WHERE key='location_mode'").fetchone()
         revision = db.execute('SELECT revision FROM sync_revision WHERE id=1').fetchone()[0]
-        response = jsonify(items=items,events=events,counter=counter,catalog=products,shelves=shelves,me=dict(id=g.user['id'],username=g.user['username'],role=g.user['role']),allowReset=ALLOW_RESET and DEMO_SEED,locationMode='optional',revision=revision)
+        response = jsonify(items=items,events=events,counter=counter,catalog=products,shelves=shelves,me=dict(id=g.user['id'],username=g.user['username'],role=g.user['role']),allowReset=ALLOW_RESET and DEMO_SEED,locationMode='optional',revision=revision,henrriConfigured=(henrri_service.public_status()['configured'] if g.user['role']=='admin' else False))
         response.headers['Cache-Control'] = 'private, no-store'
         return response
 
