@@ -90,7 +90,9 @@ function receiveStockSnapshot(data){
 async function refreshState(silent=false){
  try{
   const data=await api('/api/state');
+  const previousRevision=stockRevision;
   if(!receiveStockSnapshot(data))return true;
+  if(previousRevision>=0&&previousRevision!==stockRevision&&henrriConfigured)fetchHenrriValuation();
   if(!silent)renderApp();
   else patchLiveStockView();
   return true;
