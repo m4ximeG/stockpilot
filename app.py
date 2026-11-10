@@ -2,6 +2,7 @@
 import io
 import fcntl
 import backup_service
+import henrri_service
 import os
 import re
 import secrets
@@ -455,6 +456,33 @@ def state():
 
     finally:
         db.execute('ROLLBACK')
+
+@app.get('/api/admin/henrri/valuation')
+@protected(admin=True)
+def henrri_stock_valuation():
+    """Lecture seule : prix Henrri × quantités de StockPilot ; aucun document modifié."""
+    status = henrri_service.public_status()
+    if not status['configured']:
+        response = jsonify(status)
+    else:
+        products = [dict(r) for r in g.db.execute(
+            'SELECT id,brand,model,ref FROM products'
+        )]
+        stock_items = [dict(r) for r in g.db.execute(
+            'SELECT pid,condition FROM items WHERE out_at IS NULL'
+        )]
+        try:
+            result = henrri_service.valuation(
+                products, stock_items, force=request.args.get('refresh') == '1'
+            )
+        except henrri_service.HenrriError as exc:
+            response = jsonify(**status, status='error', error=str(exc))
+            response.headers['Cache-Control'] = 'private, no-store'
+            return response, 503
+        response = jsonify(result)
+    response.headers['Cache-Control'] = 'private, no-store'
+    return response
+
 
 @app.get('/api/sync/revision')
 @protected()
