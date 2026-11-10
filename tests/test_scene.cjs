@@ -464,7 +464,7 @@ test('Réception depuis le stock : produit existant déjà sélectionné',()=>{
 test('Assets inventaire récents : Safari ne garde pas les anciens styles et scripts',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
  assert.match(html,/\/static\/barcode-only\.js\?v=henrri-20261110-1/);
- assert.match(html,/\/static\/reception\.js\?v=13/);
+ assert.match(html,/\/static\/reception\.js\?v=14/);
  assert.match(html,/\/static\/inventory-ui\.css\?v=4/);
  assert.match(html,/\/static\/mobile-layout\.css\?v=5/);
 });
