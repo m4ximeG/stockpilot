@@ -84,7 +84,7 @@ test('Aurora est chargé et reproduit la structure sans supprimer les fonctions'
  const html=fs.readFileSync('static/index.html','utf8');
  const css=fs.readFileSync('static/aurora.css','utf8');
  assert.match(html,/aurora\.css\?v=aurora-20261102-2/);
- assert.match(html,/barcode-only\.js\?v=stable-20261104-1/);
+ assert.match(html,/barcode-only\.js\?v=henrri-20261110-1/);
  assert.match(css,/\.aurora-dashboard/);
  assert.match(css,/\.aur-rail-main/);
  assert.match(css,/\.aur-metrics/);
@@ -463,7 +463,7 @@ test('Réception depuis le stock : produit existant déjà sélectionné',()=>{
 });
 test('Assets inventaire récents : Safari ne garde pas les anciens styles et scripts',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
- assert.match(html,/\/static\/barcode-only\.js\?v=stable-20261104-1/);
+ assert.match(html,/\/static\/barcode-only\.js\?v=henrri-20261110-1/);
  assert.match(html,/\/static\/reception\.js\?v=13/);
  assert.match(html,/\/static\/inventory-ui\.css\?v=4/);
  assert.match(html,/\/static\/mobile-layout\.css\?v=5/);
@@ -490,12 +490,13 @@ test('Docker embarque les modules nécessaires au démarrage de Gunicorn',()=>{
  const docker=fs.readFileSync('Dockerfile','utf8');
  const app=fs.readFileSync('app.py','utf8');
  assert.match(app,/^import push_service$/m);
- assert.ok(docker.includes('COPY app.py push_service.py backup_service.py gunicorn_conf.py ./'));
+ assert.ok(docker.includes('COPY app.py push_service.py backup_service.py henrri_service.py gunicorn_conf.py ./'));
  assert.ok(docker.includes('"--config", "gunicorn_conf.py"'));
  assert.match(docker,/python -c "import app; assert app\.app\.test_client\(\)\.get\('\/healthz'\)\.status_code == 200"/);
  assert.match(docker,/USER stockpilot/);
  assert.match(docker,/VOLUME \["\/data"\]/);
  assert.ok(fs.existsSync('push_service.py'));
+  assert.ok(fs.existsSync('henrri_service.py'));
 });
 
 test('iPhone : aide à la réception absente mais conservée sur ordinateur',()=>{
@@ -602,7 +603,8 @@ test('Synchronisation : vérifie une révision puis met à jour sans recréer le
  vm.runInNewContext(scripts[0],ctx,{filename:'static/index.html'});
  await new Promise(resolve=>setTimeout(resolve,35));
  assert.equal(changes,2,'Écran de chargement initial puis premier rendu');
- assert.equal(intervals.length,1);
+ assert.equal(intervals.length,2);
+  assert.equal(intervals[1].delay,60*60*1000);
  assert.equal(intervals[0].delay,1200);
  assert.match(app.markup,/Stock central/);
 
