@@ -74,13 +74,15 @@ if(/(?:^\\?|&)page=products(?:&|$)/.test(String(window.location?.search||'')))pa
 function save(){} // Les données sont toujours écrites par le serveur et jamais dans localStorage.
 async function api(path,method='GET',data=null){const opts={method,credentials:'same-origin',headers:{'X-Requested-With':'StockPilot'}};if(data!==null){opts.headers['Content-Type']='application/json';opts.body=JSON.stringify(data)}let r;try{r=await fetch(path,opts)}catch(e){throw new Error('Serveur inaccessible. Vérifiez le réseau.')}if(r.status===401){window.location='/login';throw new Error('Session expirée')}const contentType=r.headers.get('content-type')||'';const result=contentType.includes('json')?await r.json():{};if(!r.ok)throw new Error(result.error||'Erreur du serveur');return result}
 let me={username:'...',role:'employee'},allowReset=false,users=[],locationMode='optional';
-let henrri={status:'loading'},henrriLoading=false;
+let henrri={status:'loading'},henrriLoading=false,henrriConfigured=false;
 let stockRevision=-1,liveSyncBusy=false,liveSyncActive=true,liveSyncLastCheck=0;
 function receiveStockSnapshot(data){
  if(typeof data.revision==='number' && stockRevision>=0 && data.revision<stockRevision)return false;
  db={items:data.items,events:data.events,catalog:data.catalog,shelves:data.shelves||[],
   warehousePhoto:!!data.warehousePhoto,counter:data.counter};
  me=data.me;allowReset=data.allowReset;locationMode=data.locationMode||'optional';
+  henrriConfigured=me.role==='admin' && data.henrriConfigured===true;
+  if(!henrriConfigured)henrri={status:'not_configured'};
  if(typeof data.revision==='number')stockRevision=data.revision;
  if(!db.catalog.some(p=>p.id===selectedProduct&&p.active))selectedProduct=db.catalog.find(p=>p.active)?.id||null;
  return true;
@@ -773,12 +775,12 @@ document.querySelector('#app').innerHTML='<div style="display:grid;place-items:c
 })();
 
 if('scrollRestoration' in history)history.scrollRestoration='manual';
-refreshState().then(ok=>{window.scrollTo(0,0);if(ok&&me.role==='admin')fetchHenrriValuation()});
+refreshState().then(ok=>{window.scrollTo(0,0);if(ok&&henrriConfigured)fetchHenrriValuation()});
 // Tous les appareils contrôlent une révision SQLite légère environ chaque seconde.
 // Pas de rafraîchissement visuel si rien n'a changé, et aucun reset de formulaire.
 setInterval(syncStockAcrossDevices,1200);
 // Prix mis en cache une heure côté serveur ; stock local recalculé à chaque lecture.
-setInterval(()=>{if(me.role==='admin')fetchHenrriValuation()},60*60*1000);
+setInterval(()=>{if(henrriConfigured)fetchHenrriValuation()},60*60*1000);
 window.addEventListener('focus',syncStockAcrossDevices);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncStockAcrossDevices()});
 if('serviceWorker' in navigator && location.protocol==='https:'){
