@@ -134,3 +134,13 @@ Le rapprochement se fait **exclusivement par référence produit** (sans différ
 Les tarifs Henrri sont mis en cache pendant **une heure maximum** côté serveur ; les quantités sont recalculées à chaque consultation. Un administrateur peut forcer une actualisation. Les clés restent dans les variables du conteneur et ne sont jamais renvoyées au navigateur.
 
 **Prérequis** : obtenir une clé Henrri donnant accès au compte réel de l'entreprise. Les clés de sandbox ne montrent que les données fictives. Vérifier les champs des articles dès réception des identifiants de production, avant de se servir des montants pour une décision comptable.
+
+### Réception depuis Henrri
+
+Dans **Entrée en stock**, saisir au moins deux caractères du nom ou de la référence. StockPilot affiche les correspondances de son stock local puis jusqu'à huit articles du catalogue Henrri avec **référence, prix d'achat HT et prix de vente HT**. La recherche côté serveur est temporisée dans le navigateur et utilise le catalogue Henrri mis en cache pendant une heure.
+
+En sélectionnant un résultat Henrri, le formulaire affiche les tarifs. Lors de l'enregistrement, le serveur revérifie l'identifiant Henrri : il réutilise un produit local si sa référence existe déjà, sinon crée une référence locale liée au même code Henrri, puis enregistre **une seule entrée de stock**. Les articles Henrri sans référence propre reçoivent une clé locale stable `HENRRI-ID-<id>`. Les doublons locaux portant la même référence sont signalés et l'entrée est bloquée pour éviter une association arbitraire.
+
+**Synchronisation à sens unique : Henrri → StockPilot** pour les désignations, références et prix ; **StockPilot reste autonome** pour les numéros de série, états, entrées, sorties et étiquettes. Aucun POST métier, ni modification de stock, de facture ou d'article n'est envoyé à Henrri.
+
+La présence des trois variables Docker indique seulement que la configuration a été transmise ; elle ne prouve pas que l'API de production accepte les clés. En cas de réponse 401/403, d'indisponibilité du service ou de format inattendu, une erreur explicite est affichée et la saisie manuelle reste possible. Avant mise en production, vérifier un article réel dont les prix sont connus.
