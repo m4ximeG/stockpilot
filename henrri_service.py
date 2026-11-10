@@ -157,7 +157,7 @@ def calculate_valuation(products, stock_items, catalog):
     for item in catalog:
         if not isinstance(item, dict):
             continue
-        ref = _reference(item.get("reference"))
+        ref = _reference(_catalog_reference(item))
         if not ref:
             continue
         if ref in by_reference:
