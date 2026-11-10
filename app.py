@@ -450,12 +450,29 @@ def state():
         counter = int(db.execute("SELECT value FROM meta WHERE key='next_item'").fetchone()[0])
         location_mode = db.execute("SELECT value FROM meta WHERE key='location_mode'").fetchone()
         revision = db.execute('SELECT revision FROM sync_revision WHERE id=1').fetchone()[0]
-        response = jsonify(items=items,events=events,counter=counter,catalog=products,shelves=shelves,me=dict(id=g.user['id'],username=g.user['username'],role=g.user['role']),allowReset=ALLOW_RESET and DEMO_SEED,locationMode='optional',revision=revision,henrriConfigured=(henrri_service.public_status()['configured'] if g.user['role']=='admin' else False))
+        response = jsonify(items=items,events=events,counter=counter,catalog=products,shelves=shelves,me=dict(id=g.user['id'],username=g.user['username'],role=g.user['role']),allowReset=ALLOW_RESET and DEMO_SEED,locationMode='optional',revision=revision,henrriConfigured=henrri_service.public_status()['configured'])
         response.headers['Cache-Control'] = 'private, no-store'
         return response
 
     finally:
         db.execute('ROLLBACK')
+
+@app.get('/api/henrri/products/search')
+@protected()
+def search_henrri_products():
+    """Suggestions d'articles Henrri pour les employés connectés (lecture seule)."""
+    query = (request.args.get('q') or '').strip()
+    if len(query) < 2:
+        return jsonify(items=[])
+    if len(query) > 120:
+        return bad('Recherche trop longue.')
+    try:
+        result = jsonify(items=henrri_service.search_items(query))
+        result.headers['Cache-Control'] = 'private, no-store'
+        return result
+    except henrri_service.HenrriError as exc:
+        return bad(str(exc), 503)
+
 
 @app.get('/api/admin/henrri/valuation')
 @protected(admin=True)
@@ -554,11 +571,39 @@ def receive_free_text():
         slot = ''
         condition=clean_text(data.get('condition','Neuf'), 'État',30,True)
         product_id=clean_text(data.get('product_id',''), 'Référence sélectionnée',64)
+        henrri_id=clean_text(data.get('henrri_id',''), 'Identifiant article Henrri',80)
+        if henrri_id and product_id:
+            return bad('Sélection de produit contradictoire.')
+        # Résolution auprès de Henrri hors transaction SQLite : jamais de requête réseau
+        # pendant le verrou d'écriture local, et aucune donnée prix fournie par le client.
+        henrri_item = henrri_service.find_item(henrri_id) if henrri_id else None
+        if henrri_item:
+            name = henrri_item['description']
         if condition not in ('Neuf','Retour SAV','Réparation'):
             return bad('État invalide.')
         db.execute('BEGIN IMMEDIATE')
         created=False
-        if product_id:
+        if henrri_item:
+            ref = henrri_item['reference']
+            matches = db.execute(
+                'SELECT id,active FROM products WHERE lower(trim(ref))=lower(trim(?))',
+                (ref,)
+            ).fetchall()
+            if len(matches) > 1:
+                db.rollback()
+                return bad('Plusieurs références locales portent le même code Henrri.',409)
+            if matches:
+                if not matches[0]['active']:
+                    db.rollback()
+                    return bad('Cette référence existe mais est désactivée dans Stock Pilot.',409)
+                pid = matches[0]['id']
+            else:
+                pid = 'p_' + secrets.token_hex(6)
+                db.execute("""INSERT INTO products(id,brand,model,cat,zone,kind,ref,preferred_slot)
+                    VALUES(?, '', ?, 'Matériel', 'A', 'package', ?, '')""",
+                    (pid,name[:100],ref))
+                created = True
+        elif product_id:
             product=db.execute('SELECT id FROM products WHERE id=? AND active=1',(product_id,)).fetchone()
             if not product:
                 db.rollback()
@@ -600,6 +645,9 @@ def receive_free_text():
     except ValueError as e:
         db.rollback()
         return bad(str(e))
+    except henrri_service.HenrriError as e:
+        db.rollback()
+        return bad(str(e),503)
 
 
 @app.post('/api/items')
