@@ -476,7 +476,7 @@ def henrri_stock_valuation():
                 products, stock_items, force=request.args.get('refresh') == '1'
             )
         except henrri_service.HenrriError as exc:
-            response = jsonify(**status, status='error', error=str(exc))
+            response = jsonify({**status, 'status': 'error', 'error': str(exc)})
             response.headers['Cache-Control'] = 'private, no-store'
             return response, 503
         response = jsonify(result)
