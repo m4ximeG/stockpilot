@@ -28,7 +28,7 @@ function updateHints(db){
  if(el)el.innerHTML=hints(db);
 }
 function queueHenrriSearch(ctx,db){
- clearTimeout(searchTimer);
+ if(typeof clearTimeout==='function')clearTimeout(searchTimer);
  const sequence=++searchSequence;
  const query=state.name.trim();
  state.henrriItems=[];
@@ -80,14 +80,14 @@ function onInput(ev,ctx){
 function onClick(ev,ctx){
  const el=ev.target.closest('[data-rx]');if(!el)return false;
  const action=el.dataset.rx,db=ctx.db;
- if(action==='choose'){const p=db.catalog.find(p=>p.id===el.dataset.id);if(p){clearTimeout(searchTimer);searchSequence++;state.name=name(p);state.pid=p.id;state.henrriId='';state.henrriSelected=null;state.suggestions=false;ctx.renderContent();}}
+ if(action==='choose'){const p=db.catalog.find(p=>p.id===el.dataset.id);if(p){if(typeof clearTimeout==='function')clearTimeout(searchTimer);searchSequence++;state.name=name(p);state.pid=p.id;state.henrriId='';state.henrriSelected=null;state.suggestions=false;ctx.renderContent();}}
  else if(action==='henrri'){
   const item=state.henrriItems.find(p=>String(p.id)===String(el.dataset.id));
-  if(item){clearTimeout(searchTimer);searchSequence++;state.name=item.description;state.pid='';state.henrriId=String(item.id);state.henrriSelected=item;state.suggestions=false;ctx.renderContent();}
+  if(item){if(typeof clearTimeout==='function')clearTimeout(searchTimer);searchSequence++;state.name=item.description;state.pid='';state.henrriId=String(item.id);state.henrriSelected=item;state.suggestions=false;ctx.renderContent();}
  }
- else if(action==='newproduct'){clearTimeout(searchTimer);searchSequence++;state.pid='';state.henrriId='';state.henrriSelected=null;state.suggestions=false;ctx.renderContent();}
+ else if(action==='newproduct'){if(typeof clearTimeout==='function')clearTimeout(searchTimer);searchSequence++;state.pid='';state.henrriId='';state.henrriSelected=null;state.suggestions=false;ctx.renderContent();}
  else if(action==='condition'){state.condition=el.dataset.value;ctx.renderContent();}
- else if(action==='again'){clearTimeout(searchTimer);searchSequence++;state=blank();ctx.renderContent();}
+ else if(action==='again'){if(typeof clearTimeout==='function')clearTimeout(searchTimer);searchSequence++;state=blank();ctx.renderContent();}
  else if(action==='print'){ctx.printLabel(el.dataset.id);}
  else if(action==='save'){
   if(!state.name.trim()||state.saving)return true;
@@ -111,7 +111,7 @@ function refreshSuggestions(db){
  const next=hints(db);
  if(panel.innerHTML!==next)panel.innerHTML=next;
 }
-function reset(){clearTimeout(searchTimer);searchSequence++;state=blank();}
+function reset(){if(typeof clearTimeout==='function')clearTimeout(searchTimer);searchSequence++;state=blank();}
 function prefill(product){
  state=blank();
  if(product){state.name=name(product);state.pid=product.id;state.suggestions=false;}
