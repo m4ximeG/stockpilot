@@ -101,17 +101,28 @@ async function refreshState(silent=false){
   return false;
  }
 }
+function refreshHenrriDisplay(){
+ if(page==='dashboard'){
+  // N'actualise que la pastille Henrri, sans relancer les animations d'accueil.
+  const old=document.querySelector('#content .sp-henrri-pill');
+  if(!old)return;
+  const container=document.createElement('div');
+  container.innerHTML=renderDashboard();
+  const next=container.querySelector('.sp-henrri-pill');
+  if(next&&next.innerHTML!==old.innerHTML)old.innerHTML=next.innerHTML;
+ }else if(page==='settings')renderContent();
+}
 async function fetchHenrriValuation(force=false){
  if(me.role!=='admin'||henrriLoading||document.hidden)return;
  henrriLoading=true;
  try{
   const result=await api('/api/admin/henrri/valuation'+(force?'?refresh=1':''));
   henrri=result;
-  if(page==='dashboard'||page==='settings')renderContent();
+  refreshHenrriDisplay();
   if(force)toast(result.status==='connected'?'Tarifs Henrri actualisés.':'Les clés Henrri ne sont pas encore configurées.',result.status!=='connected');
  }catch(e){
   henrri={status:'error',error:e.message};
-  if(page==='dashboard'||page==='settings')renderContent();
+  refreshHenrriDisplay();
   if(force)toast('Henrri : '+e.message,true);
  }finally{henrriLoading=false}
 }
@@ -374,6 +385,7 @@ async function syncStockAcrossDevices(){
      try{users=(await api('/api/users')).users||users}catch(e){}
     }
     patchLiveStockView();
+    if(henrriConfigured)fetchHenrriValuation();
    }
   }
  }catch(e){
