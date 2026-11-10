@@ -4,6 +4,8 @@
 const escape = v => String(v ?? '').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const name = p => p ? [p.brand,p.model].filter(Boolean).join(' ') : 'Produit inconnu';
 const stamp = (ms) => ms ? new Date(ms).toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+const euro=(value)=>typeof value==='number'&&Number.isFinite(value)?new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'}).format(value):'—';
+const henrriStatus=h=>h.status==='connected'?'Connecté à Henrri':h.status==='not_configured'?'À configurer':h.status==='error'?'Connexion indisponible':'Vérification…';
 const actionButton=(action,text,extra='')=>'<button type="button" class="basic-btn '+extra+'" data-action="'+action+'">'+text+'</button>';
 function dashboard(c){
  const db=c.db, now=new Date(), today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
@@ -14,6 +16,9 @@ function dashboard(c){
  const sav=db.items.filter(i=>(i.condition||'').toLowerCase().includes('sav')).length;
  const repair=db.items.filter(i=>(i.condition||'').toLowerCase().includes('réparation')).length;
  const total=db.items.length, num=n=>new Intl.NumberFormat('fr-FR').format(n);
+ const h=c.henrri||{status:'loading'};
+ const hLabel=h.status==='connected'?'<span>Valeur du stock HT</span><strong>'+euro(h.purchaseTotal)+'</strong><small>achat · '+euro(h.sellingTotal)+' en vente</small><small>'+h.purchasePricedProducts+'/'+h.totalProducts+' références tarifées</small>':'<span>Henrri</span><small>'+escape(henrriStatus(h))+'</small>';
+ const valuation=c.me?.role==='admin'?'<div class="sp-henrri-pill" aria-label="Valorisation du stock via Henrri">'+hLabel+'</div>':'';
  const metrics=[['Articles',total,'package'],['Références',refs,'layers'],['Entrées',entries,'in'],
   ['Sorties',exits,'out'],['Retour SAV',sav,'history'],['Réparation',repair,'wrench']];
  const metricHTML=metrics.map(([label,value,icon],i)=>
@@ -52,7 +57,7 @@ function dashboard(c){
  '<button data-nav="settings" title="Mon compte" aria-label="Mon compte" class="aur-avatar">SP</button></div></header>'+
  '<div class="aur-copy"><span class="aur-chip aur-sheen">'+c.ico('package',17)+' Gestion des stocks</span>'+
  '<h1><span class="aur-headline"><span>Gestion du stock</span></span><span class="aur-headline"><span>centralisé</span></span></h1>'+
- '<p>Suivez vos produits, vos entrées, vos sorties et vos étiquettes en un seul endroit. Gardez une vision claire de votre stock et restez toujours à jour.</p></div>'+
+ '<p>Suivez vos produits, vos entrées, vos sorties et vos étiquettes en un seul endroit. Gardez une vision claire de votre stock et restez toujours à jour.</p>'+valuation+'</div>'+
  '<div class="aur-metrics" role="group" aria-label="Statistiques du stock">'+metricHTML+'</div>'+
  '<div class="aur-chart"><div class="aur-chart-label">'+c.ico('package',17)+' '+week+' mouvement'+(week>1?'s':'')+' en 7 jours</div>'+chart+
  '<div class="aur-days">'+dayRow+'</div></div>'+
@@ -199,6 +204,19 @@ function history(c){
   '<div class="sp-mh-list">'+mobile+'</div></section></div>';
 }
 function settings(c){
+ const h=c.henrri||{status:'loading'};
+ const hReady=h.status==='connected';
+ const itemRows=(h.rows||[]).map(p=>'<tr><td><strong>'+escape(p.name)+'</strong><br>'+escape(p.reference)+'</td><td>'+p.quantity+'</td><td>'+euro(p.purchaseValue)+'</td><td>'+euro(p.sellingValue)+'</td></tr>').join('');
+ const info=hReady?'<div class="sp-henrri-totals"><div><small>Valeur d’achat HT</small><strong>'+euro(h.purchaseTotal)+'</strong></div><div><small>Valeur de vente HT</small><strong>'+euro(h.sellingTotal)+'</strong></div></div>'+
+   '<p>'+h.matchedProducts+'/'+h.totalProducts+' références reconnues · '+h.purchasePricedProducts+' avec prix d’achat · '+h.sellingPricedProducts+' avec prix de vente. '+h.excludedUnits+' article(s) SAV/réparation hors calcul.</p>'+
+   (h.purchasePricedProducts<h.totalProducts||h.sellingPricedProducts<h.totalProducts?'<p class="sp-henrri-unknown">Attention : estimation partielle, certaines références ou certains prix sont absents de Henrri.</p>':'')+
+   '<details><summary>Voir la valorisation par référence</summary><div class="sp-henrri-rows"><table><thead><tr><th>Produit</th><th>Qté</th><th>Achat HT</th><th>Vente HT</th></tr></thead><tbody>'+itemRows+'</tbody></table></div></details>':
+   '<p>'+(h.status==='error'?escape(h.error||'Une erreur est survenue pendant la lecture des tarifs.'):h.status==='not_configured'?'Aucune clé enregistrée. La valorisation est inactive et le stock continue à fonctionner normalement.':'Configurez les clés pour charger les prix Henrri.')+'</p>';
+ const henrriCard='<section class="card settingscard sp-henrri-settings"><h2>Henrri · Valorisation du stock</h2>'+
+   '<span class="sp-henrri-status">'+escape(henrriStatus(h))+'</span>'+
+   '<p>Lecture seule du catalogue Henrri : prix × quantités présentes dans StockPilot. Les articles sont associés uniquement par leur référence exacte, sans modification de factures ni de stock.</p>'+
+   info+'<p>Clés à renseigner dans Portainer : <code>HENRRI_CLIENT_ID</code>, <code>HENRRI_CLIENT_SECRET</code> et <code>HENRRI_ENVIRONMENT</code> (sandbox ou production). Elles ne sont jamais affichées sur le site.</p>'+
+   '<button class="btn" type="button" data-action="refreshhenrri" '+(h.status==='not_configured'?'disabled':'')+'>Actualiser les tarifs</button></section>';
  const userCard='<section class="card settingscard"><h2>Mon compte</h2><p>Connecté : <strong>'+escape(c.me.username)+'</strong> · '+(c.me.role==='admin'?'Administrateur':'Employé')+'</p><form id="password-form"><div class="field"><label>Mot de passe actuel</label><input name="old_password" type="password" autocomplete="current-password" required></div><div class="field"><label>Nouveau mot de passe (12 caractères minimum)</label><input name="new_password" type="password" autocomplete="new-password" minlength="12" required></div><button class="btn primary" type="submit">Modifier mon mot de passe</button></form><p style="margin-top:18px"><a href="/logout">Se déconnecter</a></p></section>';
  const catalog='<section class="card settingscard"><h2>Références produits</h2><p>Les références peuvent aussi être créées directement lors d’une entrée en stock.</p><form id="catalog-form" class="catalog-form"><div class="twofields"><div class="field"><label>Marque *</label><input name="brand" maxlength="60" required placeholder="Ex. TERRA"></div><div class="field"><label>Modèle *</label><input name="model" maxlength="100" required placeholder="Ex. Mobile 1517"></div></div><div class="twofields"><div class="field"><label>Catégorie</label><select name="cat"><option>PC portable</option><option>PC fixe</option><option>Écran</option><option>Accessoire</option><option>Autre</option></select></div><div class="field"><label>Référence interne *</label><input name="ref" maxlength="80" required placeholder="Ex. TE-MOB1517"></div></div><div class="field"><label>Seuil d’alerte (0 = désactivé)</label><input name="min_stock" type="number" min="0" max="99999" step="1" inputmode="numeric" value="0" required></div><button class="btn primary" type="submit">Ajouter la référence</button></form><div class="basic-catalog">'+c.db.catalog.map(p=>'<div class="basic-catalog-row"><div><strong>'+escape(name(p))+'</strong><small>'+escape(p.ref)+(p.active?'':' · Désactivée')+'</small></div><button class="btn" type="button" data-action="editproduct" data-id="'+escape(p.id)+'">Modifier</button></div>').join('')+'</div></section>';
  const access='<section class="card settingscard"><h2>Accès employés</h2><p>Chaque opération est associée au compte qui l’a réalisée.</p><form id="user-form"><div class="field"><label>Identifiant</label><input name="username" maxlength="50" required placeholder="Ex. accueil1"></div><div class="field"><label>Mot de passe initial</label><input name="password" type="password" minlength="12" required></div><div class="field"><label>Rôle</label><select name="role"><option value="employee">Employé</option><option value="admin">Administrateur</option></select></div><button class="btn primary" type="submit">Créer un compte</button></form><div class="basic-management"><button class="btn" data-action="listusers">Gérer les utilisateurs</button><button class="btn" data-action="managebackups">Sauvegardes automatiques</button></div><p>La base de données reste enregistrée dans le volume Docker du NAS.</p></section>';
@@ -227,7 +245,7 @@ function settings(c){
   '<p class="sp-ms-footnote">La gestion des références, des employés et des étiquettes DYMO se fait sur ordinateur.</p>'+
   '</section>';
  return '<div class="sp-settings-page">'+c.heading('PARAMÈTRES','Configuration','Gérez les références, les utilisateurs et les accès au stock.')+
-  '<div class="settings-board"><div class="settings-column">'+userCard+labelCard+installCard+(c.me.role==='admin'?access:'')+
+  '<div class="settings-board"><div class="settings-column">'+userCard+labelCard+installCard+(c.me.role==='admin'?henrriCard+access:'')+
   '</div>'+(c.me.role==='admin'?'<div class="settings-column">'+catalog+cleanup+'</div>':'')+'</div>'+
   mobileSettings+'</div>';
 }
