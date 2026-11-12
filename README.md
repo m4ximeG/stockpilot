@@ -148,15 +148,9 @@ La présence des trois variables Docker indique seulement que la configuration a
 
 ## Améliorations de gestion du stock — inventaire, sorties et réception en lot
 
-### Inventaire physique (comptage par étiquette)
+### Inventaire physique (fonction masquée)
 
-Le menu **Inventaire physique** permet à un administrateur d'ouvrir une session de comptage. StockPilot mémorise la liste exacte des unités attendues à cet instant. Les employés connectés peuvent scanner les étiquettes STK par douchette USB/Bluetooth, saisir les identifiants ou utiliser la caméra. Les scans sont persistants et partagés entre les utilisateurs ; rescanner une même étiquette ne double pas le comptage. Les étiquettes inconnues sont signalées séparément sans création de stock.
-
-Les **écarts sont provisoires** tant que le comptage n'est pas clôturé. L'administrateur choisit explicitement :
-- **Clôturer sans correction** : archive le comptage, ne modifie pas les quantités.
-- **Valider les écarts** : après saisie de \`VALIDER INVENTAIRE\`, retire **uniquement dans StockPilot** les unités initialement attendues mais non scannées, avec un mouvement d'historique « inventaire ». Les étiquettes inconnues restent à vérifier manuellement, sans ajout automatique.
-
-Si des entrées/sorties ou modifications du stock ont eu lieu pendant la session, la correction automatique est bloquée pour éviter de retirer des articles sur un instantané dépassé. Il faut clôturer sans correction et redémarrer un comptage. Une session active maximum ; seuls les administrateurs ouvrent et clôturent les sessions.
+Le comptage physique a été **retiré de l'interface** pour simplifier l'usage quotidien de StockPilot. Le menu et la page ne sont plus accessibles ; le code serveur et les anciennes données restent conservés pour compatibilité et récupération éventuelle, sans modifier le stock. L'application se concentre sur les deux fonctions retenues : les **sorties traçables** et la **réception groupée**.
 
 ### Sorties traçables
 
