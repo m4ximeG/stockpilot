@@ -23,6 +23,15 @@ class StockPilotTests(unittest.TestCase):
         self.headers = {'X-Requested-With': 'StockPilot'}
         self.assertEqual(self.client.post('/api/admin/reset', json={}, headers=self.headers).status_code, 200)
 
+    def _clear_test_fixture(self):
+        """Utilitaire interne aux tests : aucune route HTTP ne doit pouvoir vider le stock."""
+        with stock.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            for table in ('stocktake_unknown', 'stocktake_expected', 'stocktakes',
+                          'events', 'items', 'products'):
+                db.execute('DELETE FROM ' + table)
+            db.commit()
+
     def test_bulk_receipt_is_atomic_and_prints_multi_page_labels(self):
         start=len(self.client.get('/api/state').json['items'])
         bad=self.client.post('/api/receive/batch',headers=self.headers,json={
@@ -71,9 +80,7 @@ class StockPilotTests(unittest.TestCase):
             json={'destination':'client','target':'Autre'}).status_code,409)
 
     def test_stocktake_scan_does_not_modify_stock_without_admin_confirmation(self):
-        clean=self.client.post('/api/admin/clear-stock',headers=self.headers,
-                               json={'confirmation':'VIDER LE STOCK'})
-        self.assertEqual(clean.status_code,200,clean.text)
+        self._clear_test_fixture()
         created=self.client.post('/api/receive/batch',headers=self.headers,json={
             'name':'Stock réel','quantity':2,'serials':['INV-001','INV-002']})
         self.assertEqual(created.status_code,201,created.text)
@@ -155,6 +162,48 @@ class StockPilotTests(unittest.TestCase):
         self.assertFalse((data_dir/'backups'/'managed'/'daily-2026-11-04.sqlite3').exists())
         self.assertFalse((data_dir/'backups'/'managed'/'daily-2026-11-05.sqlite3').exists())
         self.assertTrue((data_dir/'backups'/'managed'/'daily-2026-12-06.sqlite3').exists())
+
+
+    def test_external_backup_is_restorable_without_touching_live_database(self):
+        import backup_service
+        import sqlite3
+        import tempfile
+        from datetime import datetime, timezone
+        from unittest.mock import patch
+        data_dir=Path(stock.DATA_DIR)
+        with tempfile.TemporaryDirectory() as external:
+            self.assertEqual(backup_service.external_status(data_dir,'')['status'],'not_configured')
+            when=datetime(2026,11,12,tzinfo=timezone.utc)
+            copy=backup_service.ensure_external_daily_backup(stock.DB_FILE,data_dir,external,now=when)
+            self.assertTrue(copy.is_file())
+            self.assertEqual(backup_service.external_status(data_dir,external)['status'],'ok')
+            original=self.client.get('/api/state').json['items']
+            with patch.dict(os.environ,{'STOCKPILOT_EXTERNAL_BACKUP_DIR':external}):
+                info=self.client.get('/api/admin/backups')
+                self.assertEqual(info.status_code,200)
+                self.assertEqual(info.json['external']['status'],'ok')
+                checked=self.client.post('/api/admin/backups/verify-external',
+                                         headers=self.headers,json={})
+                self.assertEqual(checked.status_code,200,checked.text)
+                self.assertEqual(checked.json['name'],copy.name)
+            self.assertEqual(self.client.get('/api/state').json['items'],original)
+            with sqlite3.connect(copy) as saved:
+                self.assertEqual(saved.execute('SELECT COUNT(*) FROM items WHERE out_at IS NULL').fetchone()[0],
+                                 len(original))
+            # Une sauvegarde corrompue est détectée et ne remplace JAMAIS le stock.
+            copy.write_bytes(b'corrupted')
+            self.assertEqual(backup_service.external_status(data_dir,external)['status'],'error')
+            with self.assertRaises((sqlite3.DatabaseError,ValueError)):
+                backup_service.verify_latest_external(data_dir,external)
+            self.assertEqual(self.client.get('/api/state').json['items'],original)
+
+    def test_external_backup_must_be_outside_live_data(self):
+        import backup_service
+        from pathlib import Path
+        with self.assertRaises(ValueError):
+            backup_service.external_directory(stock.DATA_DIR, str(Path(stock.DATA_DIR)/'backups'))
+        with self.assertRaises(ValueError):
+            backup_service.external_directory(stock.DATA_DIR, 'relative/path')
 
     def test_admin_manual_backup_and_restore_with_confirmation(self):
         import sqlite3
@@ -485,10 +534,15 @@ class StockPilotTests(unittest.TestCase):
         self.assertEqual(self.client.patch('/api/shelves/J-5',json={'size':'large','note':'Cartons très hauts'},headers=self.headers).status_code,200)
         self.assertEqual(self.client.patch('/api/shelves/J-9',json={'size':'small','note':''},headers=self.headers).status_code,404)
         self.assertEqual(self.client.patch('/api/shelves/J-5',json={'size':'huge','note':''},headers=self.headers).status_code,400)
-        self.assertEqual(self.client.post('/api/admin/clear-stock',json={'confirmation':'oui'},headers=self.headers).status_code,400)
+        state=self.client.get('/api/state').json
+        self.assertEqual(len(state['items']),27)
+        # Le bouton et l'ancienne API de vidage sont irrévocablement inactifs.
+        for confirmation in ('oui', 'VIDER LE STOCK'):
+            blocked=self.client.post('/api/admin/clear-stock',
+                json={'confirmation':confirmation},headers=self.headers)
+            self.assertEqual(blocked.status_code,410,blocked.text)
         self.assertEqual(len(self.client.get('/api/state').json['items']),27)
-        done=self.client.post('/api/admin/clear-stock',json={'confirmation':'VIDER LE STOCK'},headers=self.headers)
-        self.assertEqual(done.status_code,200,done.text)
+        self._clear_test_fixture()
         state=self.client.get('/api/state').json
         self.assertEqual(state['items'],[])
         self.assertEqual(state['events'],[])
@@ -497,7 +551,6 @@ class StockPilotTests(unittest.TestCase):
         self.assertEqual(level['size'],'large')
         self.assertEqual(level['note'],'Cartons très hauts')
         self.assertEqual(state['me']['role'],'admin')
-        self.assertEqual(len(list((Path(stock.DATA_DIR) / 'backups').glob('stockpilot-avant-vidage-*.sqlite3'))),1)
         add=self.client.post('/api/products',json={'brand':'TERRA','model':'1517','cat':'PC portable','zone':'J','preferred_slot':'J-5','ref':'TERRA-NEW'},headers=self.headers)
         self.assertEqual(add.status_code,201,add.text)
         item=self.client.post('/api/items',json={'pid':add.json['id'],'slot':'J-5','serial':'REAL-DEMO-1','condition':'Neuf'},headers=self.headers)
