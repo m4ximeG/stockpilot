@@ -594,7 +594,7 @@ function exportStockSummary(){
  downloadCSV('stockpilot-quantites.csv',rows);
  toast('Quantités exportées');
 }
-function exportHistory(){downloadCSV('stockpilot-historique.csv',[['Date','Type','Produit','Identifiant','Opérateur','Destination','Destinataire / motif'],...db.events.filter(e=>e.type==='in'||e.type==='out').map(e=>[new Date(e.at).toLocaleString('fr-FR'),e.type==='in'?'Entrée':'Sortie',displayName(product(e.pid)),e.itemId,e.actor,e.destination||'',e.target||''])]);toast('Journal CSV téléchargé')}
+function exportHistory(){downloadCSV('stockpilot-historique.csv',[['Date','Type','Produit','Identifiant','Opérateur','Destination','Destinataire / motif','Détails / correction','Mouvement corrigé','Annulé','Lot'],...db.events.filter(e=>['in','out','correction'].includes(e.type)).map(e=>[new Date(e.at).toLocaleString('fr-FR'),e.type==='in'?'Entrée':e.type==='out'?'Sortie':'Correction',displayName(product(e.pid)),e.itemId,e.actor,e.destination||'',e.target||'',e.detail||'',e.correctionOf||'',e.corrected?'Oui':'Non',e.batchId||''])]);toast('Journal CSV téléchargé')}
 function openModal(m){modal=m;document.body.classList.toggle('si-modal-open',m?.type==='stockproduct');renderApp();
  if(m?.type==='stockproduct')document.querySelector('.si-product-modal')?.focus()}
 function closeModal(){modal=null;document.body.classList.remove('si-modal-open');renderApp()}
