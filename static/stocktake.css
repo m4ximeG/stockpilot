@@ -1,0 +1,35 @@
+/* StockPilot — écrans métiers, reprennent les surfaces et contrastes existants. */
+.sp-stocktake-page{display:grid;gap:18px;max-width:1250px}
+.sp-count-card{padding:22px;display:grid;gap:13px;min-width:0}
+.sp-count-card h2,.sp-count-card h3{margin:0;font-weight:750;letter-spacing:-.025em}
+.sp-count-card h2{font-size:21px}.sp-count-card h3{font-size:16px}
+.sp-count-card p{margin:0;line-height:1.6;opacity:.85;font-size:13px}
+.sp-count-heading{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:center}
+.sp-count-heading p{margin-top:3px;font-size:12px}
+.sp-count-status{padding:7px 11px;border:1px solid rgba(144,183,213,.3);border-radius:12px;font-size:12px;font-weight:650}
+.sp-count-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px}
+.sp-count-stats>div{min-width:0;border:1px solid rgba(150,177,196,.24);border-radius:12px;padding:13px;display:grid;gap:7px;background:rgba(115,153,185,.08)}
+.sp-count-stats small{font-size:11px;opacity:.78}.sp-count-stats strong{font-size:26px;font-variant-numeric:tabular-nums;line-height:1.15}
+.sp-count-lists{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.sp-count-rows{display:grid;gap:0;max-height:440px;overflow:auto;min-height:24px}
+.sp-count-rows>div{display:flex;align-items:flex-start;gap:12px;border-top:1px solid rgba(150,177,196,.16);padding:10px 0;font-size:12px}
+.sp-count-rows code{font:12px ui-monospace,SFMono-Regular,monospace;min-width:94px}
+.sp-count-rows span{display:grid;gap:3px;min-width:0}
+.sp-count-rows small{opacity:.68;line-height:1.5}
+.sp-count-actions{display:flex;gap:11px;flex-wrap:wrap}
+.sp-count-warning{border:1px solid rgba(255,187,116,.46);border-radius:10px;padding:11px;background:rgba(255,190,118,.08)}
+.sp-count-history{border:1px solid rgba(150,177,196,.25);border-radius:12px;padding:15px;font-size:12px}
+.sp-count-history summary{cursor:pointer;font-weight:700}
+.sp-count-history div{padding:9px 0;border-top:1px solid rgba(150,177,196,.16);margin-top:8px}
+.sp-stocktake-page .scan-panel{min-height:92px;display:grid;place-items:center}
+.sp-stocktake-page .scan-input{max-width:560px}
+.sp-batch-quantity{margin:15px 0}
+.sp-batch-quantity input{width:130px;max-width:100%;height:42px}
+.sp-batch-quantity>small{display:block;margin-top:8px;font-size:11px;opacity:.75}
+.basic-entry textarea#rx-serials{width:100%;min-height:86px;resize:vertical;border-radius:10px;padding:12px;font:inherit}
+.sp-batch-items{display:grid;gap:8px;max-height:410px;overflow:auto;width:100%;margin:14px 0}
+.sp-batch-items>div{border:1px solid rgba(150,177,196,.27);border-radius:10px;padding:9px 12px;display:flex;align-items:center;justify-content:space-between;gap:9px;flex-wrap:wrap}
+.sp-batch-items code{font:12px ui-monospace,SFMono-Regular,monospace}.sp-batch-items small{opacity:.7}
+.sp-batch-items button{padding:6px 10px}
+.sp-mh-destination{font-size:11px;opacity:.8}
+@media(max-width:760px){.sp-count-lists{grid-template-columns:1fr}.sp-count-card{padding:16px}.sp-count-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.sp-count-stats strong{font-size:22px}}

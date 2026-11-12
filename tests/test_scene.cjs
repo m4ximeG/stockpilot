@@ -18,6 +18,29 @@ const context={db,me:{username:'Admin',role:'admin'},product:id=>db.catalog.find
   heading:(k,t)=>'<h1>'+t+'</h1>',btn:()=>'<button>Créer</button>',ico:()=>'<svg></svg>',
   tableFilter:'',tableType:'all',itemById:id=>db.items.find(i=>i.id===id),modal:{id:item.id},scanResult:item};
 
+test('Inventaire physique et réception groupée disponibles sans changer le scanner',()=>{
+ const html=fs.readFileSync('static/index.html','utf8');
+ const stocktake=expose('static/stocktake.js','SPStocktake');
+ const page=stocktake.render({
+  stocktake:{session:null,expected:[],unknown:[],history:[]},
+  me:{role:'admin',username:'Admin'},
+  heading:(a,b)=>'<h1>'+b+'</h1>'
+ });
+ assert.match(page,/Démarrer un inventaire/);
+ assert.match(html,/\/static\/stocktake\.js\?v=1/);
+ assert.match(html,/\/static\/stocktake\.css\?v=1/);
+ assert.match(html,/case'stocktake-scan'/);
+ assert.match(html,/case'stocktake-finalize'/);
+ assert.match(html,/data-action="stocktake-finalize"/);
+ const receipt=fs.readFileSync('static/reception.js','utf8');
+ assert.match(receipt,/rx-quantity/);
+ assert.match(receipt,/\/api\/receive\/batch/);
+ assert.match(receipt,/data-rx="printbatch"/);
+ const app=fs.readFileSync('app.py','utf8');
+ assert.match(app,/\/api\/stocktakes\/current/);
+ assert.match(app,/\/api\/labels\/batch\.pdf/);
+ assert.match(app,/out_destination/);
+});
 test('entrée en stock sans emplacement obligatoire',()=>{
  const html=receive.entry(context);
  assert.match(html,/id="rx-name"/);
@@ -464,7 +487,7 @@ test('Réception depuis le stock : produit existant déjà sélectionné',()=>{
 test('Assets inventaire récents : Safari ne garde pas les anciens styles et scripts',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
  assert.match(html,/\/static\/barcode-only\.js\?v=henrri-20261110-1/);
- assert.match(html,/\/static\/reception\.js\?v=14/);
+ assert.match(html,/\/static\/reception\.js\?v=15/);
  assert.match(html,/\/static\/inventory-ui\.css\?v=4/);
  assert.match(html,/\/static\/mobile-layout\.css\?v=5/);
 });
@@ -603,9 +626,10 @@ test('Synchronisation : vérifie une révision puis met à jour sans recréer le
  vm.runInNewContext(scripts[0],ctx,{filename:'static/index.html'});
  await new Promise(resolve=>setTimeout(resolve,35));
  assert.equal(changes,2,'Écran de chargement initial puis premier rendu');
- assert.equal(intervals.length,2);
-  assert.equal(intervals[1].delay,60*60*1000);
+ assert.equal(intervals.length,3);
  assert.equal(intervals[0].delay,1200);
+ assert.equal(intervals[1].delay,5000);
+ assert.equal(intervals[2].delay,60*60*1000);
  assert.match(app.markup,/Stock central/);
 
  // L'utilisateur navigue et commence une saisie : celle-ci ne doit pas disparaître.

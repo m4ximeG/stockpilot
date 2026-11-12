@@ -132,6 +132,40 @@ def initialize():
         # Seuil de réapprovisionnement par référence : migration additive et sans perte.
         if 'min_stock' not in existing_columns:
             con.execute("ALTER TABLE products ADD COLUMN min_stock INTEGER NOT NULL DEFAULT 0 CHECK(min_stock >= 0)")
+        # Sorties avec destination explicite ; migration additive sans perte d'historique.
+        item_columns = {row['name'] for row in con.execute('PRAGMA table_info(items)')}
+        for column in ('out_destination', 'out_target'):
+            if column not in item_columns:
+                con.execute(f"ALTER TABLE items ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
+        event_columns = {row['name'] for row in con.execute('PRAGMA table_info(events)')}
+        for column in ('destination', 'target'):
+            if column not in event_columns:
+                con.execute(f"ALTER TABLE events ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
+        # Comptages physiques persistants : photographie des étiquettes, scans, inconnus.
+        con.executescript("""
+        CREATE TABLE IF NOT EXISTS stocktakes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          status TEXT NOT NULL CHECK(status IN ('open','closed','reconciled')),
+          created_at INTEGER NOT NULL, created_by TEXT NOT NULL,
+          baseline_revision INTEGER NOT NULL,
+          closed_at INTEGER, closed_by TEXT NOT NULL DEFAULT '',
+          corrected_count INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS stocktake_one_open ON stocktakes(status) WHERE status='open';
+        CREATE TABLE IF NOT EXISTS stocktake_expected (
+          session_id INTEGER NOT NULL REFERENCES stocktakes(id),
+          item_id TEXT NOT NULL, pid TEXT NOT NULL,
+          product_name TEXT NOT NULL, product_ref TEXT NOT NULL,
+          scanned_at INTEGER, scanned_by TEXT NOT NULL DEFAULT '',
+          PRIMARY KEY(session_id,item_id)
+        );
+        CREATE TABLE IF NOT EXISTS stocktake_unknown (
+          session_id INTEGER NOT NULL REFERENCES stocktakes(id),
+          code TEXT NOT NULL, scanned_at INTEGER NOT NULL,
+          scanned_by TEXT NOT NULL, PRIMARY KEY(session_id,code)
+        );
+        CREATE INDEX IF NOT EXISTS stocktake_expected_session ON stocktake_expected(session_id,scanned_at);
+        """)
         con.executemany("INSERT OR IGNORE INTO shelf_levels(slot,size,note) VALUES(?,'unknown','')", [(slot,) for slot in SLOTS])
         con.execute("INSERT OR IGNORE INTO meta(key,value) VALUES('location_mode','optional')")
         if not con.execute('SELECT 1 FROM users LIMIT 1').fetchone():
@@ -445,7 +479,7 @@ def state():
     try:
         products = [row_dict(x) for x in db.execute('SELECT id,brand,model,cat,zone,kind,ref,active,preferred_slot,min_stock FROM products ORDER BY brand,model')]
         items = [dict(id=x['id'],pid=x['pid'],slot=x['slot'],serial=x['serial'] or '',condition=x['condition'],inAt=x['in_at']) for x in db.execute('SELECT * FROM items WHERE out_at IS NULL ORDER BY in_at')]
-        events = [dict(id='e'+str(x['id']),type=x['type'],itemId=x['item_id'],pid=x['pid'],slot=x['slot'],at=x['at'],actor=x['actor'],detail=x['detail']) for x in db.execute('SELECT * FROM events ORDER BY id DESC LIMIT 1500')]
+        events = [dict(id='e'+str(x['id']),type=x['type'],itemId=x['item_id'],pid=x['pid'],slot=x['slot'],at=x['at'],actor=x['actor'],detail=x['detail'],destination=x['destination'],target=x['target']) for x in db.execute('SELECT * FROM events ORDER BY id DESC LIMIT 1500')]
         shelves = [dict(slot=r['slot'],size=r['size'],note=r['note']) for r in db.execute('SELECT slot,size,note FROM shelf_levels ORDER BY slot')]
         counter = int(db.execute("SELECT value FROM meta WHERE key='next_item'").fetchone()[0])
         location_mode = db.execute("SELECT value FROM meta WHERE key='location_mode'").fetchone()
@@ -558,6 +592,149 @@ def push_test():
     return jsonify(ok=count > 0, devices=count)
 
 
+def _stocktake_payload(db):
+    session_row = db.execute("""SELECT * FROM stocktakes ORDER BY
+        CASE WHEN status='open' THEN 0 ELSE 1 END, id DESC LIMIT 1""").fetchone()
+    history = [dict(id=r['id'], status=r['status'], createdAt=r['created_at'],
+                    createdBy=r['created_by'], closedAt=r['closed_at'],
+                    correctedCount=r['corrected_count'])
+               for r in db.execute('SELECT * FROM stocktakes ORDER BY id DESC LIMIT 10')]
+    if not session_row:
+        return dict(session=None, expected=[], unknown=[], history=history)
+    sid = session_row['id']
+    expected = [dict(id=r['item_id'], pid=r['pid'], name=r['product_name'],
+                     reference=r['product_ref'], scanned=bool(r['scanned_at']),
+                     scannedBy=r['scanned_by'])
+                for r in db.execute('SELECT * FROM stocktake_expected WHERE session_id=? ORDER BY product_name,item_id',
+                                    (sid,))]
+    unknown = [dict(code=r['code'], scannedBy=r['scanned_by'])
+               for r in db.execute('SELECT * FROM stocktake_unknown WHERE session_id=? ORDER BY scanned_at DESC',
+                                   (sid,))]
+    session = dict(id=sid, status=session_row['status'],
+                   createdAt=session_row['created_at'], createdBy=session_row['created_by'],
+                   closedAt=session_row['closed_at'], closedBy=session_row['closed_by'],
+                   correctedCount=session_row['corrected_count'],
+                   expectedCount=len(expected),
+                   scannedCount=sum(1 for row in expected if row['scanned']),
+                   missingCount=sum(1 for row in expected if not row['scanned']),
+                   unknownCount=len(unknown),
+                   currentRevision=db.execute('SELECT revision FROM sync_revision WHERE id=1').fetchone()[0],
+                   baselineRevision=session_row['baseline_revision'])
+    session['stockChanged'] = session['currentRevision'] != session['baselineRevision']
+    return dict(session=session, expected=expected, unknown=unknown, history=history)
+
+
+@app.get('/api/stocktakes/current')
+@protected()
+def stocktake_current():
+    response = jsonify(_stocktake_payload(g.db))
+    response.headers['Cache-Control'] = 'private, no-store'
+    return response
+
+
+@app.post('/api/stocktakes')
+@protected(admin=True)
+def stocktake_start():
+    db = g.db
+    db.execute('BEGIN IMMEDIATE')
+    existing = db.execute("SELECT id FROM stocktakes WHERE status='open'").fetchone()
+    if existing:
+        db.rollback()
+        return bad('Un inventaire physique est déjà en cours.', 409)
+    now = int(time.time() * 1000)
+    revision = db.execute('SELECT revision FROM sync_revision WHERE id=1').fetchone()[0]
+    cursor = db.execute("""INSERT INTO stocktakes(status,created_at,created_by,baseline_revision)
+        VALUES('open',?,?,?)""", (now, g.user['username'], revision))
+    sid = cursor.lastrowid
+    db.execute("""INSERT INTO stocktake_expected(session_id,item_id,pid,product_name,product_ref)
+        SELECT ?,i.id,i.pid,trim(p.brand || ' ' || p.model),p.ref
+        FROM items i JOIN products p ON p.id=i.pid WHERE i.out_at IS NULL""", (sid,))
+    db.commit()
+    return jsonify(_stocktake_payload(db)), 201
+
+
+@app.post('/api/stocktakes/<int:stocktake_id>/scan')
+@protected()
+def stocktake_scan(stocktake_id):
+    try:
+        code = clean_text(json_body().get('code', ''), 'Code-barres', 60, True).upper()
+    except ValueError as exc:
+        return bad(str(exc))
+    if not re.fullmatch(r'STK-[A-Z0-9-]{1,30}', code):
+        return bad('Scannez une étiquette StockPilot de type STK-000001.')
+    db = g.db
+    db.execute('BEGIN IMMEDIATE')
+    session_row = db.execute('SELECT status FROM stocktakes WHERE id=?', (stocktake_id,)).fetchone()
+    if not session_row or session_row['status'] != 'open':
+        db.rollback()
+        return bad('Cet inventaire n’est plus actif.', 409)
+    matched = db.execute("""SELECT scanned_at FROM stocktake_expected
+        WHERE session_id=? AND item_id=?""", (stocktake_id, code)).fetchone()
+    now = int(time.time() * 1000)
+    if matched:
+        if matched['scanned_at'] is not None:
+            status = 'already_scanned'
+        else:
+            db.execute("""UPDATE stocktake_expected SET scanned_at=?, scanned_by=?
+                WHERE session_id=? AND item_id=?""",
+                (now, g.user['username'], stocktake_id, code))
+            status = 'counted'
+    else:
+        cursor = db.execute("""INSERT OR IGNORE INTO stocktake_unknown(
+            session_id,code,scanned_at,scanned_by) VALUES(?,?,?,?)""",
+            (stocktake_id, code, now, g.user['username']))
+        status = 'unknown' if cursor.rowcount else 'already_unknown'
+    db.commit()
+    return jsonify(ok=True, status=status, code=code)
+
+
+@app.post('/api/stocktakes/<int:stocktake_id>/close')
+@protected(admin=True)
+def stocktake_close(stocktake_id):
+    try:
+        data = json_body()
+        action = clean_text(data.get('action', ''), 'Action inventaire', 20, True)
+        confirmation = clean_text(data.get('confirmation', ''), 'Confirmation', 50, True)
+        if action not in ('close', 'reconcile') or confirmation != 'VALIDER INVENTAIRE':
+            return bad('Confirmation invalide. Saisissez VALIDER INVENTAIRE.')
+    except ValueError as exc:
+        return bad(str(exc))
+    db = g.db
+    db.execute('BEGIN IMMEDIATE')
+    session_row = db.execute('SELECT * FROM stocktakes WHERE id=?', (stocktake_id,)).fetchone()
+    if not session_row or session_row['status'] != 'open':
+        db.rollback()
+        return bad('Cet inventaire a déjà été clôturé ou est introuvable.', 409)
+    current_revision = db.execute('SELECT revision FROM sync_revision WHERE id=1').fetchone()[0]
+    if action == 'reconcile' and current_revision != session_row['baseline_revision']:
+        db.rollback()
+        return bad('Le stock a changé depuis le début du comptage. Clôturez sans correction et recommencez un inventaire.', 409)
+    missing = db.execute("""SELECT e.item_id,e.pid,i.slot FROM stocktake_expected e
+        LEFT JOIN items i ON i.id=e.item_id AND i.out_at IS NULL
+        WHERE e.session_id=? AND e.scanned_at IS NULL""", (stocktake_id,)).fetchall()
+    corrected = 0
+    now = int(time.time()*1000)
+    if action == 'reconcile':
+        for item in missing:
+            if item['slot'] is None:
+                db.rollback()
+                return bad('Un article a changé depuis le comptage. Correction annulée.', 409)
+            db.execute("""UPDATE items SET out_at=?,out_by=?,out_destination='inventaire',
+                out_target=? WHERE id=? AND out_at IS NULL""",
+                (now, g.user['username'], f'Écart inventaire #{stocktake_id}', item['item_id']))
+            db.execute("""INSERT INTO events(type,item_id,pid,slot,at,actor,detail,destination,target)
+                VALUES('out',?,?,?,?,?,?,?,?)""",
+                (item['item_id'], item['pid'], item['slot'], now, g.user['username'],
+                 f'Écart inventaire #{stocktake_id} - article non scanné',
+                 'inventaire', f'Écart inventaire #{stocktake_id}'))
+            corrected += 1
+    db.execute("""UPDATE stocktakes SET status=?,closed_at=?,closed_by=?,corrected_count=?
+        WHERE id=?""", ('reconciled' if action == 'reconcile' else 'closed',
+                        now, g.user['username'], corrected, stocktake_id))
+    db.commit()
+    return jsonify(ok=True, corrected=corrected, status='reconciled' if action == 'reconcile' else 'closed')
+
+
 @app.post('/api/receive')
 @protected()
 def receive_free_text():
@@ -650,6 +827,100 @@ def receive_free_text():
         return bad(str(e),503)
 
 
+@app.post('/api/receive/batch')
+@protected()
+def receive_batch():
+    """Réception atomique de 1 à 50 unités, une référence Henrri lue sans écriture."""
+    db = g.db
+    try:
+        data = json_body()
+        name = clean_text(data.get('name', ''), 'Nom du produit', 120, True)
+        product_id = clean_text(data.get('product_id', ''), 'Référence sélectionnée', 64)
+        henrri_id = clean_text(data.get('henrri_id', ''), 'Identifiant Henrri', 80)
+        condition = clean_text(data.get('condition', 'Neuf'), 'État', 30, True)
+        quantity = data.get('quantity')
+        if type(quantity) is not int or not 1 <= quantity <= 50:
+            return bad('La quantité doit être comprise entre 1 et 50.')
+        if condition not in ('Neuf', 'Retour SAV', 'Réparation'):
+            return bad('État invalide.')
+        if product_id and henrri_id:
+            return bad('Sélection de référence contradictoire.')
+        serials = data.get('serials', [])
+        if not isinstance(serials, list) or len(serials) > quantity:
+            return bad('La liste des numéros de série dépasse la quantité.')
+        serials = [clean_text(x, 'Numéro de série', 100) for x in serials]
+        serials += [''] * (quantity - len(serials))
+        nonempty = [serial.casefold() for serial in serials if serial]
+        if len(set(nonempty)) != len(nonempty):
+            return bad('Un numéro de série est présent plusieurs fois dans cette réception.', 409)
+        # Toute lecture Henrri se déroule avant la transaction SQLite.
+        henrri_item = henrri_service.find_item(henrri_id) if henrri_id else None
+        if henrri_item:
+            name = henrri_item['description']
+        db.execute('BEGIN IMMEDIATE')
+        created = False
+        if henrri_item:
+            ref = henrri_item['reference']
+            matches = db.execute(
+                'SELECT id,active FROM products WHERE lower(trim(ref))=lower(trim(?))', (ref,)
+            ).fetchall()
+            if len(matches) > 1 or (matches and not matches[0]['active']):
+                db.rollback()
+                return bad('La référence Henrri est ambiguë ou désactivée localement.', 409)
+            if matches:
+                pid = matches[0]['id']
+            else:
+                pid = 'p_' + secrets.token_hex(6)
+                db.execute("""INSERT INTO products(id,brand,model,cat,zone,kind,ref,preferred_slot)
+                    VALUES(?, '', ?, 'Matériel', 'A', 'package', ?, '')""",
+                    (pid, name[:100], ref))
+                created = True
+        elif product_id:
+            p = db.execute('SELECT id FROM products WHERE id=? AND active=1', (product_id,)).fetchone()
+            if not p:
+                db.rollback()
+                return bad('Référence locale introuvable ou désactivée.', 404)
+            pid = p['id']
+        else:
+            p = db.execute("""SELECT id FROM products WHERE active=1 AND
+                (lower(trim(brand || ' ' || model))=lower(?) OR lower(trim(model))=lower(?))
+                ORDER BY id LIMIT 1""", (name, name)).fetchone()
+            if p:
+                pid = p['id']
+            else:
+                pid = 'p_' + secrets.token_hex(6)
+                db.execute("""INSERT INTO products(id,brand,model,cat,zone,kind,ref,preferred_slot)
+                    VALUES(?, '', ?, 'Matériel', 'A', 'package', ?, '')""",
+                    (pid, name[:100], 'REF-' + secrets.token_hex(5).upper()))
+                created = True
+        number = int(db.execute("SELECT value FROM meta WHERE key='next_item'").fetchone()[0])
+        now = int(time.time() * 1000)
+        items = []
+        for serial in serials:
+            while db.execute('SELECT 1 FROM items WHERE id=?', (f'STK-{number:06d}',)).fetchone():
+                number += 1
+            item_id = f'STK-{number:06d}'
+            number += 1
+            db.execute("""INSERT INTO items(id,pid,slot,serial,condition,in_at,in_by)
+                VALUES(?,?,'',?,?,?,?)""", (item_id, pid, serial or None, condition, now, g.user['username']))
+            db.execute("""INSERT INTO events(type,item_id,pid,slot,at,actor)
+                VALUES('in',?,?,'',?,?)""", (item_id, pid, now, g.user['username']))
+            items.append(dict(id=item_id, pid=pid, slot='', serial=serial,
+                              condition=condition, inAt=now))
+        db.execute("UPDATE meta SET value=? WHERE key='next_item'", (str(number),))
+        db.commit()
+        return jsonify(items=items, item=items[0], quantity=len(items), createdProduct=created), 201
+    except sqlite3.IntegrityError:
+        db.rollback()
+        return bad('Numéro de série déjà enregistré ou référence en conflit. Rien n’a été ajouté.', 409)
+    except ValueError as exc:
+        db.rollback()
+        return bad(str(exc))
+    except henrri_service.HenrriError as exc:
+        db.rollback()
+        return bad(str(exc), 503)
+
+
 @app.post('/api/items')
 @protected()
 def entry_item():
@@ -687,6 +958,14 @@ def entry_item():
 @app.post('/api/items/<item_id>/out')
 @protected()
 def exit_item(item_id):
+    try:
+        data = json_body()
+        destination = clean_text(data.get('destination', ''), 'Destination', 30, True)
+        target = clean_text(data.get('target', ''), 'Destinataire / chantier', 120, True)
+        if destination not in ('client', 'chantier', 'technicien', 'preparation', 'autre'):
+            return bad('Choisissez une destination de sortie valide.')
+    except ValueError as exc:
+        return bad(str(exc))
     db = g.db
     db.execute('BEGIN IMMEDIATE')
     item = db.execute('SELECT * FROM items WHERE id=? AND out_at IS NULL', (item_id,)).fetchone()
@@ -694,9 +973,11 @@ def exit_item(item_id):
         db.rollback()
         return bad('Cet article est déjà sorti ou introuvable.', 409)
     now = int(time.time()*1000)
-    db.execute('UPDATE items SET out_at=?,out_by=? WHERE id=?', (now,g.user['username'],item_id))
-    db.execute('INSERT INTO events(type,item_id,pid,slot,at,actor) VALUES(?,?,?,?,?,?)',
-               ('out',item_id,item['pid'],item['slot'],now,g.user['username']))
+    db.execute('UPDATE items SET out_at=?,out_by=?,out_destination=?,out_target=? WHERE id=?',
+               (now,g.user['username'],destination,target,item_id))
+    db.execute('INSERT INTO events(type,item_id,pid,slot,at,actor,detail,destination,target) VALUES(?,?,?,?,?,?,?,?,?)',
+               ('out',item_id,item['pid'],item['slot'],now,g.user['username'],
+                'Sortie vers '+destination+' : '+target,destination,target))
     db.commit()
     # Notification uniquement lors du franchissement du seuil, pas à chaque scan.
     try:
@@ -745,21 +1026,11 @@ def move_item(item_id):
 
 
 
-@app.get('/label/<item_id>')
-@protected()
-def label_page(item_id):
-    """PDF d'une seule page, découpé aux dimensions physiques d'un rouleau DYMO."""
-    row = g.db.execute("""SELECT items.id, items.slot, items.serial, products.brand, products.model, products.ref
-                          FROM items JOIN products ON items.pid=products.id WHERE items.id=?""", (item_id,)).fetchone()
-    if not row:
-        abort(404)
-    # 11352 = 54 x 25 mm ; 11354 = 57 x 32 mm (à choisir selon le rouleau).
+def make_labels_pdf(rows, paper):
+    """Une page PDF vectorielle par étiquette DYMO, préserve le format historique."""
     formats = {'54x25': (54, 25), '57x32': (57, 32)}
-    paper = request.args.get('size', '54x25')
     if paper not in formats:
-        return bad('Format non pris en charge. Choisissez 54x25 ou 57x32.')
-    width_mm, height_mm = formats[paper]
-
+        raise ValueError('Format non pris en charge. Choisissez 54x25 ou 57x32.')
     from reportlab.pdfgen import canvas
     from reportlab.lib.units import mm
     from reportlab.pdfbase.pdfmetrics import stringWidth
@@ -768,12 +1039,12 @@ def label_page(item_id):
     from reportlab.graphics import renderPDF
     from reportlab.graphics.shapes import Drawing
 
+    width_mm, height_mm = formats[paper]
     width, height = width_mm * mm, height_mm * mm
     output = io.BytesIO()
     label = canvas.Canvas(output, pagesize=(width, height), pageCompression=1)
-    label.setTitle('StockPilot - Etiquette ' + item_id)
+    label.setTitle('StockPilot - Étiquettes')
     label.setAuthor('StockPilot')
-    label.setFillColorRGB(0, 0, 0)
 
     def fit_line(text, font, width_limit, initial_size):
         text = str(text or '').replace('\n', ' ').strip()
@@ -785,42 +1056,87 @@ def label_page(item_id):
         label.setFont(font, point)
         return text
 
-    margin = 2.2 * mm
-    label.setFont('Helvetica-Bold', 5.5)
-    label.drawString(margin, height - 2.8 * mm, 'STOCKPILOT')
-    display_name = ' '.join([row['brand'], row['model']]).strip()
-    fitted_name = fit_line(display_name, 'Helvetica-Bold', width - 2 * margin, 8.3)
-    label.drawString(margin, height - 5.3 * mm, fitted_name)
-    reference = fit_line('REF ' + row['ref'], 'Helvetica', width - 2 * margin, 5.7)
-    label.drawString(margin, height - 7.6 * mm, reference)
-
-    qr_size = (10.9 if height_mm == 25 else 13) * mm
-    code_width = width - margin * 2 - qr_size - 3 * mm
-    code_height = (8.5 if height_mm == 25 else 11) * mm
-    code = Code128(item_id, barHeight=code_height, barWidth=.61, quiet=False, humanReadable=False)
-    if code.width > code_width:
-        code = Code128(item_id, barHeight=code_height,
-                       barWidth=.61 * code_width / code.width,
+    for row in rows:
+        item_id = row['id']
+        label.setFillColorRGB(0, 0, 0)
+        margin = 2.2 * mm
+        label.setFont('Helvetica-Bold', 5.5)
+        label.drawString(margin, height - 2.8 * mm, 'STOCKPILOT')
+        display_name = ' '.join([row['brand'], row['model']]).strip()
+        label.drawString(margin, height - 5.3 * mm,
+                         fit_line(display_name, 'Helvetica-Bold', width - 2 * margin, 8.3))
+        label.drawString(margin, height - 7.6 * mm,
+                         fit_line('REF ' + row['ref'], 'Helvetica', width - 2 * margin, 5.7))
+        qr_size = (10.9 if height_mm == 25 else 13) * mm
+        code_width = width - margin * 2 - qr_size - 3 * mm
+        code_height = (8.5 if height_mm == 25 else 11) * mm
+        code = Code128(item_id, barHeight=code_height, barWidth=.61,
                        quiet=False, humanReadable=False)
-    code.drawOn(label, margin, (5.3 if height_mm == 25 else 7) * mm)
-
-    qr_code = QrCodeWidget(item_id)
-    bounds = qr_code.getBounds()
-    drawing = Drawing(bounds[2] - bounds[0], bounds[3] - bounds[1])
-    drawing.add(qr_code)
-    label.saveState()
-    label.translate(width - margin - qr_size, (3.1 if height_mm == 25 else 4.4) * mm)
-    label.scale(qr_size / drawing.width, qr_size / drawing.height)
-    renderPDF.draw(drawing, label, -bounds[0], -bounds[1])
-    label.restoreState()
-
-    label.setFont('Courier-Bold', 7.2)
-    label.drawString(margin, 2.1 * mm, item_id)
-    label.showPage()
+        if code.width > code_width:
+            code = Code128(item_id, barHeight=code_height,
+                           barWidth=.61 * code_width / code.width,
+                           quiet=False, humanReadable=False)
+        code.drawOn(label, margin, (5.3 if height_mm == 25 else 7) * mm)
+        qr_code = QrCodeWidget(item_id)
+        bounds = qr_code.getBounds()
+        drawing = Drawing(bounds[2] - bounds[0], bounds[3] - bounds[1])
+        drawing.add(qr_code)
+        label.saveState()
+        label.translate(width - margin - qr_size, (3.1 if height_mm == 25 else 4.4) * mm)
+        label.scale(qr_size / drawing.width, qr_size / drawing.height)
+        renderPDF.draw(drawing, label, -bounds[0], -bounds[1])
+        label.restoreState()
+        label.setFont('Courier-Bold', 7.2)
+        label.drawString(margin, 2.1 * mm, item_id)
+        label.showPage()
     label.save()
     output.seek(0)
+    return output
+
+
+@app.get('/label/<item_id>')
+@protected()
+def label_page(item_id):
+    row = g.db.execute("""SELECT items.id, items.slot, items.serial, products.brand, products.model, products.ref
+        FROM items JOIN products ON items.pid=products.id WHERE items.id=?""", (item_id,)).fetchone()
+    if not row:
+        abort(404)
+    paper = request.args.get('size', '54x25')
+    try:
+        output = make_labels_pdf([row], paper)
+    except ValueError as exc:
+        return bad(str(exc))
     response = send_file(output, mimetype='application/pdf', as_attachment=False,
                          download_name=f'StockPilot-{item_id}-{paper}mm.pdf', max_age=0)
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['Cache-Control'] = 'private, no-store'
+    return response
+
+
+@app.get('/api/labels/batch.pdf')
+@protected()
+def batch_labels():
+    """Planche multi-pages, une étiquette par article physique, jamais A4."""
+    raw = request.args.get('ids', '')
+    ids = [value.strip().upper() for value in raw.split(',')]
+    if not 1 <= len(ids) <= 50 or len(set(ids)) != len(ids) or any(
+        re.fullmatch(r'STK-[A-Z0-9-]{1,30}', value) is None for value in ids
+    ):
+        return bad('Sélectionnez entre 1 et 50 étiquettes distinctes.')
+    placeholders = ','.join('?' for _ in ids)
+    rows = g.db.execute(f"""SELECT items.id, items.slot, items.serial, products.brand,
+        products.model, products.ref FROM items JOIN products ON items.pid=products.id
+        WHERE items.id IN ({placeholders})""", ids).fetchall()
+    by_id = {row['id']: row for row in rows}
+    if len(by_id) != len(ids):
+        return bad('Une ou plusieurs étiquettes sont introuvables.', 404)
+    paper = request.args.get('size', '54x25')
+    try:
+        output = make_labels_pdf([by_id[item_id] for item_id in ids], paper)
+    except ValueError as exc:
+        return bad(str(exc))
+    response = send_file(output, mimetype='application/pdf', as_attachment=False,
+                         download_name='StockPilot-Etiquettes-'+paper+'mm.pdf', max_age=0)
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['Cache-Control'] = 'private, no-store'
     return response
@@ -909,6 +1225,9 @@ def clear_stock():
         backup_connection.close()
     try:
         db.execute('BEGIN IMMEDIATE')
+        db.execute('DELETE FROM stocktake_unknown')
+        db.execute('DELETE FROM stocktake_expected')
+        db.execute('DELETE FROM stocktakes')
         db.execute('DELETE FROM events')
         db.execute('DELETE FROM items')
         db.execute('DELETE FROM products')
@@ -1146,6 +1465,9 @@ def reset_demo():
         return bad('Réinitialisation désactivée sur ce serveur.', 403)
     db = g.db
     db.execute('BEGIN IMMEDIATE')
+    db.execute('DELETE FROM stocktake_unknown')
+    db.execute('DELETE FROM stocktake_expected')
+    db.execute('DELETE FROM stocktakes')
     db.execute('DELETE FROM events')
     db.execute('DELETE FROM items')
     db.execute('DELETE FROM products')

@@ -27,7 +27,8 @@
 
 
 <script src="/static/barcode-only.js?v=henrri-20261110-1"></script>
-<script src="/static/reception.js?v=14"></script>
+<script src="/static/reception.js?v=15"></script>
+<script src="/static/stocktake.js?v=1"></script>
 <link rel="stylesheet" href="/static/barcode-only.css?v=aurora-20261102-2" />
 
 <link rel="stylesheet" href="/static/aurora.css?v=aurora-20261102-2" />
@@ -39,6 +40,7 @@
 <link rel="stylesheet" href="/static/inventory-ui.css?v=4" />
 <link rel="stylesheet" href="/static/backup-ui.css?v=1" />
 <link rel="stylesheet" href="/static/henrri.css?v=2" />
+<link rel="stylesheet" href="/static/stocktake.css?v=1" />
 
 
 
@@ -76,6 +78,7 @@ async function api(path,method='GET',data=null){const opts={method,credentials:'
 let me={username:'...',role:'employee'},allowReset=false,users=[],locationMode='optional';
 let henrri={status:'loading'},henrriLoading=false,henrriConfigured=false;
 let stockRevision=-1,liveSyncBusy=false,liveSyncActive=true,liveSyncLastCheck=0;
+let stocktakeData={session:null,expected:[],unknown:[],history:[]},stocktakeLoading=false;
 function receiveStockSnapshot(data){
  if(typeof data.revision==='number' && stockRevision>=0 && data.revision<stockRevision)return false;
  db={items:data.items,events:data.events,catalog:data.catalog,shelves:data.shelves||[],
@@ -175,11 +178,12 @@ function nav(p){
   if(active){btn.setAttribute('aria-current','page');activeBtns.push(btn);}
   else btn.removeAttribute('aria-current');
  });
- document.querySelector('[data-action="mobilemore"]')?.classList.toggle('active',page==='history'||page==='settings');
+ document.querySelector('[data-action="mobilemore"]')?.classList.toggle('active',page==='history'||page==='settings'||page==='stocktake');
  document.querySelector('.sidebar')?.classList.remove('open');
  document.querySelector('.sidebackdrop')?.remove();
  document.querySelector('.overlay')?.remove();
  if(page==='products'||page==='settings')updatePushButton();
+ if(page==='stocktake')loadStocktake();
  window.scrollTo(0,0);
  if(reduced)return;
  activeBtns.forEach(btn=>btn.classList.add('sp-nav-arrive'));
@@ -224,8 +228,8 @@ function nav(p){
 }
 function goEntry(pid=null){entryPresetPid=pid;selectedProduct=pid||selectedProduct||db.catalog[0]?.id||null;chosenSlot=null;formSerial='';formCondition='Neuf';lastAdded=null;nav('entry')}
 function goExit(id=null){scanResult=id?itemById(id)||null:null;nav('exit')}
-function layout(){document.body.classList.toggle('aurora-on',page==='dashboard');let menu=[['dashboard','Tableau de bord','dashboard-tiles'],['entry','Entrée en stock','package-plus'],['exit','Scanner une sortie','scan-out'],['products','Produits en stock','stock-boxes'],['history','Historique','history-clock'],['settings','Paramètres','settings-gear']];return `<div class="app">${mobileNav?'<div class="sidebackdrop" data-action="closemenu"></div>':''}<aside class="sidebar ${mobileNav?'open':''}"><div class="brand"><div class="brand-mark"><img class="sp-logo" src="/static/stockpilot-mark.svg?v=1" alt="StockPilot" width="44" height="44"></div><div><strong>Stock<span>Pilot</span></strong><small>Gestion du stock</small></div></div><div class="navlabel">ESPACE DE TRAVAIL</div>${menu.map(([id,label,icon])=>`<button class="navbtn ${page===id?'active':''}" data-nav="${id}" aria-label="${label}" title="${label}" ${page===id?'aria-current="page"':''}>${ico(icon,21)} <span>${label}</span>${id==='products'?`<span class="count">${db.items.length}</span>`:''}</button>`).join('')}<div class="sidebottom"><div class="sidecard"><strong><span class="green-dot"></span> Données centralisées</strong><p>Stock partagé et sauvegardé dans la base du NAS.</p></div><a href="/logout" class="sp-logout" title="Se déconnecter" aria-label="Se déconnecter">${ico('log-out',24)}<span class="sr-only">Se déconnecter</span></a><div class="sidefoot"><div class="avatar">SP</div><div><strong>${esc(me.username)}</strong><small>${me.role==='admin'?'Administrateur':'Employé'}</small></div></div></div></aside><main class="main"><div class="content" id="content">${renderPage()}</div></main><nav class="mobilebottom" aria-label="Navigation mobile">${[['dashboard','Accueil','dashboard-tiles'],['entry','Entrée','package-plus'],['exit','Scanner','scan-out'],['products','Stock','stock-boxes']].map(([id,label,icon])=>`<button type="button" data-nav="${id}" class="${page===id?'active':''}" aria-label="${label}" ${page===id?'aria-current="page"':''}>${ico(icon,21)}<span>${label}</span></button>`).join('')}<button type="button" class="${page==='history'||page==='settings'?'active':''}" data-action="mobilemore" aria-label="Plus de pages" aria-haspopup="dialog" aria-controls="sp-mobile-menu" aria-expanded="false">${ico('menu',21)}<span>Plus</span></button></nav><div id="sp-mobile-scrim" class="sp-mobile-scrim" data-action="closemobilemore" hidden></div><div id="sp-mobile-menu" class="sp-mobile-menu" role="dialog" aria-label="Autres pages StockPilot" aria-modal="true" hidden><div class="sp-mobile-menu-head"><strong>Autres pages</strong><button type="button" data-action="closemobilemore" aria-label="Fermer le menu">${ico('close',20)}</button></div><button type="button" data-nav="history">${ico('history-clock',21)}<span>Historique</span>${ico('chev',17)}</button><button type="button" data-nav="settings">${ico('settings-gear',21)}<span>Paramètres</span>${ico('chev',17)}</button><a href="/logout">${ico('log-out',21)}<span>Se déconnecter</span></a></div></div>${modal?renderModal():''}`}
-function renderPage(){const views={dashboard:renderDashboard,entry:renderEntry,exit:renderExit,products:renderProducts,history:renderHistory,settings:renderSettings};return (views[page]||views.dashboard)();}
+function layout(){document.body.classList.toggle('aurora-on',page==='dashboard');let menu=[['dashboard','Tableau de bord','dashboard-tiles'],['entry','Entrée en stock','package-plus'],['exit','Scanner une sortie','scan-out'],['products','Produits en stock','stock-boxes'],['history','Historique','history-clock'],['stocktake','Inventaire physique','stock-boxes'],['settings','Paramètres','settings-gear']];return `<div class="app">${mobileNav?'<div class="sidebackdrop" data-action="closemenu"></div>':''}<aside class="sidebar ${mobileNav?'open':''}"><div class="brand"><div class="brand-mark"><img class="sp-logo" src="/static/stockpilot-mark.svg?v=1" alt="StockPilot" width="44" height="44"></div><div><strong>Stock<span>Pilot</span></strong><small>Gestion du stock</small></div></div><div class="navlabel">ESPACE DE TRAVAIL</div>${menu.map(([id,label,icon])=>`<button class="navbtn ${page===id?'active':''}" data-nav="${id}" aria-label="${label}" title="${label}" ${page===id?'aria-current="page"':''}>${ico(icon,21)} <span>${label}</span>${id==='products'?`<span class="count">${db.items.length}</span>`:''}</button>`).join('')}<div class="sidebottom"><div class="sidecard"><strong><span class="green-dot"></span> Données centralisées</strong><p>Stock partagé et sauvegardé dans la base du NAS.</p></div><a href="/logout" class="sp-logout" title="Se déconnecter" aria-label="Se déconnecter">${ico('log-out',24)}<span class="sr-only">Se déconnecter</span></a><div class="sidefoot"><div class="avatar">SP</div><div><strong>${esc(me.username)}</strong><small>${me.role==='admin'?'Administrateur':'Employé'}</small></div></div></div></aside><main class="main"><div class="content" id="content">${renderPage()}</div></main><nav class="mobilebottom" aria-label="Navigation mobile">${[['dashboard','Accueil','dashboard-tiles'],['entry','Entrée','package-plus'],['exit','Scanner','scan-out'],['products','Stock','stock-boxes']].map(([id,label,icon])=>`<button type="button" data-nav="${id}" class="${page===id?'active':''}" aria-label="${label}" ${page===id?'aria-current="page"':''}>${ico(icon,21)}<span>${label}</span></button>`).join('')}<button type="button" class="${page==='history'||page==='settings'?'active':''}" data-action="mobilemore" aria-label="Plus de pages" aria-haspopup="dialog" aria-controls="sp-mobile-menu" aria-expanded="false">${ico('menu',21)}<span>Plus</span></button></nav><div id="sp-mobile-scrim" class="sp-mobile-scrim" data-action="closemobilemore" hidden></div><div id="sp-mobile-menu" class="sp-mobile-menu" role="dialog" aria-label="Autres pages StockPilot" aria-modal="true" hidden><div class="sp-mobile-menu-head"><strong>Autres pages</strong><button type="button" data-action="closemobilemore" aria-label="Fermer le menu">${ico('close',20)}</button></div><button type="button" data-nav="history">${ico('history-clock',21)}<span>Historique</span>${ico('chev',17)}</button><button type="button" data-nav="settings">${ico('settings-gear',21)}<span>Paramètres</span>${ico('chev',17)}</button><button type="button" data-nav="stocktake">${ico('stock-boxes',21)}<span>Inventaire physique</span>${ico('chev',17)}</button><a href="/logout">${ico('log-out',21)}<span>Se déconnecter</span></a></div></div>${modal?renderModal():''}`}
+function renderPage(){const views={dashboard:renderDashboard,entry:renderEntry,exit:renderExit,products:renderProducts,history:renderHistory,stocktake:renderStocktake,settings:renderSettings};return (views[page]||views.dashboard)();}
 function heading(kicker,title,subtitle,actions=''){return `<div class="pagehead"><div><div class="eyebrow">${kicker}</div><h1>${title}</h1><p>${subtitle}</p></div>${actions?`<div class="head-actions">${actions}</div>`:''}</div>`}
 const btn=(label,action,icon='arrow',cls='primary')=>`<button class="btn ${cls}" data-action="${action}">${ico(icon,16)} ${label}</button>`;
 function renderDashboard(){return SPBasic.dashboard({db,me,henrri,heading,btn,ico});}
@@ -280,6 +284,7 @@ function renderLabel(item){const p=product(item.pid);return `<div class="label-p
 function renderExit(){return SPBasic.exit({db,heading,btn,ico,scanResult,itemById,product});}
 function renderProducts(){return SPBasic.inventory({db,me,heading,btn,tableFilter,tableType,tableStockFilter,product});}
 function renderHistory(){return SPBasic.history({db,heading,btn,product});}
+function renderStocktake(){return window.SPStocktake?window.SPStocktake.render({stocktake:stocktakeData,me,heading,btn,ico}):'<p>Module inventaire non chargé.</p>'}
 function renderSettingsLegacy(){return SPBasic.settings({db,me,heading});}
 function renderSettings(){return SPBasic.settings({db,me,henrri,heading,labelSize:stockPilotLabelSize()});}
 function renderModal(){
@@ -289,7 +294,13 @@ function renderModal(){
  if(modal.type==='editproduct')return SPBasic.editModal({modal,product});
  if(modal.type==='confirmout'){
   const item=itemById(modal.id);if(!item)return '';
-  return '<div class="overlay" data-action="backdrop"><div class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Confirmer la sortie</h2><button class="closebtn" data-action="closemodal">×</button></div><div class="modal-body"><p>Ce produit sera retiré des articles disponibles. La sortie restera enregistrée dans l’historique.</p><div class="productpick"><div class="prodicon">'+ico('package',23)+'</div><div><strong>'+esc(displayName(product(item.pid)))+'</strong><small>'+esc(item.id)+'</small></div></div></div><div class="modal-foot"><button class="btn" data-action="closemodal">Annuler</button><button class="btn negative" data-action="remove" data-id="'+esc(item.id)+'">Confirmer la sortie</button></div></div></div>';
+  return '<div class="overlay" data-action="backdrop"><div class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Confirmer la sortie</h2><button class="closebtn" data-action="closemodal">×</button></div><div class="modal-body"><p>Chaque sortie doit avoir une destination précise. L’opérateur et le motif sont conservés dans l’historique.</p><div class="productpick"><div class="prodicon">'+ico('package',23)+'</div><div><strong>'+esc(displayName(product(item.pid)))+'</strong><small>'+esc(item.id)+'</small></div></div><div class="field"><label for="out-destination">Destination *</label><select id="out-destination" required><option value="">Choisir une destination</option><option value="client">Client</option><option value="chantier">Chantier</option><option value="technicien">Technicien</option><option value="preparation">Préparation PC</option><option value="autre">Autre</option></select></div><div class="field"><label for="out-target">Nom du destinataire, chantier ou motif *</label><input id="out-target" maxlength="120" autocomplete="off" placeholder="Ex. Client Dupont, chantier Centre-ville…" required></div></div><div class="modal-foot"><button class="btn" data-action="closemodal">Annuler</button><button class="btn negative" data-action="remove" data-id="'+esc(item.id)+'">Valider la sortie</button></div></div></div>';
+ }
+ if(modal.type==='stocktake-confirm'){
+  const s=stocktakeData.session,mode=modal.mode||'close';
+  if(!s||s.status!=='open')return '';
+  const reconcile=mode==='reconcile';
+  return '<div class="overlay" data-action="backdrop"><div class="modal" role="dialog" aria-modal="true" aria-label="Validation de l’inventaire"><div class="modal-head"><h2>'+(reconcile?'Corriger les écarts ?':'Clôturer cet inventaire ?')+'</h2><button class="closebtn" data-action="closemodal">×</button></div><div class="modal-body"><p>'+(reconcile?'<strong>'+s.missingCount+' article(s) non scanné(s) seront définitivement sortis du stock local.</strong> Chaque correction sera tracée.':'Le comptage sera clôturé <strong>sans modifier aucune quantité</strong>.')+'</p><p>Articles inconnus à vérifier séparément : '+s.unknownCount+'. <strong>Henrri ne sera pas modifié.</strong></p><div class="field"><label for="stocktake-confirm-text">Saisissez VALIDER INVENTAIRE</label><input id="stocktake-confirm-text" autocomplete="off" placeholder="VALIDER INVENTAIRE"></div></div><div class="modal-foot"><button class="btn" data-action="closemodal">Annuler</button><button class="btn negative" data-action="stocktake-finalize" data-mode="'+mode+'">Confirmer</button></div></div></div>';
  }
  if(modal.type==='users')return '<div class="overlay" data-action="backdrop"><div class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Comptes utilisateurs</h2><button class="closebtn" data-action="closemodal">×</button></div><div class="modal-body">'+(users.map(u=>'<div class="ruleitem"><div><strong>'+esc(u.username)+'</strong><small>'+(u.role==='admin'?'Administrateur':'Employé')+' · '+(u.enabled?'Actif':'Désactivé')+'</small></div><button class="btn" data-action="toggleuser" data-id="'+u.id+'" '+(u.id===me.id?'disabled':'')+'>'+(u.enabled?'Désactiver':'Activer')+'</button></div>').join('')||'Aucun compte')+'</div><div class="modal-foot"><button class="btn" data-action="closemodal">Fermer</button></div></div></div>';
  if(modal.type==='backups'){
@@ -405,20 +416,71 @@ function printLabel(id){
  const popup=window.open('/label/'+encodeURIComponent(item.id)+'?size='+encodeURIComponent(stockPilotLabelSize()),'_blank');
  if(!popup)toast('Autorisez les fenêtres contextuelles pour imprimer',true);
 }
+function printBatchLabels(ids){
+ if(!Array.isArray(ids)||!ids.length||ids.length>50)return toast('Lot d’étiquettes invalide.',true);
+ const url='/api/labels/batch.pdf?ids='+encodeURIComponent(ids.join(','))+'&size='+encodeURIComponent(stockPilotLabelSize());
+ const popup=window.open(url,'_blank');
+ if(!popup)toast('Autorisez les fenêtres contextuelles pour imprimer le lot.',true);
+}
 async function removeItem(id){
  const item=itemById(id);
  if(!item)return toast('Article déjà sorti du stock',true);
+ const destination=$('#out-destination')?.value||'';
+ const target=$('#out-target')?.value?.trim()||'';
+ if(!destination||!target)return toast('Renseignez la destination et le destinataire ou motif de sortie.',true);
  try {
-  await api('/api/items/'+encodeURIComponent(id)+'/out','POST',{});
+  await api('/api/items/'+encodeURIComponent(id)+'/out','POST',{destination,target});
   modal=null;scanResult=null;
   await refreshState(true);
   renderApp();
   toast(displayName(product(item.pid))+' sorti du stock');
  } catch(error) {
   toast(error.message,true);
-  await refreshState(true);
-  renderApp();
  }
+}
+async function loadStocktake(silent=false){
+ if(page!=='stocktake'||stocktakeLoading)return;
+ stocktakeLoading=true;
+ try{
+  stocktakeData=await api('/api/stocktakes/current');
+  if(page==='stocktake'&&(!silent||document.activeElement?.id!=='stocktake-code'))renderContent();
+ }catch(e){if(!silent)toast('Inventaire : '+e.message,true)}
+ finally{stocktakeLoading=false}
+}
+async function startStocktake(){
+ if(me.role!=='admin')return toast('Réservé aux administrateurs.',true);
+ try{
+  stocktakeData=await api('/api/stocktakes','POST',{});
+  renderContent();
+  toast('Inventaire physique démarré : scannez les étiquettes.');
+ }catch(e){toast(e.message,true)}
+}
+async function scanStocktake(raw){
+ const session=stocktakeData.session,code=String(raw||'').trim().toUpperCase();
+ if(!session||session.status!=='open')return toast('Aucun comptage actif.',true);
+ if(!code)return toast('Scannez un identifiant STK.',true);
+ try{
+  const result=await api('/api/stocktakes/'+session.id+'/scan','POST',{code});
+  await loadStocktake();
+  const messages={counted:'Article compté.',already_scanned:'Déjà compté : pas de doublon.',unknown:'Étiquette inconnue : à vérifier.',already_unknown:'Cette étiquette inconnue est déjà signalée.'};
+  toast(messages[result.status]||'Code pris en compte.',result.status==='unknown');
+  document.getElementById('stocktake-code')?.focus();
+ }catch(e){toast(e.message,true)}
+}
+async function finalizeStocktake(mode){
+ const session=stocktakeData.session;
+ const confirmation=$('#stocktake-confirm-text')?.value?.trim()||'';
+ if(!session||session.status!=='open')return toast('Inventaire déjà terminé.',true);
+ if(confirmation!=='VALIDER INVENTAIRE')return toast('Saisissez VALIDER INVENTAIRE.',true);
+ if(mode!=='reconcile'&&mode!=='close')return;
+ try{
+  const result=await api('/api/stocktakes/'+session.id+'/close','POST',{action:mode,confirmation});
+  modal=null;
+  await refreshState(true);
+  await loadStocktake();
+  renderApp();
+  toast(mode==='reconcile'?result.corrected+' écart(s) corrigé(s) dans Stock Pilot.':'Inventaire clôturé sans correction.');
+ }catch(e){toast(e.message,true);await loadStocktake(true)}
 }
 function lookup(code){
  const id=String(code||'').trim().toUpperCase();
@@ -462,7 +524,7 @@ function exportStockSummary(){
  downloadCSV('stockpilot-quantites.csv',rows);
  toast('Quantités exportées');
 }
-function exportHistory(){downloadCSV('stockpilot-historique.csv',[['Date','Type','Produit','Identifiant','Opérateur'],...db.events.filter(e=>e.type==='in'||e.type==='out').map(e=>[new Date(e.at).toLocaleString('fr-FR'),e.type==='in'?'Entrée':'Sortie',displayName(product(e.pid)),e.itemId,e.actor])]);toast('Journal CSV téléchargé')}
+function exportHistory(){downloadCSV('stockpilot-historique.csv',[['Date','Type','Produit','Identifiant','Opérateur','Destination','Destinataire / motif'],...db.events.filter(e=>e.type==='in'||e.type==='out').map(e=>[new Date(e.at).toLocaleString('fr-FR'),e.type==='in'?'Entrée':'Sortie',displayName(product(e.pid)),e.itemId,e.actor,e.destination||'',e.target||''])]);toast('Journal CSV téléchargé')}
 function openModal(m){modal=m;document.body.classList.toggle('si-modal-open',m?.type==='stockproduct');renderApp();
  if(m?.type==='stockproduct')document.querySelector('.si-product-modal')?.focus()}
 function closeModal(){modal=null;document.body.classList.remove('si-modal-open');renderApp()}
@@ -483,7 +545,7 @@ function ensureScannerLibrary(){
  return scannerLibraryPending;
 }
 async function startCamera(){
- if(scanning){await stopCamera();if(page==='exit')renderContent();return}
+ if(scanning){await stopCamera();if(page==='exit'||page==='stocktake')renderContent();return}
  const panel=$('#scan-panel');
  if(!panel)return;
  if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia){
@@ -498,7 +560,7 @@ async function startCamera(){
  if(button)button.innerHTML=ico('close',17)+' Arrêter la caméra';
  try{
   await ensureScannerLibrary();
-  if(token!==activeCameraRun||page!=='exit')return;
+  if(token!==activeCameraRun||!['exit','stocktake'].includes(page))return;
   const format=window.Html5QrcodeSupportedFormats;
   cameraReader=new window.Html5Qrcode('sp-camera-reader',{
    formatsToSupport:[format.QR_CODE,format.CODE_128,format.CODE_39],
@@ -512,7 +574,7 @@ async function startCamera(){
     const id=String(decoded||'').trim().toUpperCase();
     if(!/^STK-[A-Z0-9-]+$/.test(id))return;
     await stopCamera();
-    if(page==='exit')lookup(id);
+    if(page==='exit')lookup(id);else if(page==='stocktake')scanStocktake(id);
    },
    ()=>{}
   );
@@ -520,7 +582,7 @@ async function startCamera(){
  }catch(error){
   if(token!==activeCameraRun)return;
   await stopCamera();
-  if(page==='exit')renderContent();
+  if(page==='exit'||page==='stocktake')renderContent();
   const msg=String(error?.message||error||'');
   const blocked=/NotAllowed|Permission|denied|refus|access/i.test(msg);
   toast(blocked?'Autorisez l’accès à la caméra dans les réglages du navigateur puis réessayez.':
@@ -677,7 +739,7 @@ async function togglePushSubscription(button){
 }
 function searchGlobal(v){searchTerm=v;page='products';tableFilter=v;renderApp();const f=$('#filter-products');if(f){f.focus();f.setSelectionRange(f.value.length,f.value.length)}}
 // Global delegated controls
-window.addEventListener('click',ev=>{if(SPV3.onClick(ev,{db,api,refreshState,renderContent,toast,printLabel,page,setSlot}))return;const n=ev.target.closest('[data-nav]');if(n){nav(n.dataset.nav);return}const slot=ev.target.closest('[data-slot]');if(slot){setSlot(slot.dataset.slot);return}const a=ev.target.closest('[data-action]');if(!a)return;const act=a.dataset.action,id=a.dataset.id;if(act==='backdrop'){if(ev.target===a)closeModal();return}switch(act){case'save-shelf':(async()=>{if(me.role!=='admin')return;const slot=a.dataset.slot;try{await api('/api/shelves/'+encodeURIComponent(slot),'PATCH',{size:$('#shelf-size')?.value||'unknown',note:$('#shelf-note')?.value||''});await refreshState(true);renderContent();toast('Niveau '+slot+' mis à jour')}catch(e){toast(e.message,true)}})();break;case'clearstock':openModal({type:'clearstock'});break;case'doclearstock':(async()=>{if($('#clear-confirm')?.value!=='VIDER LE STOCK')return toast('Confirmation incorrecte',true);try{await api('/api/admin/clear-stock','POST',{confirmation:'VIDER LE STOCK'});lastAdded=null;scanResult=null;modal=null;selectedProduct=null;await refreshState(true);nav('dashboard');toast('Stock vidé. Sauvegarde créée sur le NAS.')}catch(e){toast(e.message,true)}})();break;case'save-rule':(async()=>{if(me.role!=='admin')return;const slot=$('#rule-'+id)?.value??'';try{await api('/api/products/'+encodeURIComponent(id),'PATCH',{preferred_slot:slot});await refreshState(true);renderContent();toast(slot?'Emplacement conseillé enregistré':'Suggestion de rangement effacée')}catch(e){toast(e.message,true)}})();break;case'setlocationmode':(async()=>{if(me.role!=='admin')return;try{const mode=a.dataset.mode;await api('/api/settings/location-mode','POST',{mode});locationMode=mode;await refreshState(true);renderApp();toast('Mode de rangement mis à jour')}catch(e){toast(e.message,true)}})();break;case'mobilemore':toggleMobileMore();break;case'closemobilemore':toggleMobileMore(false);break;case'menu':mobileNav=true;renderApp();break;case'closemenu':mobileNav=false;renderApp();break;case'newentry':goEntry();break;case'goexit':goExit();break;case'gomap':nav('map');break;case'saveentry':recordEntry();break;case'print':printLabel(id);break;case'lookup':lookup($('#scan-code')?.value);break;case'stockfilter':tableStockFilter=['all','low','in'].includes(a.dataset.status)?a.dataset.status:'all';renderContent();break;
+window.addEventListener('click',ev=>{if(SPV3.onClick(ev,{db,api,refreshState,renderContent,toast,printLabel,printBatchLabels,page,setSlot}))return;const n=ev.target.closest('[data-nav]');if(n){nav(n.dataset.nav);return}const slot=ev.target.closest('[data-slot]');if(slot){setSlot(slot.dataset.slot);return}const a=ev.target.closest('[data-action]');if(!a)return;const act=a.dataset.action,id=a.dataset.id;if(act==='backdrop'){if(ev.target===a)closeModal();return}switch(act){case'save-shelf':(async()=>{if(me.role!=='admin')return;const slot=a.dataset.slot;try{await api('/api/shelves/'+encodeURIComponent(slot),'PATCH',{size:$('#shelf-size')?.value||'unknown',note:$('#shelf-note')?.value||''});await refreshState(true);renderContent();toast('Niveau '+slot+' mis à jour')}catch(e){toast(e.message,true)}})();break;case'clearstock':openModal({type:'clearstock'});break;case'doclearstock':(async()=>{if($('#clear-confirm')?.value!=='VIDER LE STOCK')return toast('Confirmation incorrecte',true);try{await api('/api/admin/clear-stock','POST',{confirmation:'VIDER LE STOCK'});lastAdded=null;scanResult=null;modal=null;selectedProduct=null;await refreshState(true);nav('dashboard');toast('Stock vidé. Sauvegarde créée sur le NAS.')}catch(e){toast(e.message,true)}})();break;case'save-rule':(async()=>{if(me.role!=='admin')return;const slot=$('#rule-'+id)?.value??'';try{await api('/api/products/'+encodeURIComponent(id),'PATCH',{preferred_slot:slot});await refreshState(true);renderContent();toast(slot?'Emplacement conseillé enregistré':'Suggestion de rangement effacée')}catch(e){toast(e.message,true)}})();break;case'setlocationmode':(async()=>{if(me.role!=='admin')return;try{const mode=a.dataset.mode;await api('/api/settings/location-mode','POST',{mode});locationMode=mode;await refreshState(true);renderApp();toast('Mode de rangement mis à jour')}catch(e){toast(e.message,true)}})();break;case'mobilemore':toggleMobileMore();break;case'closemobilemore':toggleMobileMore(false);break;case'menu':mobileNav=true;renderApp();break;case'closemenu':mobileNav=false;renderApp();break;case'newentry':goEntry();break;case'goexit':goExit();break;case'gomap':nav('map');break;case'saveentry':recordEntry();break;case'print':printLabel(id);break;case'lookup':lookup($('#scan-code')?.value);break;case'stockfilter':tableStockFilter=['all','low','in'].includes(a.dataset.status)?a.dataset.status:'all';renderContent();break;
 case'stockproduct':openModal({type:'stockproduct',id});break;case'pushsubscribe':togglePushSubscription(a);break;
 case'exportstocksummary':exportStockSummary();break;
  case'refreshhenrri':fetchHenrriValuation(true);break;
@@ -698,7 +760,7 @@ case'stockthreshold':(async()=>{
   toast(value?'Alerte enregistrée.':'Alerte désactivée pour ce produit.');
  }catch(e){toast(e.message,true)}
 })();break;
-case'camera':startCamera();break;case'installapp':installMobileApp();break;case'selectscan':scanResult=itemById(id);renderContent();break;case'confirmout':case'outfrommodal':openModal({type:'confirmout',id});break;case'remove':removeItem(id);break;case'details':openModal({type:'details',id});break;case'closemodal':closeModal();break;case'entryslot':selectedProduct=db.catalog.find(p=>p.zone===a.dataset.slot[0])?.id||db.catalog[0]?.id||null;chosenSlot=a.dataset.slot;lastAdded=null;nav('entry');SPV3.selectSlot(a.dataset.slot);renderContent();break;case'zone':selectedSlot=`${a.dataset.zone}-1`;renderContent();break;case'pickslot':setSlot(a.dataset.slot);break;case'export':exportStock();break;case'exporthistory':exportHistory();break;case'clearstock':openModal({type:'clearstock'});break;case'reset':openModal({type:'reset'});break;case'doreset':(async()=>{try{await api('/api/admin/reset','POST',{});formSerial='';lastAdded=null;scanResult=null;selectedSlot='A-1';modal=null;await refreshState(true);nav('dashboard');toast('Stock fictif réinitialisé')}catch(e){toast(e.message,true)}})();break;case'movemodal':openModal({type:'move',id});break;case'confirmmove':(async()=>{try{await api('/api/items/'+encodeURIComponent(id)+'/move','POST',{slot:$('#move-slot')?.value});modal=null;await refreshState(true);renderApp();toast('Article déplacé')}catch(e){toast(e.message,true)}})();break;case'editproduct':openModal({type:'editproduct',id});break;case'listusers':(async()=>{try{users=(await api('/api/users')).users;openModal({type:'users'})}catch(e){toast(e.message,true)}})();break;case'toggleuser':(async()=>{const u=users.find(x=>String(x.id)===String(id));if(!u)return;try{await api('/api/users/'+id,'PATCH',{enabled:!u.enabled});users=(await api('/api/users')).users;openModal({type:'users'});toast('Compte mis à jour')}catch(e){toast(e.message,true)}})();break;case'managebackups':(async()=>{
+case'camera':startCamera();break;case'stocktake-start':startStocktake();break;case'stocktake-scan':scanStocktake($('#stocktake-code')?.value);break;case'stocktake-confirm':openModal({type:'stocktake-confirm',mode:a.dataset.mode});break;case'stocktake-finalize':finalizeStocktake(a.dataset.mode);break;case'installapp':installMobileApp();break;case'selectscan':scanResult=itemById(id);renderContent();break;case'confirmout':case'outfrommodal':openModal({type:'confirmout',id});break;case'remove':removeItem(id);break;case'details':openModal({type:'details',id});break;case'closemodal':closeModal();break;case'entryslot':selectedProduct=db.catalog.find(p=>p.zone===a.dataset.slot[0])?.id||db.catalog[0]?.id||null;chosenSlot=a.dataset.slot;lastAdded=null;nav('entry');SPV3.selectSlot(a.dataset.slot);renderContent();break;case'zone':selectedSlot=`${a.dataset.zone}-1`;renderContent();break;case'pickslot':setSlot(a.dataset.slot);break;case'export':exportStock();break;case'exporthistory':exportHistory();break;case'clearstock':openModal({type:'clearstock'});break;case'reset':openModal({type:'reset'});break;case'doreset':(async()=>{try{await api('/api/admin/reset','POST',{});formSerial='';lastAdded=null;scanResult=null;selectedSlot='A-1';modal=null;await refreshState(true);nav('dashboard');toast('Stock fictif réinitialisé')}catch(e){toast(e.message,true)}})();break;case'movemodal':openModal({type:'move',id});break;case'confirmmove':(async()=>{try{await api('/api/items/'+encodeURIComponent(id)+'/move','POST',{slot:$('#move-slot')?.value});modal=null;await refreshState(true);renderApp();toast('Article déplacé')}catch(e){toast(e.message,true)}})();break;case'editproduct':openModal({type:'editproduct',id});break;case'listusers':(async()=>{try{users=(await api('/api/users')).users;openModal({type:'users'})}catch(e){toast(e.message,true)}})();break;case'toggleuser':(async()=>{const u=users.find(x=>String(x.id)===String(id));if(!u)return;try{await api('/api/users/'+id,'PATCH',{enabled:!u.enabled});users=(await api('/api/users')).users;openModal({type:'users'});toast('Compte mis à jour')}catch(e){toast(e.message,true)}})();break;case'managebackups':(async()=>{
  if(me.role!=='admin')return;
  try{
   const result=await api('/api/admin/backups');
@@ -753,7 +815,7 @@ window.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementBy
  e.preventDefault();
  const editor=e.target.closest('.si-alert-editor');
  editor?.querySelector('[data-action="stockthreshold"]')?.click();
-}else if(e.key==='Enter'&&e.target.id==='scan-code'){e.preventDefault();lookup(e.target.value)}else if(e.key==='Enter'&&e.target.id==='global-search'){e.preventDefault();searchGlobal(e.target.value)}else if((e.key==='Enter'||e.key===' ')&&e.target.matches('[data-slot]')){e.preventDefault();setSlot(e.target.dataset.slot)}});
+}else if(e.key==='Enter'&&e.target.id==='scan-code'){e.preventDefault();lookup(e.target.value)}else if(e.key==='Enter'&&e.target.id==='stocktake-code'){e.preventDefault();scanStocktake(e.target.value)}else if(e.key==='Enter'&&e.target.id==='global-search'){e.preventDefault();searchGlobal(e.target.value)}else if((e.key==='Enter'||e.key===' ')&&e.target.matches('[data-slot]')){e.preventDefault();setSlot(e.target.dataset.slot)}});
 window.addEventListener('pagehide',stopCamera);
 document.querySelector('#app').innerHTML='<div style="display:grid;place-items:center;min-height:100vh;color:#53657f;font-family:system-ui">Chargement du stock partagé…</div>';
 // Safari iPhone : bloquer uniquement le dépassement aux extrémités sans casser le défilement.
@@ -793,6 +855,8 @@ refreshState().then(ok=>{window.scrollTo(0,0);if(ok&&henrriConfigured)fetchHenrr
 // Tous les appareils contrôlent une révision SQLite légère environ chaque seconde.
 // Pas de rafraîchissement visuel si rien n'a changé, et aucun reset de formulaire.
 setInterval(syncStockAcrossDevices,1200);
+// Comptage physique partagé : mise à jour des scans sans effacer un champ en cours de saisie.
+setInterval(()=>{if(page==='stocktake')loadStocktake(true)},5000);
 // Prix mis en cache une heure côté serveur ; stock local recalculé à chaque lecture.
 setInterval(()=>{if(henrriConfigured)fetchHenrriValuation()},60*60*1000);
 window.addEventListener('focus',syncStockAcrossDevices);

@@ -181,7 +181,7 @@ function stockProductModal(c){
 function history(c){
  const ev=[...c.db.events].filter(x=>x.type==='in'||x.type==='out').sort((a,b)=>b.at-a.at);
  const desktop=c.heading('TRAÇABILITÉ','Historique des mouvements','Toutes les entrées et sorties, avec la date et l’opérateur.',c.btn('Exporter le journal','exporthistory','arrow',''))+
- '<section class="card basic-table-card"><div class="table-wrap"><table class="slim-table basic-table"><thead><tr><th>Date</th><th>Mouvement</th><th>Produit</th><th>Identifiant</th><th>Opérateur</th></tr></thead><tbody>'+ (ev.length?ev.map(e=>'<tr><td>'+stamp(e.at)+'</td><td><span class="pill '+(e.type==='in'?'green':'red')+'">'+(e.type==='in'?'Entrée':'Sortie')+'</span></td><td>'+escape(name(c.product(e.pid)))+'</td><td class="basic-id">'+escape(e.itemId)+'</td><td>'+escape(e.actor)+'</td></tr>').join(''):'<tr><td colspan="5" class="basic-table-empty">Aucune entrée ni sortie enregistrée.</td></tr>')+'</tbody></table></div></section>';
+ '<section class="card basic-table-card"><div class="table-wrap"><table class="slim-table basic-table"><thead><tr><th>Date</th><th>Mouvement</th><th>Produit</th><th>Identifiant</th><th>Opérateur</th><th>Destination / motif</th></tr></thead><tbody>'+ (ev.length?ev.map(e=>'<tr><td>'+stamp(e.at)+'</td><td><span class="pill '+(e.type==='in'?'green':'red')+'">'+(e.type==='in'?'Entrée':'Sortie')+'</span></td><td>'+escape(name(c.product(e.pid)))+'</td><td class="basic-id">'+escape(e.itemId)+'</td><td>'+escape(e.actor)+'</td><td>'+escape(e.type==='out'?(e.destination?({client:'Client',chantier:'Chantier',technicien:'Technicien',preparation:'Préparation',autre:'Autre',inventaire:'Inventaire physique'}[e.destination]||e.destination):'Ancienne sortie')+(e.target?' · '+e.target:''):'—')+'</td></tr>').join(''):'<tr><td colspan="6" class="basic-table-empty">Aucune entrée ni sortie enregistrée.</td></tr>')+'</tbody></table></div></section>';
  let lastDay='';
  const mobile=ev.length?ev.map(e=>{
   const date=new Date(e.at);
@@ -195,7 +195,7 @@ function history(c){
    '<div class="sp-mh-main"><div class="sp-mh-top"><strong>'+escape(name(c.product(e.pid)))+'</strong>'+
    '<span class="sp-mh-action '+(e.type==='in'?'sp-mh-in':'sp-mh-out')+'">'+label+'</span></div>'+
    '<div class="sp-mh-details"><code>'+escape(e.itemId)+'</code><span>'+escape(time)+'</span>'+
-   '<span class="sp-mh-actor">'+escape(e.actor||'—')+'</span></div></div></article>';
+   '<span class="sp-mh-actor">'+escape(e.actor||'—')+'</span>'+(e.type==='out'&&e.destination?'<span class="sp-mh-destination">'+escape(e.destination)+' · '+escape(e.target||'')+'</span>':'')+'</div></div></article>';
  }).join(''):'<p class="sp-mh-empty">Aucun mouvement enregistré pour le moment.</p>';
  return '<div class="sp-history-page">'+desktop+
   '<header class="sp-mobile-pagehead"><span>ACTIVITÉ</span><h1>Historique</h1></header>'+

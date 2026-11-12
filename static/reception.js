@@ -3,7 +3,7 @@
 'use strict';
 const esc=v=>String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const name=p=>[p?.brand,p?.model].filter(Boolean).join(' ');
-const blank=()=>({name:'',pid:'',serial:'',condition:'Neuf',saving:false,suggestions:true,received:null,henrriItems:[],henrriId:'',henrriSelected:null,henrriLoading:false,henrriError:''});
+const blank=()=>({name:'',pid:'',serial:'',condition:'Neuf',saving:false,suggestions:true,received:null,receivedItems:[],quantity:1,serialsText:'',henrriItems:[],henrriId:'',henrriSelected:null,henrriLoading:false,henrriError:''});
 let state=blank();
 let searchTimer=null,searchSequence=0,canSearchHenrri=false;
 const euro=n=>typeof n==='number'&&Number.isFinite(n)?new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'}).format(n):'Non renseigné';
@@ -57,11 +57,13 @@ function entry(ctx){
  const db=ctx.db;
  canSearchHenrri=ctx.henrriConfigured===true;
  if(state.received){
-  const item=state.received,product=db.catalog.find(p=>p.id===item.pid);
-  return '<div class="basic-entry"><div class="basic-entry-heading"><div><span>RÉCEPTION VALIDÉE</span><h1>Produit ajouté au stock</h1><p>L’article et son étiquette sont prêts.</p></div></div><section class="card basic-result"><div class="basic-result-icon">✓</div><h2>'+esc(product?name(product):state.name)+'</h2><p>Identifiant : <strong>'+esc(item.id)+'</strong></p><p>État : '+esc(item.condition||state.condition)+'</p><div class="basic-result-actions"><button type="button" class="basic-btn primary" data-rx="print" data-id="'+esc(item.id)+'">Imprimer l’étiquette</button><button type="button" class="basic-btn" data-rx="again">Ajouter un autre produit</button></div></section></div>';
+  const item=state.received,product=db.catalog.find(p=>p.id===item.pid),all=state.receivedItems||[item];
+  const bulk=all.length>1;
+  const results=bulk?'<div class="sp-batch-items">'+all.map(i=>'<div><code>'+esc(i.id)+'</code><small>'+esc(i.serial||'Sans n° de série')+'</small><button type="button" class="basic-btn" data-rx="print" data-id="'+esc(i.id)+'">Étiquette</button></div>').join('')+'</div>':'<p>Identifiant : <strong>'+esc(item.id)+'</strong></p><p>État : '+esc(item.condition||state.condition)+'</p>';
+  return '<div class="basic-entry"><div class="basic-entry-heading"><div><span>RÉCEPTION VALIDÉE</span><h1>'+all.length+' article'+(bulk?'s':'')+' ajouté'+(bulk?'s':'')+' au stock</h1><p>Les étiquettes DYMO sont prêtes.</p></div></div><section class="card basic-result"><div class="basic-result-icon">✓</div><h2>'+esc(product?name(product):state.name)+'</h2>'+results+'<div class="basic-result-actions">'+(bulk?'<button type="button" class="basic-btn primary" data-rx="printbatch">Imprimer les '+all.length+' étiquettes (PDF)</button>':'<button type="button" class="basic-btn primary" data-rx="print" data-id="'+esc(item.id)+'">Imprimer l’étiquette</button>')+'<button type="button" class="basic-btn" data-rx="again">Ajouter un autre produit</button></div></section></div>';
  }
  const p=db.catalog.find(p=>p.id===state.pid);
- return '<div class="basic-entry"><div class="basic-entry-heading"><div><span>NOUVELLE RÉCEPTION</span><h1>Entrée en stock</h1><p>Enregistrez un article, puis imprimez son étiquette pour le retrouver au scanner.</p></div><span class="basic-entry-tag">Code-barres individuel</span></div><div class="basic-entry-grid"><section class="card basic-entry-form"><h2>Informations du produit</h2><p class="basic-intro">Un article existant est proposé pendant la saisie. Sinon, la référence sera créée automatiquement.</p><div class="basic-field"><label for="rx-name">Nom du produit *</label><input id="rx-name" maxlength="120" autocomplete="off" value="'+esc(state.name)+'" placeholder="Ex. TERRA Mobile 1517, souris Logitech…" /><div id="rx-suggestions" class="basic-suggestions">'+hints(db)+'</div>'+(p?'<span class="basic-reused">✓ Référence existante : '+esc(p.ref)+'</span>':'')+(state.henrriSelected?'<div class="sp-henrri-selected"><div><strong>✓ Article sélectionné dans Henrri</strong><small>Réf. '+esc(state.henrriSelected.reference)+'</small></div><div class="sp-henrri-price-pair"><span><small>Prix d’achat HT</small><b>'+esc(euro(state.henrriSelected.purchasePrice))+'</b></span><span><small>Prix de vente HT</small><b>'+esc(euro(state.henrriSelected.sellingPrice))+'</b></span></div></div>':'')+'</div><div class="basic-dual-fields"><div class="basic-field"><label for="rx-serial">Numéro de série <small>(facultatif)</small></label><input id="rx-serial" maxlength="100" autocomplete="off" value="'+esc(state.serial)+'" placeholder="À laisser vide si inutile"></div><div class="basic-field"><label>État de l’article</label><div class="basic-conditions">'+['Neuf','Retour SAV','Réparation'].map(c=>'<button type="button" data-rx="condition" data-value="'+esc(c)+'" class="'+(state.condition===c?'active':'')+'">'+esc(c)+'</button>').join('')+'</div></div></div><div class="basic-info">Une étiquette unique sera générée après l’enregistrement. Vous pourrez la réimprimer depuis l’inventaire.</div><button type="button" class="basic-submit" data-rx="save" '+(!state.name.trim()||state.saving?'disabled':'')+'>'+(state.saving?'Enregistrement…':'Enregistrer le produit')+' <span>→</span></button></section><section class="card basic-entry-help"><div class="basic-entry-help-head"><span class="basic-help-symbol">'+(ctx.ico?ctx.ico('barcode',24):'')+'</span><h2>Comment ça marche ?</h2></div><div class="basic-steps"><div><b>1</b><span><strong>Réceptionnez l’article</strong><small>Indiquez son nom, éventuellement le numéro de série et son état.</small></span></div><div><b>2</b><span><strong>Imprimez son étiquette</strong><small>Chaque unité obtient un identifiant unique et un QR code imprimable.</small></span></div><div><b>3</b><span><strong>Scannez à la sortie</strong><small>Le produit disparaît du stock disponible et la sortie reste dans l’historique.</small></span></div></div><div class="basic-example-label"><div><strong>STOCKPILOT</strong><small>EXEMPLE D’ÉTIQUETTE</small></div><p>TERRA Mobile 1517</p><div class="basic-example-bottom"><span class="basic-example-bars" aria-hidden="true"></span><span>STK-000001<small>Scanner pour identifier</small></span></div></div></section></div></div>';
+ return '<div class="basic-entry"><div class="basic-entry-heading"><div><span>NOUVELLE RÉCEPTION</span><h1>Entrée en stock</h1><p>Enregistrez un article, puis imprimez son étiquette pour le retrouver au scanner.</p></div><span class="basic-entry-tag">Code-barres individuel</span></div><div class="basic-entry-grid"><section class="card basic-entry-form"><h2>Informations du produit</h2><p class="basic-intro">Un article existant est proposé pendant la saisie. Sinon, la référence sera créée automatiquement.</p><div class="basic-field"><label for="rx-name">Nom du produit *</label><input id="rx-name" maxlength="120" autocomplete="off" value="'+esc(state.name)+'" placeholder="Ex. TERRA Mobile 1517, souris Logitech…" /><div id="rx-suggestions" class="basic-suggestions">'+hints(db)+'</div>'+(p?'<span class="basic-reused">✓ Référence existante : '+esc(p.ref)+'</span>':'')+(state.henrriSelected?'<div class="sp-henrri-selected"><div><strong>✓ Article sélectionné dans Henrri</strong><small>Réf. '+esc(state.henrriSelected.reference)+'</small></div><div class="sp-henrri-price-pair"><span><small>Prix d’achat HT</small><b>'+esc(euro(state.henrriSelected.purchasePrice))+'</b></span><span><small>Prix de vente HT</small><b>'+esc(euro(state.henrriSelected.sellingPrice))+'</b></span></div></div>':'')+'</div><div class="basic-field sp-batch-quantity"><label for="rx-quantity">Quantité à réceptionner (1 à 50)</label><input id="rx-quantity" type="number" min="1" max="50" step="1" inputmode="numeric" value="'+esc(state.quantity)+'"><small>Chaque unité reçoit son propre identifiant STK et son étiquette.</small></div><div class="basic-dual-fields"><div class="basic-field">'+(state.quantity>1?'<label for="rx-serials">Numéros de série <small>(facultatifs, un par ligne)</small></label><textarea id="rx-serials" rows="4" placeholder="Une ligne par appareil, dans l’ordre. Les lignes vides sont autorisées.">'+esc(state.serialsText)+'</textarea>':'<label for="rx-serial">Numéro de série <small>(facultatif)</small></label><input id="rx-serial" maxlength="100" autocomplete="off" value="'+esc(state.serial)+'" placeholder="À laisser vide si inutile">')+'</div><div class="basic-field"><label>État de l’article</label><div class="basic-conditions">'+['Neuf','Retour SAV','Réparation'].map(c=>'<button type="button" data-rx="condition" data-value="'+esc(c)+'" class="'+(state.condition===c?'active':'')+'">'+esc(c)+'</button>').join('')+'</div></div></div><div class="basic-info">Une étiquette unique sera générée pour chaque unité après l’enregistrement. Vous pourrez la réimprimer depuis l’inventaire.</div><button type="button" class="basic-submit" data-rx="save" '+(!state.name.trim()||state.saving?'disabled':'')+'>'+(state.saving?'Enregistrement…':'Enregistrer le produit')+' <span>→</span></button></section><section class="card basic-entry-help"><div class="basic-entry-help-head"><span class="basic-help-symbol">'+(ctx.ico?ctx.ico('barcode',24):'')+'</span><h2>Comment ça marche ?</h2></div><div class="basic-steps"><div><b>1</b><span><strong>Réceptionnez l’article</strong><small>Indiquez son nom, éventuellement le numéro de série et son état.</small></span></div><div><b>2</b><span><strong>Imprimez son étiquette</strong><small>Chaque unité obtient un identifiant unique et un QR code imprimable.</small></span></div><div><b>3</b><span><strong>Scannez à la sortie</strong><small>Le produit disparaît du stock disponible et la sortie reste dans l’historique.</small></span></div></div><div class="basic-example-label"><div><strong>STOCKPILOT</strong><small>EXEMPLE D’ÉTIQUETTE</small></div><p>TERRA Mobile 1517</p><div class="basic-example-bottom"><span class="basic-example-bars" aria-hidden="true"></span><span>STK-000001<small>Scanner pour identifier</small></span></div></div></section></div></div>';
 }
 function onInput(ev,ctx){
  const db=ctx.db||ctx;
@@ -75,6 +77,8 @@ function onInput(ev,ctx){
   return true;
  }
  if(ev.target.id==='rx-serial'){state.serial=ev.target.value;return true;}
+ if(ev.target.id==='rx-serials'){state.serialsText=ev.target.value;return true;}
+ if(ev.target.id==='rx-quantity'){state.quantity=Number(ev.target.value)||1;return true;}
  return false;
 }
 function onClick(ev,ctx){
@@ -89,17 +93,30 @@ function onClick(ev,ctx){
  else if(action==='condition'){state.condition=el.dataset.value;ctx.renderContent();}
  else if(action==='again'){if(typeof clearTimeout==='function')clearTimeout(searchTimer);searchSequence++;state=blank();ctx.renderContent();}
  else if(action==='print'){ctx.printLabel(el.dataset.id);}
+ else if(action==='printbatch'){ctx.printBatchLabels((state.receivedItems||[]).map(i=>i.id));}
  else if(action==='save'){
   if(!state.name.trim()||state.saving)return true;
+  if(!Number.isInteger(state.quantity)||state.quantity<1||state.quantity>50){
+   ctx.toast('Choisissez une quantité entre 1 et 50.',true);return true;
+  }
+  const many=state.quantity>1;
+  let serials=[];
+  if(many){
+   serials=state.serialsText?state.serialsText.split(/\r?\n/).map(s=>s.trim()):[];
+   if(serials.length>state.quantity){ctx.toast('Il y a plus de numéros de série que d’articles.',true);return true}
+   if(serials.some(s=>s.length>100)){ctx.toast('Un numéro de série dépasse 100 caractères.',true);return true}
+  }
   state.saving=true;
   const data={name:state.name.trim(),product_id:state.pid,henrri_id:state.henrriId,serial:state.serial.trim(),condition:state.condition};
+  if(many){data.quantity=state.quantity;data.serials=serials}
   ctx.renderContent();
   (async()=>{try{
-   const response=await ctx.api('/api/receive','POST',data);
+   const response=await ctx.api(many?'/api/receive/batch':'/api/receive','POST',data);
    state.received=response.item;
+   state.receivedItems=response.items||[response.item];
    await ctx.refreshState(true);
    ctx.renderContent();
-   ctx.toast('Produit ajouté au stock');
+   ctx.toast(state.receivedItems.length+' article(s) ajouté(s) au stock.');
   }catch(error){state.saving=false;ctx.renderContent();ctx.toast(error.message,true)}})();
  }
  return true;
@@ -116,6 +133,13 @@ function prefill(product){
  state=blank();
  if(product){state.name=name(product);state.pid=product.id;state.suggestions=false;}
 }
-function onChange(){return false;}
+function onChange(ev,ctx){
+ if(ev.target.id==='rx-quantity'){
+  if(!Number.isInteger(state.quantity)||state.quantity<1||state.quantity>50){ctx.toast('Quantité entre 1 et 50.',true);return true}
+  if(state.quantity>1&&!state.serialsText&&state.serial)state.serialsText=state.serial;
+  ctx.renderContent();return true;
+ }
+ return false;
+}
 window.SPV3={entry,onInput,onClick,onChange,reset,prefill,refreshSuggestions,selectSlot(){}};
 })();
