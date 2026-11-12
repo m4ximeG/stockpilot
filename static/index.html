@@ -513,12 +513,20 @@ async function finalizeStocktake(mode){
  }catch(e){toast(e.message,true);await loadStocktake(true)}
 }
 function lookup(code,fromCamera=false){
+ const resetScanField=()=>{
+  if(fromCamera)return;
+  const field=$('#scan-code');
+  if(field){field.value='';field.focus();}
+ };
  const id=String(code||'').trim().toUpperCase();
- if(!id)return toast('Saisissez ou scannez un identifiant',true);
+ if(!id){resetScanField();return toast('Saisissez ou scannez un identifiant',true);}
  const item=itemById(id);
- if(!item)return toast('Aucun article en stock avec cet identifiant',true);
- if(exitBasket.includes(id))return fromCamera?undefined:toast('Cet article est déjà sélectionné.',true);
- if(exitBasket.length>=50)return toast('Maximum 50 articles par sortie.',true);
+ if(!item){resetScanField();return toast('Aucun article en stock avec cet identifiant',true);}
+ if(exitBasket.includes(id)){
+  if(!fromCamera){resetScanField();toast('Cet article est déjà sélectionné.',true);}
+  return;
+ }
+ if(exitBasket.length>=50){resetScanField();return toast('Maximum 50 articles par sortie.',true);}
  exitBasket.push(id);scanResult=item;
  if(fromCamera&&scanning){
   // Préserver le lecteur vidéo pendant les scans successifs.
@@ -532,8 +540,7 @@ function lookup(code,fromCamera=false){
  }else{
   renderContent();
   // Douchette USB/Bluetooth : conserver le focus pour scanner le suivant sans clic.
-  const scanField=$('#scan-code');
-  if(scanField){scanField.value='';scanField.focus();}
+  resetScanField();
  }
  toast(displayName(product(item.pid))+' ajouté ('+exitBasket.length+'/50)');
 }
