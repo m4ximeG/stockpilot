@@ -79,6 +79,112 @@ class StockPilotTests(unittest.TestCase):
         self.assertEqual(self.client.post(endpoint,headers=self.headers,
             json={'destination':'client','target':'Autre'}).status_code,409)
 
+    def test_bulk_exit_atomic_traced_and_duplicates_rejected(self):
+        receipt=self.client.post('/api/receive/batch',headers=self.headers,json={
+            'name':'Matériel à sortir','quantity':3,
+            'serials':['OUT-A','OUT-B','OUT-C']})
+        self.assertEqual(receipt.status_code,201,receipt.text)
+        ids=[item['id'] for item in receipt.json['items']]
+        endpoint='/api/items/out/batch'
+        base={'destination':'chantier','target':'Chantier Duval'}
+        for bad_ids in ([ids[0],ids[0]],[ids[0],'STK-999999'],[]):
+            response=self.client.post(endpoint,headers=self.headers,json={
+                **base,'ids':bad_ids})
+            self.assertIn(response.status_code,(400,409),response.text)
+        state=self.client.get('/api/state').json
+        self.assertTrue(all(any(item['id']==id for item in state['items']) for id in ids))
+        response=self.client.post(endpoint,headers=self.headers,json={**base,'ids':ids})
+        self.assertEqual(response.status_code,200,response.text)
+        self.assertEqual(response.json['count'],3)
+        self.assertEqual(response.json['ids'],ids)
+        self.assertTrue(response.json['batchId'].startswith('B-'))
+        state=self.client.get('/api/state').json
+        self.assertTrue(all(not any(item['id']==id for item in state['items']) for id in ids))
+        events=[e for e in state['events'] if e['itemId'] in ids and e['type']=='out']
+        self.assertEqual(len(events),3)
+        self.assertEqual({e['batchId'] for e in events},{response.json['batchId']})
+        self.assertEqual({e['destination'] for e in events},{'chantier'})
+        self.assertEqual({e['target'] for e in events},{'Chantier Duval'})
+        failed=self.client.post(endpoint,headers=self.headers,json={
+            **base,'ids':[ids[0],next(x['id'] for x in state['items'])]})
+        self.assertEqual(failed.status_code,409,failed.text)
+
+    def test_correction_of_entry_preserves_audit_log(self):
+        receipt=self.client.post('/api/receive',headers=self.headers,json={
+            'name':'Ajout erroné','serial':'ERR-IN-1'})
+        self.assertEqual(receipt.status_code,201,receipt.text)
+        item_id=receipt.json['item']['id']
+        state=self.client.get('/api/state').json
+        initial=next(e for e in state['events']
+                     if e['type']=='in' and e['itemId']==item_id)
+        url='/api/admin/movements/'+initial['id'][1:]+'/correct'
+        self.assertEqual(self.client.post(url,headers=self.headers,
+            json={'reason':'court'}).status_code,400)
+        before=len(self.client.get('/api/state').json['items'])
+        fixed=self.client.post(url,headers=self.headers,
+            json={'reason':'Ajout en double au comptoir'})
+        self.assertEqual(fixed.status_code,200,fixed.text)
+        state=self.client.get('/api/state').json
+        self.assertEqual(len(state['items']),before-1)
+        original=next(e for e in state['events'] if e['id']==initial['id'])
+        self.assertTrue(original['corrected'])
+        compensating=next(e for e in state['events']
+                          if e['correctionOf']==initial['id'])
+        self.assertEqual(compensating['type'],'correction')
+        self.assertIn('Ajout en double au comptoir',compensating['detail'])
+        self.assertEqual(compensating['actor'],'admin')
+        self.assertEqual(self.client.post(url,headers=self.headers,
+            json={'reason':'Encore une correction'}).status_code,409)
+
+    def test_correction_of_exit_restores_item_and_guards_serial_collision(self):
+        receipt=self.client.post('/api/receive',headers=self.headers,json={
+            'name':'Article sorti par erreur','serial':'RETOUR-123'})
+        item_id=receipt.json['item']['id']
+        out=self.client.post('/api/items/'+item_id+'/out',headers=self.headers,
+            json={'destination':'client','target':'Erreur au comptoir'})
+        self.assertEqual(out.status_code,200,out.text)
+        movement=next(e for e in self.client.get('/api/state').json['events']
+                      if e['itemId']==item_id and e['type']=='out')
+        url='/api/admin/movements/'+movement['id'][1:]+'/correct'
+        collision=self.client.post('/api/receive',headers=self.headers,json={
+            'name':'Autre article','serial':'RETOUR-123'})
+        self.assertEqual(collision.status_code,201,collision.text)
+        refused=self.client.post(url,headers=self.headers,json={
+            'reason':'Mauvais article livré'})
+        self.assertEqual(refused.status_code,409,refused.text)
+        self.assertFalse(next(e for e in self.client.get('/api/state').json['events']
+                              if e['id']==movement['id'])['corrected'])
+        # Libérer le numéro en sortant l'autre article, puis restaurer le premier.
+        other_id=collision.json['item']['id']
+        self.assertEqual(self.client.post('/api/items/'+other_id+'/out',
+            headers=self.headers,json={'destination':'autre','target':'Retour fournisseur'}).status_code,200)
+        ok=self.client.post(url,headers=self.headers,json={
+            'reason':'Mauvais article livré'})
+        self.assertEqual(ok.status_code,200,ok.text)
+        self.assertIn(item_id,[x['id'] for x in self.client.get('/api/state').json['items']])
+        initial=next(e for e in self.client.get('/api/state').json['events']
+                     if e['itemId']==item_id and e['type']=='in')
+        previous='/api/admin/movements/'+initial['id'][1:]+'/correct'
+        self.assertEqual(self.client.post(previous,headers=self.headers,
+            json={'reason':'Correction trop ancienne'}).status_code,409)
+
+    def test_correction_requires_admin(self):
+        item=self.client.post('/api/receive',headers=self.headers,
+            json={'name':'Vérification droits'}).json['item']
+        event=next(e for e in self.client.get('/api/state').json['events']
+                   if e['itemId']==item['id'] and e['type']=='in')
+        self.assertEqual(self.client.post('/api/users',headers=self.headers,json={
+            'username':'employe_test','password':'PasswordEmployee2026!!','role':'employee'
+        }).status_code,201)
+        employee=stock.app.test_client()
+        self.assertEqual(employee.post('/login',data={
+            'username':'employe_test','password':'PasswordEmployee2026!!'
+        }).status_code,302)
+        response=employee.post('/api/admin/movements/'+event['id'][1:]+'/correct',
+            headers=self.headers,json={'reason':'Tentative non autorisée'})
+        self.assertEqual(response.status_code,403)
+        self.assertIn(item['id'],[x['id'] for x in self.client.get('/api/state').json['items']])
+
     def test_stocktake_scan_does_not_modify_stock_without_admin_confirmation(self):
         self._clear_test_fixture()
         created=self.client.post('/api/receive/batch',headers=self.headers,json={
