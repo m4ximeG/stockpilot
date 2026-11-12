@@ -529,7 +529,12 @@ function lookup(code,fromCamera=false){
    const fresh=wrapper.querySelector('#sp-exit-cart');
    if(fresh)old.innerHTML=fresh.innerHTML;
   }
- }else renderContent();
+ }else{
+  renderContent();
+  // Douchette USB/Bluetooth : conserver le focus pour scanner le suivant sans clic.
+  const scanField=$('#scan-code');
+  if(scanField){scanField.value='';scanField.focus();}
+ }
  toast(displayName(product(item.pid))+' ajouté ('+exitBasket.length+'/50)');
 }
 async function submitBatchOut(){
