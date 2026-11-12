@@ -78,6 +78,43 @@ test('Configuration : sections séparées, montants lisibles et mobile conservé
  assert.doesNotMatch(employee,/data-tab="team"/);
  assert.match(employee,/class="sp-mobile-settings"/);
 });
+test('Sorties multiples : panier visible, contrôles et responsive',()=>{
+ const html=basic.exit({...context,exitBasket:[item.id]});
+ assert.match(html,/id="sp-exit-cart"/);
+ assert.match(html,/data-action="confirmbatchout"/);
+ assert.match(html,/data-action="exitbasketremove"/);
+ assert.match(html,/data-action="exitbasketclear"/);
+ assert.match(html,/STK-000010/);
+ const empty=basic.exit({...context,exitBasket:[]});
+ assert.match(empty,/Aucun article sélectionné/);
+ assert.match(empty,/data-action="confirmbatchout" disabled/);
+ const page=fs.readFileSync('static/index.html','utf8');
+ const css=fs.readFileSync('static/movement-ui.css','utf8');
+ assert.match(page,/\/static\/movement-ui\.css\?v=1/);
+ assert.match(page,/case'confirmbatchout'/);
+ assert.match(page,/case'correctmovementconfirm'/);
+ assert.match(page,/\/api\/items\/out\/batch/);
+ assert.match(page,/\/api\/admin\/movements\//);
+ assert.match(css,/\.sp-exit-grid/);
+ assert.match(css,/\.sp-mv-correct/);
+ assert.match(css,/@media screen and \(max-width:860px\)/);
+});
+test('Historique : corrections sans effacer les mouvements précédents',()=>{
+ const e1={id:'e100',type:'in',itemId:item.id,pid:product.id,actor:'Admin',
+  at:Date.now()-5000,detail:'',destination:'',target:'',corrected:true};
+ const e2={id:'e101',type:'correction',itemId:item.id,pid:product.id,actor:'Admin',
+  at:Date.now(),detail:'Annulation de l’entrée · Motif : Erreur de saisie',correctionOf:'e100'};
+ const screen=basic.history({...context,db:{...db,events:[e2,e1]}});
+ assert.match(screen,/Annulé par correction/);
+ assert.match(screen,/Erreur de saisie/);
+ assert.match(screen,/Correction/);
+ assert.doesNotMatch(screen,/data-action="correctmovement"/);
+ const normal=basic.history({...context,db:{...db,events:[{...e1,corrected:false}]}});
+ assert.match(normal,/data-action="correctmovement"/);
+ const employee=basic.history({...context,me:{role:'employee',username:'Collègue'},
+  db:{...db,events:[{...e1,corrected:false}]}});
+ assert.doesNotMatch(employee,/data-action="correctmovement"/);
+});
 test('entrée en stock sans emplacement obligatoire',()=>{
  const html=receive.entry(context);
  assert.match(html,/id="rx-name"/);
@@ -144,7 +181,7 @@ test('Aurora est chargé et reproduit la structure sans supprimer les fonctions'
  const html=fs.readFileSync('static/index.html','utf8');
  const css=fs.readFileSync('static/aurora.css','utf8');
  assert.match(html,/aurora\.css\?v=aurora-20261102-2/);
- assert.match(html,/barcode-only\.js\?v=settings-20261112-1/);
+ assert.match(html,/barcode-only\.js\?v=movements-20261112-1/);
  assert.match(css,/\.aurora-dashboard/);
  assert.match(css,/\.aur-rail-main/);
  assert.match(css,/\.aur-metrics/);
@@ -526,7 +563,7 @@ test('Réception depuis le stock : produit existant déjà sélectionné',()=>{
 });
 test('Assets inventaire récents : Safari ne garde pas les anciens styles et scripts',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
- assert.match(html,/\/static\/barcode-only\.js\?v=settings-20261112-1/);
+ assert.match(html,/\/static\/barcode-only\.js\?v=movements-20261112-1/);
  assert.match(html,/\/static\/reception\.js\?v=15/);
  assert.match(html,/\/static\/inventory-ui\.css\?v=4/);
  assert.match(html,/\/static\/mobile-layout\.css\?v=5/);
