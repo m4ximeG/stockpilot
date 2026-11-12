@@ -23,6 +23,104 @@ class StockPilotTests(unittest.TestCase):
         self.headers = {'X-Requested-With': 'StockPilot'}
         self.assertEqual(self.client.post('/api/admin/reset', json={}, headers=self.headers).status_code, 200)
 
+    def test_bulk_receipt_is_atomic_and_prints_multi_page_labels(self):
+        start=len(self.client.get('/api/state').json['items'])
+        bad=self.client.post('/api/receive/batch',headers=self.headers,json={
+            'name':'Test lot matériel','quantity':3,'serials':['BULK-X','bulk-x',''],
+            'condition':'Neuf'})
+        self.assertEqual(bad.status_code,409,bad.text)
+        self.assertEqual(len(self.client.get('/api/state').json['items']),start)
+        good=self.client.post('/api/receive/batch',headers=self.headers,json={
+            'name':'Test lot matériel','quantity':3,'serials':['SER-ONE','','SER-THREE'],
+            'condition':'Neuf'})
+        self.assertEqual(good.status_code,201,good.text)
+        self.assertEqual(good.json['quantity'],3)
+        items=good.json['items']
+        self.assertEqual([x['serial'] for x in items],['SER-ONE','','SER-THREE'])
+        self.assertEqual(len({x['id'] for x in items}),3)
+        self.assertEqual(len(self.client.get('/api/state').json['items']),start+3)
+        labels=self.client.get('/api/labels/batch.pdf?ids='+','.join(x['id'] for x in items))
+        self.assertEqual(labels.status_code,200,labels.text[:100] if labels.status_code!=200 else '')
+        self.assertEqual(labels.mimetype,'application/pdf')
+        self.assertTrue(labels.data.startswith(b'%PDF-'))
+        self.assertEqual(self.client.get('/api/labels/batch.pdf?ids=INVALID').status_code,400)
+        self.assertEqual(self.client.get('/api/labels/batch.pdf?ids='+items[0]['id']+','+items[0]['id']).status_code,400)
+        failed=self.client.post('/api/receive/batch',headers=self.headers,json={
+            'name':'Test lot matériel','quantity':2,'serials':['A-NEW','SER-ONE']})
+        self.assertEqual(failed.status_code,409,failed.text)
+        self.assertEqual(len(self.client.get('/api/state').json['items']),start+3)
+
+    def test_outbound_destination_is_required_and_audited(self):
+        created=self.client.post('/api/receive',headers=self.headers,json={'name':'Sortie traçable'})
+        self.assertEqual(created.status_code,201,created.text)
+        item_id=created.json['item']['id']
+        endpoint=f'/api/items/{item_id}/out'
+        self.assertEqual(self.client.post(endpoint,headers=self.headers,json={}).status_code,400)
+        self.assertEqual(self.client.post(endpoint,headers=self.headers,
+            json={'destination':'client','target':''}).status_code,400)
+        self.assertEqual(self.client.post(endpoint,headers=self.headers,
+            json={'destination':'inventaire','target':'non autorisé'}).status_code,400)
+        out=self.client.post(endpoint,headers=self.headers,
+            json={'destination':'chantier','target':'Chantier Dupont'})
+        self.assertEqual(out.status_code,200,out.text)
+        movement=next(e for e in self.client.get('/api/state').json['events']
+                      if e['itemId']==item_id and e['type']=='out')
+        self.assertEqual(movement['destination'],'chantier')
+        self.assertEqual(movement['target'],'Chantier Dupont')
+        self.assertEqual(self.client.post(endpoint,headers=self.headers,
+            json={'destination':'client','target':'Autre'}).status_code,409)
+
+    def test_stocktake_scan_does_not_modify_stock_without_admin_confirmation(self):
+        clean=self.client.post('/api/admin/clear-stock',headers=self.headers,
+                               json={'confirmation':'VIDER LE STOCK'})
+        self.assertEqual(clean.status_code,200,clean.text)
+        created=self.client.post('/api/receive/batch',headers=self.headers,json={
+            'name':'Stock réel','quantity':2,'serials':['INV-001','INV-002']})
+        self.assertEqual(created.status_code,201,created.text)
+        a,b=[x['id'] for x in created.json['items']]
+        opened=self.client.post('/api/stocktakes',headers=self.headers,json={})
+        self.assertEqual(opened.status_code,201,opened.text)
+        sid=opened.json['session']['id']
+        self.assertEqual(opened.json['session']['expectedCount'],2)
+        self.assertEqual(self.client.post('/api/stocktakes',headers=self.headers,json={}).status_code,409)
+        scan=f'/api/stocktakes/{sid}/scan'
+        self.assertEqual(self.client.post(scan,headers=self.headers,json={'code':a}).json['status'],'counted')
+        self.assertEqual(self.client.post(scan,headers=self.headers,json={'code':a}).json['status'],'already_scanned')
+        self.assertEqual(self.client.post(scan,headers=self.headers,json={'code':'STK-INCONNU'}).json['status'],'unknown')
+        state=self.client.get('/api/stocktakes/current').json
+        self.assertEqual(state['session']['scannedCount'],1)
+        self.assertEqual(state['session']['missingCount'],1)
+        self.assertEqual(state['session']['unknownCount'],1)
+        self.assertEqual(len(self.client.get('/api/state').json['items']),2)
+        endpoint=f'/api/stocktakes/{sid}/close'
+        self.assertEqual(self.client.post(endpoint,headers=self.headers,json={
+            'action':'reconcile','confirmation':'INVALID'}).status_code,400)
+        self.assertEqual(len(self.client.get('/api/state').json['items']),2)
+        final=self.client.post(endpoint,headers=self.headers,json={
+            'action':'reconcile','confirmation':'VALIDER INVENTAIRE'})
+        self.assertEqual(final.status_code,200,final.text)
+        self.assertEqual(final.json['corrected'],1)
+        self.assertEqual([x['id'] for x in self.client.get('/api/state').json['items']],[a])
+        events=self.client.get('/api/state').json['events']
+        self.assertTrue(any(e['itemId']==b and e['destination']=='inventaire' for e in events))
+        self.assertEqual(self.client.post(scan,headers=self.headers,json={'code':a}).status_code,409)
+        self.assertEqual(self.client.get('/api/stocktakes/current').json['session']['status'],'reconciled')
+
+    def test_stocktake_refuses_reconcile_if_stock_changed_during_count(self):
+        opened=self.client.post('/api/stocktakes',headers=self.headers,json={})
+        self.assertEqual(opened.status_code,201,opened.text)
+        sid=opened.json['session']['id']
+        self.assertEqual(self.client.post('/api/receive',headers=self.headers,
+            json={'name':'Entrée pendant le comptage'}).status_code,201)
+        endpoint=f'/api/stocktakes/{sid}/close'
+        self.assertEqual(self.client.post(endpoint,headers=self.headers,json={
+            'action':'reconcile','confirmation':'VALIDER INVENTAIRE'}).status_code,409)
+        self.assertEqual(self.client.get('/api/stocktakes/current').json['session']['status'],'open')
+        closed=self.client.post(endpoint,headers=self.headers,json={
+            'action':'close','confirmation':'VALIDER INVENTAIRE'})
+        self.assertEqual(closed.status_code,200,closed.text)
+        self.assertEqual(closed.json['corrected'],0)
+
     def test_managed_daily_backups_retention_and_integrity(self):
         import backup_service
         from datetime import datetime, timedelta, timezone
@@ -152,7 +250,7 @@ class StockPilotTests(unittest.TestCase):
         self.assertTrue(any(item['id'] == receive.json['item']['id']
                             for item in self.client.get('/api/state').json['items']))
         removed = second.post(f"/api/items/{receive.json['item']['id']}/out",
-                              headers=self.headers, json={})
+                              headers=self.headers, json={'destination':'client','target':'Test client'})
         self.assertEqual(removed.status_code, 200, removed.text)
         rev4 = self.client.get('/api/sync/revision').json['revision']
         self.assertGreater(rev4, rev3)
@@ -223,14 +321,14 @@ class StockPilotTests(unittest.TestCase):
             ids.append(response.json['item']['id'])
         with patch.object(push_service,'send_stock_warning',return_value=1) as send:
             self.assertEqual(self.client.post(f'/api/items/{ids[0]}/out',
-                                              json={},headers=self.headers).status_code,200)
+                                              json={'destination':'client','target':'Test client'},headers=self.headers).status_code,200)
             self.assertEqual(send.call_count,0)
             self.assertEqual(self.client.post(f'/api/items/{ids[1]}/out',
-                                              json={},headers=self.headers).status_code,200)
+                                              json={'destination':'client','target':'Test client'},headers=self.headers).status_code,200)
             self.assertEqual(send.call_count,1)
             self.assertEqual(send.call_args.args[-2:], (2, 2))
             self.assertEqual(self.client.post(f'/api/items/{ids[2]}/out',
-                                              json={},headers=self.headers).status_code,200)
+                                              json={'destination':'client','target':'Test client'},headers=self.headers).status_code,200)
             self.assertEqual(send.call_count,1)
         # Une configuration facultative non activée ne déclenche rien.
         self.assertEqual(self.client.patch(f'/api/products/{pid}',json={'min_stock':0},
@@ -288,9 +386,9 @@ class StockPilotTests(unittest.TestCase):
         self.assertEqual(label.status_code, 200)
         self.assertEqual(label.content_type, 'application/pdf')
         self.assertTrue(label.data.startswith(b'%PDF-'))
-        out=self.client.post(f'/api/items/{item_id}/out',json={},headers=self.headers)
+        out=self.client.post(f'/api/items/{item_id}/out',json={'destination':'client','target':'Test client'},headers=self.headers)
         self.assertEqual(out.status_code, 200)
-        self.assertEqual(self.client.post(f'/api/items/{item_id}/out',json={},headers=self.headers).status_code,409)
+        self.assertEqual(self.client.post(f'/api/items/{item_id}/out',json={'destination':'client','target':'Test client'},headers=self.headers).status_code,409)
         types=[e['type'] for e in self.client.get('/api/state').json['events'] if e['itemId']==item_id]
         self.assertEqual(set(types), {'in','out','move'})
 
@@ -331,7 +429,7 @@ class StockPilotTests(unittest.TestCase):
         self.assertIsNotNone(bigger_size)
         self.assertAlmostEqual(float(bigger_size.group(1)), 57 * 72 / 25.4, delta=.2)
         self.assertEqual(self.client.get(f"/label/{first.json['item']['id']}?size=A4").status_code,400)
-        self.assertEqual(self.client.post(f"/api/items/{first.json['item']['id']}/out",json={},headers=self.headers).status_code,200)
+        self.assertEqual(self.client.post(f"/api/items/{first.json['item']['id']}/out",json={'destination':'client','target':'Test client'},headers=self.headers).status_code,200)
 
     def test_stock_threshold_persists_for_each_reference(self):
         created=self.client.post('/api/products',json={
