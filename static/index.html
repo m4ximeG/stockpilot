@@ -438,6 +438,50 @@ async function removeItem(id){
   toast(error.message,true);
  }
 }
+async function loadStocktake(silent=false){
+ if(page!=='stocktake'||stocktakeLoading)return;
+ stocktakeLoading=true;
+ try{
+  stocktakeData=await api('/api/stocktakes/current');
+  if(page==='stocktake'&&(!silent||document.activeElement?.id!=='stocktake-code'))renderContent();
+ }catch(e){if(!silent)toast('Inventaire : '+e.message,true)}
+ finally{stocktakeLoading=false}
+}
+async function startStocktake(){
+ if(me.role!=='admin')return toast('Réservé aux administrateurs.',true);
+ try{
+  stocktakeData=await api('/api/stocktakes','POST',{});
+  renderContent();
+  toast('Inventaire physique démarré : scannez les étiquettes.');
+ }catch(e){toast(e.message,true)}
+}
+async function scanStocktake(raw){
+ const session=stocktakeData.session,code=String(raw||'').trim().toUpperCase();
+ if(!session||session.status!=='open')return toast('Aucun comptage actif.',true);
+ if(!code)return toast('Scannez un identifiant STK.',true);
+ try{
+  const result=await api('/api/stocktakes/'+session.id+'/scan','POST',{code});
+  await loadStocktake();
+  const messages={counted:'Article compté.',already_scanned:'Déjà compté : pas de doublon.',unknown:'Étiquette inconnue : à vérifier.',already_unknown:'Cette étiquette inconnue est déjà signalée.'};
+  toast(messages[result.status]||'Code pris en compte.',result.status==='unknown');
+  document.getElementById('stocktake-code')?.focus();
+ }catch(e){toast(e.message,true)}
+}
+async function finalizeStocktake(mode){
+ const session=stocktakeData.session;
+ const confirmation=$('#stocktake-confirm-text')?.value?.trim()||'';
+ if(!session||session.status!=='open')return toast('Inventaire déjà terminé.',true);
+ if(confirmation!=='VALIDER INVENTAIRE')return toast('Saisissez VALIDER INVENTAIRE.',true);
+ if(mode!=='reconcile'&&mode!=='close')return;
+ try{
+  const result=await api('/api/stocktakes/'+session.id+'/close','POST',{action:mode,confirmation});
+  modal=null;
+  await refreshState(true);
+  await loadStocktake();
+  renderApp();
+  toast(mode==='reconcile'?result.corrected+' écart(s) corrigé(s) dans Stock Pilot.':'Inventaire clôturé sans correction.');
+ }catch(e){toast(e.message,true);await loadStocktake(true)}
+}
 function lookup(code){
  const id=String(code||'').trim().toUpperCase();
  if(!id)return toast('Saisissez ou scannez un identifiant',true);
@@ -501,7 +545,7 @@ function ensureScannerLibrary(){
  return scannerLibraryPending;
 }
 async function startCamera(){
- if(scanning){await stopCamera();if(page==='exit')renderContent();return}
+ if(scanning){await stopCamera();if(page==='exit'||page==='stocktake')renderContent();return}
  const panel=$('#scan-panel');
  if(!panel)return;
  if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia){
@@ -516,7 +560,7 @@ async function startCamera(){
  if(button)button.innerHTML=ico('close',17)+' Arrêter la caméra';
  try{
   await ensureScannerLibrary();
-  if(token!==activeCameraRun||page!=='exit')return;
+  if(token!==activeCameraRun||!['exit','stocktake'].includes(page))return;
   const format=window.Html5QrcodeSupportedFormats;
   cameraReader=new window.Html5Qrcode('sp-camera-reader',{
    formatsToSupport:[format.QR_CODE,format.CODE_128,format.CODE_39],
@@ -530,7 +574,7 @@ async function startCamera(){
     const id=String(decoded||'').trim().toUpperCase();
     if(!/^STK-[A-Z0-9-]+$/.test(id))return;
     await stopCamera();
-    if(page==='exit')lookup(id);
+    if(page==='exit')lookup(id);else if(page==='stocktake')scanStocktake(id);
    },
    ()=>{}
   );
@@ -538,7 +582,7 @@ async function startCamera(){
  }catch(error){
   if(token!==activeCameraRun)return;
   await stopCamera();
-  if(page==='exit')renderContent();
+  if(page==='exit'||page==='stocktake')renderContent();
   const msg=String(error?.message||error||'');
   const blocked=/NotAllowed|Permission|denied|refus|access/i.test(msg);
   toast(blocked?'Autorisez l’accès à la caméra dans les réglages du navigateur puis réessayez.':
@@ -716,7 +760,7 @@ case'stockthreshold':(async()=>{
   toast(value?'Alerte enregistrée.':'Alerte désactivée pour ce produit.');
  }catch(e){toast(e.message,true)}
 })();break;
-case'camera':startCamera();break;case'installapp':installMobileApp();break;case'selectscan':scanResult=itemById(id);renderContent();break;case'confirmout':case'outfrommodal':openModal({type:'confirmout',id});break;case'remove':removeItem(id);break;case'details':openModal({type:'details',id});break;case'closemodal':closeModal();break;case'entryslot':selectedProduct=db.catalog.find(p=>p.zone===a.dataset.slot[0])?.id||db.catalog[0]?.id||null;chosenSlot=a.dataset.slot;lastAdded=null;nav('entry');SPV3.selectSlot(a.dataset.slot);renderContent();break;case'zone':selectedSlot=`${a.dataset.zone}-1`;renderContent();break;case'pickslot':setSlot(a.dataset.slot);break;case'export':exportStock();break;case'exporthistory':exportHistory();break;case'clearstock':openModal({type:'clearstock'});break;case'reset':openModal({type:'reset'});break;case'doreset':(async()=>{try{await api('/api/admin/reset','POST',{});formSerial='';lastAdded=null;scanResult=null;selectedSlot='A-1';modal=null;await refreshState(true);nav('dashboard');toast('Stock fictif réinitialisé')}catch(e){toast(e.message,true)}})();break;case'movemodal':openModal({type:'move',id});break;case'confirmmove':(async()=>{try{await api('/api/items/'+encodeURIComponent(id)+'/move','POST',{slot:$('#move-slot')?.value});modal=null;await refreshState(true);renderApp();toast('Article déplacé')}catch(e){toast(e.message,true)}})();break;case'editproduct':openModal({type:'editproduct',id});break;case'listusers':(async()=>{try{users=(await api('/api/users')).users;openModal({type:'users'})}catch(e){toast(e.message,true)}})();break;case'toggleuser':(async()=>{const u=users.find(x=>String(x.id)===String(id));if(!u)return;try{await api('/api/users/'+id,'PATCH',{enabled:!u.enabled});users=(await api('/api/users')).users;openModal({type:'users'});toast('Compte mis à jour')}catch(e){toast(e.message,true)}})();break;case'managebackups':(async()=>{
+case'camera':startCamera();break;case'stocktake-start':startStocktake();break;case'stocktake-scan':scanStocktake($('#stocktake-code')?.value);break;case'stocktake-confirm':openModal({type:'stocktake-confirm',mode:a.dataset.mode});break;case'stocktake-finalize':finalizeStocktake(a.dataset.mode);break;case'installapp':installMobileApp();break;case'selectscan':scanResult=itemById(id);renderContent();break;case'confirmout':case'outfrommodal':openModal({type:'confirmout',id});break;case'remove':removeItem(id);break;case'details':openModal({type:'details',id});break;case'closemodal':closeModal();break;case'entryslot':selectedProduct=db.catalog.find(p=>p.zone===a.dataset.slot[0])?.id||db.catalog[0]?.id||null;chosenSlot=a.dataset.slot;lastAdded=null;nav('entry');SPV3.selectSlot(a.dataset.slot);renderContent();break;case'zone':selectedSlot=`${a.dataset.zone}-1`;renderContent();break;case'pickslot':setSlot(a.dataset.slot);break;case'export':exportStock();break;case'exporthistory':exportHistory();break;case'clearstock':openModal({type:'clearstock'});break;case'reset':openModal({type:'reset'});break;case'doreset':(async()=>{try{await api('/api/admin/reset','POST',{});formSerial='';lastAdded=null;scanResult=null;selectedSlot='A-1';modal=null;await refreshState(true);nav('dashboard');toast('Stock fictif réinitialisé')}catch(e){toast(e.message,true)}})();break;case'movemodal':openModal({type:'move',id});break;case'confirmmove':(async()=>{try{await api('/api/items/'+encodeURIComponent(id)+'/move','POST',{slot:$('#move-slot')?.value});modal=null;await refreshState(true);renderApp();toast('Article déplacé')}catch(e){toast(e.message,true)}})();break;case'editproduct':openModal({type:'editproduct',id});break;case'listusers':(async()=>{try{users=(await api('/api/users')).users;openModal({type:'users'})}catch(e){toast(e.message,true)}})();break;case'toggleuser':(async()=>{const u=users.find(x=>String(x.id)===String(id));if(!u)return;try{await api('/api/users/'+id,'PATCH',{enabled:!u.enabled});users=(await api('/api/users')).users;openModal({type:'users'});toast('Compte mis à jour')}catch(e){toast(e.message,true)}})();break;case'managebackups':(async()=>{
  if(me.role!=='admin')return;
  try{
   const result=await api('/api/admin/backups');
@@ -771,7 +815,7 @@ window.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementBy
  e.preventDefault();
  const editor=e.target.closest('.si-alert-editor');
  editor?.querySelector('[data-action="stockthreshold"]')?.click();
-}else if(e.key==='Enter'&&e.target.id==='scan-code'){e.preventDefault();lookup(e.target.value)}else if(e.key==='Enter'&&e.target.id==='global-search'){e.preventDefault();searchGlobal(e.target.value)}else if((e.key==='Enter'||e.key===' ')&&e.target.matches('[data-slot]')){e.preventDefault();setSlot(e.target.dataset.slot)}});
+}else if(e.key==='Enter'&&e.target.id==='scan-code'){e.preventDefault();lookup(e.target.value)}else if(e.key==='Enter'&&e.target.id==='stocktake-code'){e.preventDefault();scanStocktake(e.target.value)}else if(e.key==='Enter'&&e.target.id==='global-search'){e.preventDefault();searchGlobal(e.target.value)}else if((e.key==='Enter'||e.key===' ')&&e.target.matches('[data-slot]')){e.preventDefault();setSlot(e.target.dataset.slot)}});
 window.addEventListener('pagehide',stopCamera);
 document.querySelector('#app').innerHTML='<div style="display:grid;place-items:center;min-height:100vh;color:#53657f;font-family:system-ui">Chargement du stock partagé…</div>';
 // Safari iPhone : bloquer uniquement le dépassement aux extrémités sans casser le défilement.
@@ -811,6 +855,8 @@ refreshState().then(ok=>{window.scrollTo(0,0);if(ok&&henrriConfigured)fetchHenrr
 // Tous les appareils contrôlent une révision SQLite légère environ chaque seconde.
 // Pas de rafraîchissement visuel si rien n'a changé, et aucun reset de formulaire.
 setInterval(syncStockAcrossDevices,1200);
+// Comptage physique partagé : mise à jour des scans sans effacer un champ en cours de saisie.
+setInterval(()=>{if(page==='stocktake')loadStocktake(true)},5000);
 // Prix mis en cache une heure côté serveur ; stock local recalculé à chaque lecture.
 setInterval(()=>{if(henrriConfigured)fetchHenrriValuation()},60*60*1000);
 window.addEventListener('focus',syncStockAcrossDevices);
