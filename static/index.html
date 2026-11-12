@@ -296,6 +296,28 @@ function renderModal(){
   const item=itemById(modal.id);if(!item)return '';
   return '<div class="overlay" data-action="backdrop"><div class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Confirmer la sortie</h2><button class="closebtn" data-action="closemodal">×</button></div><div class="modal-body"><p>Chaque sortie doit avoir une destination précise. L’opérateur et le motif sont conservés dans l’historique.</p><div class="productpick"><div class="prodicon">'+ico('package',23)+'</div><div><strong>'+esc(displayName(product(item.pid)))+'</strong><small>'+esc(item.id)+'</small></div></div><div class="field"><label for="out-destination">Destination *</label><select id="out-destination" required><option value="">Choisir une destination</option><option value="client">Client</option><option value="chantier">Chantier</option><option value="technicien">Technicien</option><option value="preparation">Préparation PC</option><option value="autre">Autre</option></select></div><div class="field"><label for="out-target">Nom du destinataire, chantier ou motif *</label><input id="out-target" maxlength="120" autocomplete="off" placeholder="Ex. Client Dupont, chantier Centre-ville…" required></div></div><div class="modal-foot"><button class="btn" data-action="closemodal">Annuler</button><button class="btn negative" data-action="remove" data-id="'+esc(item.id)+'">Valider la sortie</button></div></div></div>';
  }
+ if(modal.type==='confirmbatchout'){
+  const items=exitBasket.map(itemById).filter(Boolean);
+  if(!items.length)return '';
+  return '<div class="overlay" data-action="backdrop"><div class="modal sp-exit-dialog" role="dialog" aria-modal="true" aria-label="Confirmer une sortie groupée">'+
+   '<div class="modal-head"><h2>Sortie de '+items.length+' article'+(items.length>1?'s':'')+'</h2><button class="closebtn" type="button" data-action="closemodal">×</button></div>'+
+   '<div class="modal-body"><p>Une seule destination et un seul destinataire pour tout le lot. Si un article manque, aucune sortie ne sera enregistrée.</p>'+
+   '<div class="sp-exit-dialog-items">'+items.map(x=>'<div><strong>'+esc(displayName(product(x.pid)))+'</strong><small>'+esc(x.id)+'</small></div>').join('')+'</div>'+
+   '<div class="field"><label for="batch-out-destination">Destination *</label><select id="batch-out-destination" required><option value="">Choisir une destination</option><option value="client">Client</option><option value="chantier">Chantier</option><option value="technicien">Technicien</option><option value="preparation">Préparation PC</option><option value="autre">Autre</option></select></div>'+
+   '<div class="field"><label for="batch-out-target">Nom du destinataire, chantier ou motif *</label><input id="batch-out-target" maxlength="120" autocomplete="off" required placeholder="Ex. Client Dupont, intervention du 12/11"></div></div>'+
+   '<div class="modal-foot"><button type="button" class="btn" data-action="closemodal">Annuler</button><button type="button" class="btn negative" data-action="batchoutsubmit">Confirmer les '+items.length+' sorties</button></div></div></div>';
+ }
+ if(modal.type==='correctmovement'){
+  const event=db.events.find(e=>e.id===modal.id);
+  if(!event||me.role!=='admin')return '';
+  return '<div class="overlay" data-action="backdrop"><div class="modal sp-correction-dialog" role="dialog" aria-modal="true" aria-label="Corriger un mouvement">'+
+   '<div class="modal-head"><h2>Corriger une '+(event.type==='in'?'entrée':'sortie')+'</h2><button class="closebtn" type="button" data-action="closemodal">×</button></div>'+
+   '<div class="modal-body"><p>Une nouvelle ligne de correction sera créée dans l’historique. Le mouvement initial ne sera pas effacé. <strong>Henrri ne sera pas modifié.</strong></p>'+
+   '<div class="sp-correction-summary"><strong>'+esc(displayName(product(event.pid)))+'</strong><small>'+esc(event.itemId)+' · '+esc(event.actor)+' · '+new Date(event.at).toLocaleString('fr-FR')+'</small></div>'+
+   '<p>'+(event.type==='out'?'L’article sera remis en stock, sous réserve qu’aucun numéro de série identique ne soit déjà présent.':'L’article sera retiré du stock si aucun mouvement n’a eu lieu depuis cette entrée.')+'</p>'+
+   '<div class="field"><label for="correction-reason">Motif obligatoire (8 caractères minimum)</label><textarea id="correction-reason" minlength="8" maxlength="240" rows="3" placeholder="Ex. Mauvaise référence scannée lors de la préparation…" required></textarea></div></div>'+
+   '<div class="modal-foot"><button class="btn" type="button" data-action="closemodal">Annuler</button><button type="button" class="btn negative" data-action="correctmovementconfirm" data-id="'+esc(event.id)+'">Enregistrer la correction</button></div></div></div>';
+ }
  if(modal.type==='stocktake-confirm'){
   const s=stocktakeData.session,mode=modal.mode||'close';
   if(!s||s.status!=='open')return '';
