@@ -183,7 +183,7 @@ function history(c){
   .sort((a,b)=>Number(String(b.id).slice(1))-Number(String(a.id).slice(1)));
  const lastByItem=new Map();
  for(const e of ev){if(!lastByItem.has(e.itemId))lastByItem.set(e.itemId,e.id);}
- const canCorrect=e=>c.me?.role==='admin'&&['in','out'].includes(e.type)&&
+ const canCorrect=e=>c.me?.role==='admin'&&/^e[1-9][0-9]*$/.test(String(e.id||''))&&['in','out'].includes(e.type)&&
     !e.corrected&&e.destination!=='inventaire'&&lastByItem.get(e.itemId)===e.id;
  const titles={in:'Entrée',out:'Sortie',correction:'Correction'};
  const destination=e=>e.type==='out'
