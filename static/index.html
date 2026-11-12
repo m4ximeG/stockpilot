@@ -28,7 +28,6 @@
 
 <script src="/static/barcode-only.js?v=henrri-20261110-1"></script>
 <script src="/static/reception.js?v=15"></script>
-<script src="/static/stocktake.js?v=1"></script>
 <link rel="stylesheet" href="/static/barcode-only.css?v=aurora-20261102-2" />
 
 <link rel="stylesheet" href="/static/aurora.css?v=aurora-20261102-2" />
@@ -40,7 +39,6 @@
 <link rel="stylesheet" href="/static/inventory-ui.css?v=4" />
 <link rel="stylesheet" href="/static/backup-ui.css?v=1" />
 <link rel="stylesheet" href="/static/henrri.css?v=2" />
-<link rel="stylesheet" href="/static/stocktake.css?v=1" />
 
 
 
@@ -149,7 +147,7 @@ function toggleMobileMore(force){
 let entryPresetPid=null;
 let spRouteSerial=0;
 function nav(p){
- if(p==='map')p='products';
+ if(p==='map'||p==='stocktake')p='products';
  const reduced=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
  const serial=++spRouteSerial;
  // Conserver les mêmes éléments de structure : fond d'orage, sidebar et
@@ -178,12 +176,12 @@ function nav(p){
   if(active){btn.setAttribute('aria-current','page');activeBtns.push(btn);}
   else btn.removeAttribute('aria-current');
  });
- document.querySelector('[data-action="mobilemore"]')?.classList.toggle('active',page==='history'||page==='settings'||page==='stocktake');
+ document.querySelector('[data-action="mobilemore"]')?.classList.toggle('active',page==='history'||page==='settings');
  document.querySelector('.sidebar')?.classList.remove('open');
  document.querySelector('.sidebackdrop')?.remove();
  document.querySelector('.overlay')?.remove();
  if(page==='products'||page==='settings')updatePushButton();
- if(page==='stocktake')loadStocktake();
+ // Le comptage physique n'est plus affiché dans l'application.
  window.scrollTo(0,0);
  if(reduced)return;
  activeBtns.forEach(btn=>btn.classList.add('sp-nav-arrive'));
@@ -228,8 +226,8 @@ function nav(p){
 }
 function goEntry(pid=null){entryPresetPid=pid;selectedProduct=pid||selectedProduct||db.catalog[0]?.id||null;chosenSlot=null;formSerial='';formCondition='Neuf';lastAdded=null;nav('entry')}
 function goExit(id=null){scanResult=id?itemById(id)||null:null;nav('exit')}
-function layout(){document.body.classList.toggle('aurora-on',page==='dashboard');let menu=[['dashboard','Tableau de bord','dashboard-tiles'],['entry','Entrée en stock','package-plus'],['exit','Scanner une sortie','scan-out'],['products','Produits en stock','stock-boxes'],['history','Historique','history-clock'],['stocktake','Inventaire physique','stock-boxes'],['settings','Paramètres','settings-gear']];return `<div class="app">${mobileNav?'<div class="sidebackdrop" data-action="closemenu"></div>':''}<aside class="sidebar ${mobileNav?'open':''}"><div class="brand"><div class="brand-mark"><img class="sp-logo" src="/static/stockpilot-mark.svg?v=1" alt="StockPilot" width="44" height="44"></div><div><strong>Stock<span>Pilot</span></strong><small>Gestion du stock</small></div></div><div class="navlabel">ESPACE DE TRAVAIL</div>${menu.map(([id,label,icon])=>`<button class="navbtn ${page===id?'active':''}" data-nav="${id}" aria-label="${label}" title="${label}" ${page===id?'aria-current="page"':''}>${ico(icon,21)} <span>${label}</span>${id==='products'?`<span class="count">${db.items.length}</span>`:''}</button>`).join('')}<div class="sidebottom"><div class="sidecard"><strong><span class="green-dot"></span> Données centralisées</strong><p>Stock partagé et sauvegardé dans la base du NAS.</p></div><a href="/logout" class="sp-logout" title="Se déconnecter" aria-label="Se déconnecter">${ico('log-out',24)}<span class="sr-only">Se déconnecter</span></a><div class="sidefoot"><div class="avatar">SP</div><div><strong>${esc(me.username)}</strong><small>${me.role==='admin'?'Administrateur':'Employé'}</small></div></div></div></aside><main class="main"><div class="content" id="content">${renderPage()}</div></main><nav class="mobilebottom" aria-label="Navigation mobile">${[['dashboard','Accueil','dashboard-tiles'],['entry','Entrée','package-plus'],['exit','Scanner','scan-out'],['products','Stock','stock-boxes']].map(([id,label,icon])=>`<button type="button" data-nav="${id}" class="${page===id?'active':''}" aria-label="${label}" ${page===id?'aria-current="page"':''}>${ico(icon,21)}<span>${label}</span></button>`).join('')}<button type="button" class="${page==='history'||page==='settings'?'active':''}" data-action="mobilemore" aria-label="Plus de pages" aria-haspopup="dialog" aria-controls="sp-mobile-menu" aria-expanded="false">${ico('menu',21)}<span>Plus</span></button></nav><div id="sp-mobile-scrim" class="sp-mobile-scrim" data-action="closemobilemore" hidden></div><div id="sp-mobile-menu" class="sp-mobile-menu" role="dialog" aria-label="Autres pages StockPilot" aria-modal="true" hidden><div class="sp-mobile-menu-head"><strong>Autres pages</strong><button type="button" data-action="closemobilemore" aria-label="Fermer le menu">${ico('close',20)}</button></div><button type="button" data-nav="history">${ico('history-clock',21)}<span>Historique</span>${ico('chev',17)}</button><button type="button" data-nav="settings">${ico('settings-gear',21)}<span>Paramètres</span>${ico('chev',17)}</button><button type="button" data-nav="stocktake">${ico('stock-boxes',21)}<span>Inventaire physique</span>${ico('chev',17)}</button><a href="/logout">${ico('log-out',21)}<span>Se déconnecter</span></a></div></div>${modal?renderModal():''}`}
-function renderPage(){const views={dashboard:renderDashboard,entry:renderEntry,exit:renderExit,products:renderProducts,history:renderHistory,stocktake:renderStocktake,settings:renderSettings};return (views[page]||views.dashboard)();}
+function layout(){document.body.classList.toggle('aurora-on',page==='dashboard');let menu=[['dashboard','Tableau de bord','dashboard-tiles'],['entry','Entrée en stock','package-plus'],['exit','Scanner une sortie','scan-out'],['products','Produits en stock','stock-boxes'],['history','Historique','history-clock'],['settings','Paramètres','settings-gear']];return `<div class="app">${mobileNav?'<div class="sidebackdrop" data-action="closemenu"></div>':''}<aside class="sidebar ${mobileNav?'open':''}"><div class="brand"><div class="brand-mark"><img class="sp-logo" src="/static/stockpilot-mark.svg?v=1" alt="StockPilot" width="44" height="44"></div><div><strong>Stock<span>Pilot</span></strong><small>Gestion du stock</small></div></div><div class="navlabel">ESPACE DE TRAVAIL</div>${menu.map(([id,label,icon])=>`<button class="navbtn ${page===id?'active':''}" data-nav="${id}" aria-label="${label}" title="${label}" ${page===id?'aria-current="page"':''}>${ico(icon,21)} <span>${label}</span>${id==='products'?`<span class="count">${db.items.length}</span>`:''}</button>`).join('')}<div class="sidebottom"><div class="sidecard"><strong><span class="green-dot"></span> Données centralisées</strong><p>Stock partagé et sauvegardé dans la base du NAS.</p></div><a href="/logout" class="sp-logout" title="Se déconnecter" aria-label="Se déconnecter">${ico('log-out',24)}<span class="sr-only">Se déconnecter</span></a><div class="sidefoot"><div class="avatar">SP</div><div><strong>${esc(me.username)}</strong><small>${me.role==='admin'?'Administrateur':'Employé'}</small></div></div></div></aside><main class="main"><div class="content" id="content">${renderPage()}</div></main><nav class="mobilebottom" aria-label="Navigation mobile">${[['dashboard','Accueil','dashboard-tiles'],['entry','Entrée','package-plus'],['exit','Scanner','scan-out'],['products','Stock','stock-boxes']].map(([id,label,icon])=>`<button type="button" data-nav="${id}" class="${page===id?'active':''}" aria-label="${label}" ${page===id?'aria-current="page"':''}>${ico(icon,21)}<span>${label}</span></button>`).join('')}<button type="button" class="${page==='history'||page==='settings'?'active':''}" data-action="mobilemore" aria-label="Plus de pages" aria-haspopup="dialog" aria-controls="sp-mobile-menu" aria-expanded="false">${ico('menu',21)}<span>Plus</span></button></nav><div id="sp-mobile-scrim" class="sp-mobile-scrim" data-action="closemobilemore" hidden></div><div id="sp-mobile-menu" class="sp-mobile-menu" role="dialog" aria-label="Autres pages StockPilot" aria-modal="true" hidden><div class="sp-mobile-menu-head"><strong>Autres pages</strong><button type="button" data-action="closemobilemore" aria-label="Fermer le menu">${ico('close',20)}</button></div><button type="button" data-nav="history">${ico('history-clock',21)}<span>Historique</span>${ico('chev',17)}</button><button type="button" data-nav="settings">${ico('settings-gear',21)}<span>Paramètres</span>${ico('chev',17)}</button><a href="/logout">${ico('log-out',21)}<span>Se déconnecter</span></a></div></div>${modal?renderModal():''}`}
+function renderPage(){const views={dashboard:renderDashboard,entry:renderEntry,exit:renderExit,products:renderProducts,history:renderHistory,settings:renderSettings};return (views[page]||views.dashboard)();}
 function heading(kicker,title,subtitle,actions=''){return `<div class="pagehead"><div><div class="eyebrow">${kicker}</div><h1>${title}</h1><p>${subtitle}</p></div>${actions?`<div class="head-actions">${actions}</div>`:''}</div>`}
 const btn=(label,action,icon='arrow',cls='primary')=>`<button class="btn ${cls}" data-action="${action}">${ico(icon,16)} ${label}</button>`;
 function renderDashboard(){return SPBasic.dashboard({db,me,henrri,heading,btn,ico});}

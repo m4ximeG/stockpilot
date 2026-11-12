@@ -18,7 +18,7 @@ const context={db,me:{username:'Admin',role:'admin'},product:id=>db.catalog.find
   heading:(k,t)=>'<h1>'+t+'</h1>',btn:()=>'<button>Créer</button>',ico:()=>'<svg></svg>',
   tableFilter:'',tableType:'all',itemById:id=>db.items.find(i=>i.id===id),modal:{id:item.id},scanResult:item};
 
-test('Inventaire physique et réception groupée disponibles sans changer le scanner',()=>{
+test('Inventaire physique retiré de l’interface ; réception groupée conservée',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
  const stocktake=expose('static/stocktake.js','SPStocktake');
  const page=stocktake.render({
@@ -27,8 +27,11 @@ test('Inventaire physique et réception groupée disponibles sans changer le sca
   heading:(a,b)=>'<h1>'+b+'</h1>'
  });
  assert.match(page,/Démarrer un inventaire/);
- assert.match(html,/\/static\/stocktake\.js\?v=1/);
- assert.match(html,/\/static\/stocktake\.css\?v=1/);
+ assert.doesNotMatch(html,/<script src="\/static\/stocktake\.js/);
+ assert.doesNotMatch(html,/<link rel="stylesheet" href="\/static\/stocktake\.css/);
+ assert.doesNotMatch(html,/data-nav="stocktake"/);
+ assert.doesNotMatch(html,/\['stocktake','Inventaire physique'/);
+ assert.doesNotMatch(html,/stocktake:renderStocktake/);
  assert.match(html,/case'stocktake-scan'/);
  assert.match(html,/case'stocktake-finalize'/);
  assert.match(html,/data-action="stocktake-finalize"/);
