@@ -132,6 +132,40 @@ def initialize():
         # Seuil de réapprovisionnement par référence : migration additive et sans perte.
         if 'min_stock' not in existing_columns:
             con.execute("ALTER TABLE products ADD COLUMN min_stock INTEGER NOT NULL DEFAULT 0 CHECK(min_stock >= 0)")
+        # Sorties avec destination explicite ; migration additive sans perte d'historique.
+        item_columns = {row['name'] for row in con.execute('PRAGMA table_info(items)')}
+        for column in ('out_destination', 'out_target'):
+            if column not in item_columns:
+                con.execute(f"ALTER TABLE items ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
+        event_columns = {row['name'] for row in con.execute('PRAGMA table_info(events)')}
+        for column in ('destination', 'target'):
+            if column not in event_columns:
+                con.execute(f"ALTER TABLE events ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
+        # Comptages physiques persistants : photographie des étiquettes, scans, inconnus.
+        con.executescript("""
+        CREATE TABLE IF NOT EXISTS stocktakes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          status TEXT NOT NULL CHECK(status IN ('open','closed','reconciled')),
+          created_at INTEGER NOT NULL, created_by TEXT NOT NULL,
+          baseline_revision INTEGER NOT NULL,
+          closed_at INTEGER, closed_by TEXT NOT NULL DEFAULT '',
+          corrected_count INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS stocktake_one_open ON stocktakes(status) WHERE status='open';
+        CREATE TABLE IF NOT EXISTS stocktake_expected (
+          session_id INTEGER NOT NULL REFERENCES stocktakes(id),
+          item_id TEXT NOT NULL, pid TEXT NOT NULL,
+          product_name TEXT NOT NULL, product_ref TEXT NOT NULL,
+          scanned_at INTEGER, scanned_by TEXT NOT NULL DEFAULT '',
+          PRIMARY KEY(session_id,item_id)
+        );
+        CREATE TABLE IF NOT EXISTS stocktake_unknown (
+          session_id INTEGER NOT NULL REFERENCES stocktakes(id),
+          code TEXT NOT NULL, scanned_at INTEGER NOT NULL,
+          scanned_by TEXT NOT NULL, PRIMARY KEY(session_id,code)
+        );
+        CREATE INDEX IF NOT EXISTS stocktake_expected_session ON stocktake_expected(session_id,scanned_at);
+        """)
         con.executemany("INSERT OR IGNORE INTO shelf_levels(slot,size,note) VALUES(?,'unknown','')", [(slot,) for slot in SLOTS])
         con.execute("INSERT OR IGNORE INTO meta(key,value) VALUES('location_mode','optional')")
         if not con.execute('SELECT 1 FROM users LIMIT 1').fetchone():
@@ -445,7 +479,7 @@ def state():
     try:
         products = [row_dict(x) for x in db.execute('SELECT id,brand,model,cat,zone,kind,ref,active,preferred_slot,min_stock FROM products ORDER BY brand,model')]
         items = [dict(id=x['id'],pid=x['pid'],slot=x['slot'],serial=x['serial'] or '',condition=x['condition'],inAt=x['in_at']) for x in db.execute('SELECT * FROM items WHERE out_at IS NULL ORDER BY in_at')]
-        events = [dict(id='e'+str(x['id']),type=x['type'],itemId=x['item_id'],pid=x['pid'],slot=x['slot'],at=x['at'],actor=x['actor'],detail=x['detail']) for x in db.execute('SELECT * FROM events ORDER BY id DESC LIMIT 1500')]
+        events = [dict(id='e'+str(x['id']),type=x['type'],itemId=x['item_id'],pid=x['pid'],slot=x['slot'],at=x['at'],actor=x['actor'],detail=x['detail'],destination=x['destination'],target=x['target']) for x in db.execute('SELECT * FROM events ORDER BY id DESC LIMIT 1500')]
         shelves = [dict(slot=r['slot'],size=r['size'],note=r['note']) for r in db.execute('SELECT slot,size,note FROM shelf_levels ORDER BY slot')]
         counter = int(db.execute("SELECT value FROM meta WHERE key='next_item'").fetchone()[0])
         location_mode = db.execute("SELECT value FROM meta WHERE key='location_mode'").fetchone()
@@ -687,6 +721,14 @@ def entry_item():
 @app.post('/api/items/<item_id>/out')
 @protected()
 def exit_item(item_id):
+    try:
+        data = json_body()
+        destination = clean_text(data.get('destination', ''), 'Destination', 30, True)
+        target = clean_text(data.get('target', ''), 'Destinataire / chantier', 120, True)
+        if destination not in ('client', 'chantier', 'technicien', 'preparation', 'autre'):
+            return bad('Choisissez une destination de sortie valide.')
+    except ValueError as exc:
+        return bad(str(exc))
     db = g.db
     db.execute('BEGIN IMMEDIATE')
     item = db.execute('SELECT * FROM items WHERE id=? AND out_at IS NULL', (item_id,)).fetchone()
@@ -694,9 +736,11 @@ def exit_item(item_id):
         db.rollback()
         return bad('Cet article est déjà sorti ou introuvable.', 409)
     now = int(time.time()*1000)
-    db.execute('UPDATE items SET out_at=?,out_by=? WHERE id=?', (now,g.user['username'],item_id))
-    db.execute('INSERT INTO events(type,item_id,pid,slot,at,actor) VALUES(?,?,?,?,?,?)',
-               ('out',item_id,item['pid'],item['slot'],now,g.user['username']))
+    db.execute('UPDATE items SET out_at=?,out_by=?,out_destination=?,out_target=? WHERE id=?',
+               (now,g.user['username'],destination,target,item_id))
+    db.execute('INSERT INTO events(type,item_id,pid,slot,at,actor,detail,destination,target) VALUES(?,?,?,?,?,?,?,?,?)',
+               ('out',item_id,item['pid'],item['slot'],now,g.user['username'],
+                'Sortie vers '+destination+' : '+target,destination,target))
     db.commit()
     # Notification uniquement lors du franchissement du seuil, pas à chaque scan.
     try:
