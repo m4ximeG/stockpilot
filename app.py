@@ -684,6 +684,100 @@ def receive_free_text():
         return bad(str(e),503)
 
 
+@app.post('/api/receive/batch')
+@protected()
+def receive_batch():
+    """Réception atomique de 1 à 50 unités, une référence Henrri lue sans écriture."""
+    db = g.db
+    try:
+        data = json_body()
+        name = clean_text(data.get('name', ''), 'Nom du produit', 120, True)
+        product_id = clean_text(data.get('product_id', ''), 'Référence sélectionnée', 64)
+        henrri_id = clean_text(data.get('henrri_id', ''), 'Identifiant Henrri', 80)
+        condition = clean_text(data.get('condition', 'Neuf'), 'État', 30, True)
+        quantity = data.get('quantity')
+        if type(quantity) is not int or not 1 <= quantity <= 50:
+            return bad('La quantité doit être comprise entre 1 et 50.')
+        if condition not in ('Neuf', 'Retour SAV', 'Réparation'):
+            return bad('État invalide.')
+        if product_id and henrri_id:
+            return bad('Sélection de référence contradictoire.')
+        serials = data.get('serials', [])
+        if not isinstance(serials, list) or len(serials) > quantity:
+            return bad('La liste des numéros de série dépasse la quantité.')
+        serials = [clean_text(x, 'Numéro de série', 100) for x in serials]
+        serials += [''] * (quantity - len(serials))
+        nonempty = [serial.casefold() for serial in serials if serial]
+        if len(set(nonempty)) != len(nonempty):
+            return bad('Un numéro de série est présent plusieurs fois dans cette réception.', 409)
+        # Toute lecture Henrri se déroule avant la transaction SQLite.
+        henrri_item = henrri_service.find_item(henrri_id) if henrri_id else None
+        if henrri_item:
+            name = henrri_item['description']
+        db.execute('BEGIN IMMEDIATE')
+        created = False
+        if henrri_item:
+            ref = henrri_item['reference']
+            matches = db.execute(
+                'SELECT id,active FROM products WHERE lower(trim(ref))=lower(trim(?))', (ref,)
+            ).fetchall()
+            if len(matches) > 1 or (matches and not matches[0]['active']):
+                db.rollback()
+                return bad('La référence Henrri est ambiguë ou désactivée localement.', 409)
+            if matches:
+                pid = matches[0]['id']
+            else:
+                pid = 'p_' + secrets.token_hex(6)
+                db.execute("""INSERT INTO products(id,brand,model,cat,zone,kind,ref,preferred_slot)
+                    VALUES(?, '', ?, 'Matériel', 'A', 'package', ?, '')""",
+                    (pid, name[:100], ref))
+                created = True
+        elif product_id:
+            p = db.execute('SELECT id FROM products WHERE id=? AND active=1', (product_id,)).fetchone()
+            if not p:
+                db.rollback()
+                return bad('Référence locale introuvable ou désactivée.', 404)
+            pid = p['id']
+        else:
+            p = db.execute("""SELECT id FROM products WHERE active=1 AND
+                (lower(trim(brand || ' ' || model))=lower(?) OR lower(trim(model))=lower(?))
+                ORDER BY id LIMIT 1""", (name, name)).fetchone()
+            if p:
+                pid = p['id']
+            else:
+                pid = 'p_' + secrets.token_hex(6)
+                db.execute("""INSERT INTO products(id,brand,model,cat,zone,kind,ref,preferred_slot)
+                    VALUES(?, '', ?, 'Matériel', 'A', 'package', ?, '')""",
+                    (pid, name[:100], 'REF-' + secrets.token_hex(5).upper()))
+                created = True
+        number = int(db.execute("SELECT value FROM meta WHERE key='next_item'").fetchone()[0])
+        now = int(time.time() * 1000)
+        items = []
+        for serial in serials:
+            while db.execute('SELECT 1 FROM items WHERE id=?', (f'STK-{number:06d}',)).fetchone():
+                number += 1
+            item_id = f'STK-{number:06d}'
+            number += 1
+            db.execute("""INSERT INTO items(id,pid,slot,serial,condition,in_at,in_by)
+                VALUES(?,?,'',?,?,?,?)""", (item_id, pid, serial or None, condition, now, g.user['username']))
+            db.execute("""INSERT INTO events(type,item_id,pid,slot,at,actor)
+                VALUES('in',?,?,'',?,?)""", (item_id, pid, now, g.user['username']))
+            items.append(dict(id=item_id, pid=pid, slot='', serial=serial,
+                              condition=condition, inAt=now))
+        db.execute("UPDATE meta SET value=? WHERE key='next_item'", (str(number),))
+        db.commit()
+        return jsonify(items=items, item=items[0], quantity=len(items), createdProduct=created), 201
+    except sqlite3.IntegrityError:
+        db.rollback()
+        return bad('Numéro de série déjà enregistré ou référence en conflit. Rien n’a été ajouté.', 409)
+    except ValueError as exc:
+        db.rollback()
+        return bad(str(exc))
+    except henrri_service.HenrriError as exc:
+        db.rollback()
+        return bad(str(exc), 503)
+
+
 @app.post('/api/items')
 @protected()
 def entry_item():
