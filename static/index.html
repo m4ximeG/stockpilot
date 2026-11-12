@@ -511,14 +511,54 @@ async function finalizeStocktake(mode){
   toast(mode==='reconcile'?result.corrected+' écart(s) corrigé(s) dans Stock Pilot.':'Inventaire clôturé sans correction.');
  }catch(e){toast(e.message,true);await loadStocktake(true)}
 }
-function lookup(code){
+function lookup(code,fromCamera=false){
  const id=String(code||'').trim().toUpperCase();
  if(!id)return toast('Saisissez ou scannez un identifiant',true);
  const item=itemById(id);
- if(!item)return toast('Aucun produit en stock avec cet identifiant',true);
- scanResult=item;
- renderContent();
- toast('Produit trouvé : '+displayName(product(item.pid)));
+ if(!item)return toast('Aucun article en stock avec cet identifiant',true);
+ if(exitBasket.includes(id))return fromCamera?undefined:toast('Cet article est déjà sélectionné.',true);
+ if(exitBasket.length>=50)return toast('Maximum 50 articles par sortie.',true);
+ exitBasket.push(id);scanResult=item;
+ if(fromCamera&&scanning){
+  // Préserver le lecteur vidéo pendant les scans successifs.
+  const old=document.getElementById('sp-exit-cart');
+  if(old){
+   const wrapper=document.createElement('div');
+   wrapper.innerHTML=renderExit();
+   const fresh=wrapper.querySelector('#sp-exit-cart');
+   if(fresh)old.innerHTML=fresh.innerHTML;
+  }
+ }else renderContent();
+ toast(displayName(product(item.pid))+' ajouté ('+exitBasket.length+'/50)');
+}
+async function submitBatchOut(){
+ const destination=$('#batch-out-destination')?.value||'';
+ const target=$('#batch-out-target')?.value?.trim()||'';
+ if(!exitBasket.length||!destination||!target)
+  return toast('Sélectionnez des articles et renseignez la destination.',true);
+ const button=document.querySelector('[data-action="batchoutsubmit"]');
+ if(button)button.disabled=true;
+ try{
+  const result=await api('/api/items/out/batch','POST',{ids:[...exitBasket],destination,target});
+  modal=null;exitBasket=[];scanResult=null;
+  await refreshState(true);renderApp();
+  toast(result.count+' article(s) sorti(s) et tracé(s).');
+ }catch(e){toast(e.message,true);if(button)button.disabled=false;}
+}
+async function submitMovementCorrection(id){
+ if(me.role!=='admin')return;
+ const reason=$('#correction-reason')?.value?.trim()||'';
+ if(reason.length<8)return toast('Expliquez la correction en au moins 8 caractères.',true);
+ const eventNumber=Number(String(id||'').replace(/^e/,''));
+ if(!Number.isSafeInteger(eventNumber)||eventNumber<1)return toast('Mouvement invalide.',true);
+ const button=document.querySelector('[data-action="correctmovementconfirm"]');
+ if(button)button.disabled=true;
+ try{
+  await api('/api/admin/movements/'+eventNumber+'/correct','POST',{reason});
+  modal=null;
+  await refreshState(true);renderApp();
+  toast('Correction enregistrée et conservée dans l’historique.');
+ }catch(e){toast(e.message,true);if(button)button.disabled=false;}
 }
 // Compatibilité avec les anciens boutons : aucun emplacement physique n'est enregistré.
 function setSlot(){return}
@@ -602,8 +642,8 @@ async function startCamera(){
     if(token!==activeCameraRun||!scanning)return;
     const id=String(decoded||'').trim().toUpperCase();
     if(!/^STK-[A-Z0-9-]+$/.test(id))return;
-    await stopCamera();
-    if(page==='exit')lookup(id);else if(page==='stocktake')scanStocktake(id);
+    if(page==='exit')lookup(id,true);
+    else if(page==='stocktake'){await stopCamera();scanStocktake(id);}
    },
    ()=>{}
   );
@@ -789,7 +829,7 @@ case'stockthreshold':(async()=>{
   toast(value?'Alerte enregistrée.':'Alerte désactivée pour ce produit.');
  }catch(e){toast(e.message,true)}
 })();break;
-case'camera':startCamera();break;case'stocktake-start':startStocktake();break;case'stocktake-scan':scanStocktake($('#stocktake-code')?.value);break;case'stocktake-confirm':openModal({type:'stocktake-confirm',mode:a.dataset.mode});break;case'stocktake-finalize':finalizeStocktake(a.dataset.mode);break;case'installapp':installMobileApp();break;case'selectscan':scanResult=itemById(id);renderContent();break;case'confirmout':case'outfrommodal':openModal({type:'confirmout',id});break;case'remove':removeItem(id);break;case'details':openModal({type:'details',id});break;case'closemodal':closeModal();break;case'entryslot':selectedProduct=db.catalog.find(p=>p.zone===a.dataset.slot[0])?.id||db.catalog[0]?.id||null;chosenSlot=a.dataset.slot;lastAdded=null;nav('entry');SPV3.selectSlot(a.dataset.slot);renderContent();break;case'zone':selectedSlot=`${a.dataset.zone}-1`;renderContent();break;case'pickslot':setSlot(a.dataset.slot);break;case'export':exportStock();break;case'exporthistory':exportHistory();break;case'clearstock':openModal({type:'clearstock'});break;case'reset':openModal({type:'reset'});break;case'doreset':(async()=>{try{await api('/api/admin/reset','POST',{});formSerial='';lastAdded=null;scanResult=null;selectedSlot='A-1';modal=null;await refreshState(true);nav('dashboard');toast('Stock fictif réinitialisé')}catch(e){toast(e.message,true)}})();break;case'movemodal':openModal({type:'move',id});break;case'confirmmove':(async()=>{try{await api('/api/items/'+encodeURIComponent(id)+'/move','POST',{slot:$('#move-slot')?.value});modal=null;await refreshState(true);renderApp();toast('Article déplacé')}catch(e){toast(e.message,true)}})();break;case'editproduct':openModal({type:'editproduct',id});break;case'listusers':(async()=>{try{users=(await api('/api/users')).users;openModal({type:'users'})}catch(e){toast(e.message,true)}})();break;case'toggleuser':(async()=>{const u=users.find(x=>String(x.id)===String(id));if(!u)return;try{await api('/api/users/'+id,'PATCH',{enabled:!u.enabled});users=(await api('/api/users')).users;openModal({type:'users'});toast('Compte mis à jour')}catch(e){toast(e.message,true)}})();break;case'managebackups':(async()=>{
+case'camera':startCamera();break;case'exitbasketremove':exitBasket=exitBasket.filter(x=>x!==id);renderContent();break;case'exitbasketclear':exitBasket=[];renderContent();break;case'confirmbatchout':if(exitBasket.length)openModal({type:'confirmbatchout'});break;case'batchoutsubmit':submitBatchOut();break;case'correctmovement':if(me.role==='admin')openModal({type:'correctmovement',id});break;case'correctmovementconfirm':submitMovementCorrection(id);break;case'stocktake-start':startStocktake();break;case'stocktake-scan':scanStocktake($('#stocktake-code')?.value);break;case'stocktake-confirm':openModal({type:'stocktake-confirm',mode:a.dataset.mode});break;case'stocktake-finalize':finalizeStocktake(a.dataset.mode);break;case'installapp':installMobileApp();break;case'selectscan':lookup(id);break;case'confirmout':case'outfrommodal':openModal({type:'confirmout',id});break;case'remove':removeItem(id);break;case'details':openModal({type:'details',id});break;case'closemodal':closeModal();break;case'entryslot':selectedProduct=db.catalog.find(p=>p.zone===a.dataset.slot[0])?.id||db.catalog[0]?.id||null;chosenSlot=a.dataset.slot;lastAdded=null;nav('entry');SPV3.selectSlot(a.dataset.slot);renderContent();break;case'zone':selectedSlot=`${a.dataset.zone}-1`;renderContent();break;case'pickslot':setSlot(a.dataset.slot);break;case'export':exportStock();break;case'exporthistory':exportHistory();break;case'clearstock':openModal({type:'clearstock'});break;case'reset':openModal({type:'reset'});break;case'doreset':(async()=>{try{await api('/api/admin/reset','POST',{});formSerial='';lastAdded=null;scanResult=null;selectedSlot='A-1';modal=null;await refreshState(true);nav('dashboard');toast('Stock fictif réinitialisé')}catch(e){toast(e.message,true)}})();break;case'movemodal':openModal({type:'move',id});break;case'confirmmove':(async()=>{try{await api('/api/items/'+encodeURIComponent(id)+'/move','POST',{slot:$('#move-slot')?.value});modal=null;await refreshState(true);renderApp();toast('Article déplacé')}catch(e){toast(e.message,true)}})();break;case'editproduct':openModal({type:'editproduct',id});break;case'listusers':(async()=>{try{users=(await api('/api/users')).users;openModal({type:'users'})}catch(e){toast(e.message,true)}})();break;case'toggleuser':(async()=>{const u=users.find(x=>String(x.id)===String(id));if(!u)return;try{await api('/api/users/'+id,'PATCH',{enabled:!u.enabled});users=(await api('/api/users')).users;openModal({type:'users'});toast('Compte mis à jour')}catch(e){toast(e.message,true)}})();break;case'managebackups':(async()=>{
  if(me.role!=='admin')return;
  try{
   const result=await api('/api/admin/backups');
