@@ -233,7 +233,8 @@ def external_status(data_dir, directory):
         if not os.access(target, os.W_OK):
             raise ValueError("Dossier externe non inscriptible.")
         if metadata.get('destinationKey') != hashlib.sha256(str(target).encode()).hexdigest():
-            return {'configured': True, 'status': 'pending'}
+            return {'configured': True, 'status': 'error' if metadata.get('error') else 'pending',
+                    'error': metadata.get('error') or ''}
         name = metadata.get('name', '')
         existing = target / name
         valid_file = BACKUP_NAME.fullmatch(name) and existing.is_file() and not existing.is_symlink()
@@ -354,6 +355,12 @@ def verify_latest_external(data_dir, external_dir):
         if not files:
             raise ValueError("Aucune sauvegarde externe disponible à tester.")
         path = files[0]
-        _verify_restorable(path, data_dir)
+        try:
+            _verify_restorable(path, data_dir)
+        except Exception:
+            status = _load_external_status(data_dir)
+            status['error'] = 'Échec du test de restauration de la copie externe.'
+            _save_external_status(data_dir, status)
+            raise
         _external_success(data_dir, target, path.name)
         return {'ok': True, 'name': path.name, 'verifiedAt': int(time.time() * 1000)}
