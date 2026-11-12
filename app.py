@@ -592,6 +592,149 @@ def push_test():
     return jsonify(ok=count > 0, devices=count)
 
 
+def _stocktake_payload(db):
+    session_row = db.execute("""SELECT * FROM stocktakes ORDER BY
+        CASE WHEN status='open' THEN 0 ELSE 1 END, id DESC LIMIT 1""").fetchone()
+    history = [dict(id=r['id'], status=r['status'], createdAt=r['created_at'],
+                    createdBy=r['created_by'], closedAt=r['closed_at'],
+                    correctedCount=r['corrected_count'])
+               for r in db.execute('SELECT * FROM stocktakes ORDER BY id DESC LIMIT 10')]
+    if not session_row:
+        return dict(session=None, expected=[], unknown=[], history=history)
+    sid = session_row['id']
+    expected = [dict(id=r['item_id'], pid=r['pid'], name=r['product_name'],
+                     reference=r['product_ref'], scanned=bool(r['scanned_at']),
+                     scannedBy=r['scanned_by'])
+                for r in db.execute('SELECT * FROM stocktake_expected WHERE session_id=? ORDER BY product_name,item_id',
+                                    (sid,))]
+    unknown = [dict(code=r['code'], scannedBy=r['scanned_by'])
+               for r in db.execute('SELECT * FROM stocktake_unknown WHERE session_id=? ORDER BY scanned_at DESC',
+                                   (sid,))]
+    session = dict(id=sid, status=session_row['status'],
+                   createdAt=session_row['created_at'], createdBy=session_row['created_by'],
+                   closedAt=session_row['closed_at'], closedBy=session_row['closed_by'],
+                   correctedCount=session_row['corrected_count'],
+                   expectedCount=len(expected),
+                   scannedCount=sum(1 for row in expected if row['scanned']),
+                   missingCount=sum(1 for row in expected if not row['scanned']),
+                   unknownCount=len(unknown),
+                   currentRevision=db.execute('SELECT revision FROM sync_revision WHERE id=1').fetchone()[0],
+                   baselineRevision=session_row['baseline_revision'])
+    session['stockChanged'] = session['currentRevision'] != session['baselineRevision']
+    return dict(session=session, expected=expected, unknown=unknown, history=history)
+
+
+@app.get('/api/stocktakes/current')
+@protected()
+def stocktake_current():
+    response = jsonify(_stocktake_payload(g.db))
+    response.headers['Cache-Control'] = 'private, no-store'
+    return response
+
+
+@app.post('/api/stocktakes')
+@protected(admin=True)
+def stocktake_start():
+    db = g.db
+    db.execute('BEGIN IMMEDIATE')
+    existing = db.execute("SELECT id FROM stocktakes WHERE status='open'").fetchone()
+    if existing:
+        db.rollback()
+        return bad('Un inventaire physique est déjà en cours.', 409)
+    now = int(time.time() * 1000)
+    revision = db.execute('SELECT revision FROM sync_revision WHERE id=1').fetchone()[0]
+    cursor = db.execute("""INSERT INTO stocktakes(status,created_at,created_by,baseline_revision)
+        VALUES('open',?,?,?)""", (now, g.user['username'], revision))
+    sid = cursor.lastrowid
+    db.execute("""INSERT INTO stocktake_expected(session_id,item_id,pid,product_name,product_ref)
+        SELECT ?,i.id,i.pid,trim(p.brand || ' ' || p.model),p.ref
+        FROM items i JOIN products p ON p.id=i.pid WHERE i.out_at IS NULL""", (sid,))
+    db.commit()
+    return jsonify(_stocktake_payload(db)), 201
+
+
+@app.post('/api/stocktakes/<int:stocktake_id>/scan')
+@protected()
+def stocktake_scan(stocktake_id):
+    try:
+        code = clean_text(json_body().get('code', ''), 'Code-barres', 60, True).upper()
+    except ValueError as exc:
+        return bad(str(exc))
+    if not re.fullmatch(r'STK-[A-Z0-9-]{1,30}', code):
+        return bad('Scannez une étiquette StockPilot de type STK-000001.')
+    db = g.db
+    db.execute('BEGIN IMMEDIATE')
+    session_row = db.execute('SELECT status FROM stocktakes WHERE id=?', (stocktake_id,)).fetchone()
+    if not session_row or session_row['status'] != 'open':
+        db.rollback()
+        return bad('Cet inventaire n’est plus actif.', 409)
+    matched = db.execute("""SELECT scanned_at FROM stocktake_expected
+        WHERE session_id=? AND item_id=?""", (stocktake_id, code)).fetchone()
+    now = int(time.time() * 1000)
+    if matched:
+        if matched['scanned_at'] is not None:
+            status = 'already_scanned'
+        else:
+            db.execute("""UPDATE stocktake_expected SET scanned_at=?, scanned_by=?
+                WHERE session_id=? AND item_id=?""",
+                (now, g.user['username'], stocktake_id, code))
+            status = 'counted'
+    else:
+        cursor = db.execute("""INSERT OR IGNORE INTO stocktake_unknown(
+            session_id,code,scanned_at,scanned_by) VALUES(?,?,?,?)""",
+            (stocktake_id, code, now, g.user['username']))
+        status = 'unknown' if cursor.rowcount else 'already_unknown'
+    db.commit()
+    return jsonify(ok=True, status=status, code=code)
+
+
+@app.post('/api/stocktakes/<int:stocktake_id>/close')
+@protected(admin=True)
+def stocktake_close(stocktake_id):
+    try:
+        data = json_body()
+        action = clean_text(data.get('action', ''), 'Action inventaire', 20, True)
+        confirmation = clean_text(data.get('confirmation', ''), 'Confirmation', 50, True)
+        if action not in ('close', 'reconcile') or confirmation != 'VALIDER INVENTAIRE':
+            return bad('Confirmation invalide. Saisissez VALIDER INVENTAIRE.')
+    except ValueError as exc:
+        return bad(str(exc))
+    db = g.db
+    db.execute('BEGIN IMMEDIATE')
+    session_row = db.execute('SELECT * FROM stocktakes WHERE id=?', (stocktake_id,)).fetchone()
+    if not session_row or session_row['status'] != 'open':
+        db.rollback()
+        return bad('Cet inventaire a déjà été clôturé ou est introuvable.', 409)
+    current_revision = db.execute('SELECT revision FROM sync_revision WHERE id=1').fetchone()[0]
+    if action == 'reconcile' and current_revision != session_row['baseline_revision']:
+        db.rollback()
+        return bad('Le stock a changé depuis le début du comptage. Clôturez sans correction et recommencez un inventaire.', 409)
+    missing = db.execute("""SELECT e.item_id,e.pid,i.slot FROM stocktake_expected e
+        LEFT JOIN items i ON i.id=e.item_id AND i.out_at IS NULL
+        WHERE e.session_id=? AND e.scanned_at IS NULL""", (stocktake_id,)).fetchall()
+    corrected = 0
+    now = int(time.time()*1000)
+    if action == 'reconcile':
+        for item in missing:
+            if item['slot'] is None:
+                db.rollback()
+                return bad('Un article a changé depuis le comptage. Correction annulée.', 409)
+            db.execute("""UPDATE items SET out_at=?,out_by=?,out_destination='inventaire',
+                out_target=? WHERE id=? AND out_at IS NULL""",
+                (now, g.user['username'], f'Écart inventaire #{stocktake_id}', item['item_id']))
+            db.execute("""INSERT INTO events(type,item_id,pid,slot,at,actor,detail,destination,target)
+                VALUES('out',?,?,?,?,?,?,?,?)""",
+                (item['item_id'], item['pid'], item['slot'], now, g.user['username'],
+                 f'Écart inventaire #{stocktake_id} - article non scanné',
+                 'inventaire', f'Écart inventaire #{stocktake_id}'))
+            corrected += 1
+    db.execute("""UPDATE stocktakes SET status=?,closed_at=?,closed_by=?,corrected_count=?
+        WHERE id=?""", ('reconciled' if action == 'reconcile' else 'closed',
+                        now, g.user['username'], corrected, stocktake_id))
+    db.commit()
+    return jsonify(ok=True, corrected=corrected, status='reconciled' if action == 'reconcile' else 'closed')
+
+
 @app.post('/api/receive')
 @protected()
 def receive_free_text():
