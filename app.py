@@ -1225,6 +1225,9 @@ def clear_stock():
         backup_connection.close()
     try:
         db.execute('BEGIN IMMEDIATE')
+        db.execute('DELETE FROM stocktake_unknown')
+        db.execute('DELETE FROM stocktake_expected')
+        db.execute('DELETE FROM stocktakes')
         db.execute('DELETE FROM events')
         db.execute('DELETE FROM items')
         db.execute('DELETE FROM products')
@@ -1462,6 +1465,9 @@ def reset_demo():
         return bad('Réinitialisation désactivée sur ce serveur.', 403)
     db = g.db
     db.execute('BEGIN IMMEDIATE')
+    db.execute('DELETE FROM stocktake_unknown')
+    db.execute('DELETE FROM stocktake_expected')
+    db.execute('DELETE FROM stocktakes')
     db.execute('DELETE FROM events')
     db.execute('DELETE FROM items')
     db.execute('DELETE FROM products')
