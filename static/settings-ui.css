@@ -1,0 +1,161 @@
+/* StockPilot – paramètres desktop : organisation sobre et cohérente.
+   Chargé après les feuilles communes pour isoler cette refonte sans toucher aux autres pages. */
+@media screen and (min-width:861px){
+ body:not(.aurora-on) .sp-settings-page{
+   width:100%;max-width:1300px;margin-inline:auto;min-width:0;
+ }
+ body:not(.aurora-on) .sp-settings-page>.settings-board.sp-settings-board{
+   display:grid!important;
+   grid-template-columns:minmax(205px,230px) minmax(0,1fr)!important;
+   gap:22px!important;align-items:start!important;margin:0!important;width:100%;
+ }
+ body:not(.aurora-on) .sp-settings-navigation{
+   position:sticky;top:22px;display:flex;flex-direction:column;gap:5px;
+   min-width:0;padding:14px;border-radius:17px;
+   border:1px solid rgba(238,248,255,.20);
+   background:linear-gradient(155deg,rgba(34,52,76,.92),rgba(34,43,65,.78));
+   -webkit-backdrop-filter:blur(22px);backdrop-filter:blur(22px);
+   box-shadow:0 11px 30px rgba(6,15,28,.12);
+ }
+ body:not(.aurora-on) .sp-settings-navigation-title{
+   color:#bbd0de;font-size:10px;font-weight:800;letter-spacing:.14em;
+   margin:8px 12px 11px;
+ }
+ body:not(.aurora-on) .sp-settings-nav-btn{
+   width:100%;min-width:0;text-align:left;display:grid;gap:3px;
+   padding:12px 13px;border:1px solid transparent;border-radius:11px;
+   color:#e2ebf4;background:transparent;line-height:1.35;
+   transition:background .16s,border-color .16s,transform .16s;
+ }
+ body:not(.aurora-on) .sp-settings-nav-btn span{font-size:13px;font-weight:700;letter-spacing:-.1px}
+ body:not(.aurora-on) .sp-settings-nav-btn small{font-size:10px;color:#bacbd7;line-height:1.5}
+ body:not(.aurora-on) .sp-settings-nav-btn:hover{background:rgba(239,248,255,.1);border-color:rgba(255,255,255,.10)}
+ body:not(.aurora-on) .sp-settings-nav-btn.is-active{
+   background:linear-gradient(125deg,rgba(217,234,245,.22),rgba(176,208,233,.13));
+   border-color:rgba(238,248,255,.33);box-shadow:inset 3px 0 0 #d3edfb;
+   color:#fff;
+ }
+ body:not(.aurora-on) .sp-settings-nav-btn.is-active small{color:#deebf5}
+ body:not(.aurora-on) .sp-settings-panel{width:100%;min-width:0;min-height:330px}
+ body:not(.aurora-on) .sp-settings-panel>.settingscard,
+ body:not(.aurora-on) .sp-settings-general-grid .settingscard{
+   width:100%!important;max-width:none!important;min-width:0!important;
+   margin:0!important;
+ }
+ body:not(.aurora-on) .sp-settings-panel>.settingscard{max-width:920px!important}
+ body:not(.aurora-on) .sp-settings-general-grid{
+   display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:start;
+ }
+ body:not(.aurora-on) .sp-settings-general-grid>div{
+   display:flex;flex-direction:column;gap:20px;min-width:0;
+ }
+ body:not(.aurora-on) .sp-settings-page .settingscard{
+   padding:clamp(22px,2vw,31px)!important;
+ }
+ body:not(.aurora-on) .sp-settings-page .settingscard h2{
+   font-size:19px!important;font-weight:750!important;letter-spacing:-.45px!important;margin-bottom:10px;
+ }
+ body:not(.aurora-on) .sp-settings-page .settingscard>p{
+   line-height:1.65!important;font-size:12px!important;color:#dce7f0!important;
+ }
+ body:not(.aurora-on) .sp-settings-page .settingscard .field{
+   margin-bottom:16px!important;min-width:0;
+ }
+ body:not(.aurora-on) .sp-settings-page .settingscard .twofields{
+   gap:16px!important;
+ }
+ body:not(.aurora-on) .sp-settings-page .settingscard form input,
+ body:not(.aurora-on) .sp-settings-page .settingscard form select,
+ body:not(.aurora-on) .sp-settings-page .settingscard .field select{
+   min-height:42px!important;
+   color:#f5fbff!important;background:rgba(12,27,42,.34)!important;
+   border:1px solid rgba(220,237,247,.27)!important;border-radius:10px!important;
+ }
+ body:not(.aurora-on) .sp-settings-page .settingscard input::placeholder{
+   color:#b9c9d6!important;opacity:.86;
+ }
+ body:not(.aurora-on) .sp-settings-page .settingscard .btn{
+   max-width:100%;
+ }
+ body:not(.aurora-on) .sp-settings-page .settingscard .basic-management{
+   margin:17px 0 12px!important;
+ }
+ body:not(.aurora-on) .sp-settings-page .sp-settings-empty{
+   font-size:12px;padding:18px;border:1px dashed rgba(223,239,249,.22);
+   border-radius:12px;color:#d3e3ef!important;
+ }
+ body:not(.aurora-on) .sp-settings-page .basic-catalog{
+   max-height:520px;overflow-y:auto;
+ }
+ body:not(.aurora-on) .sp-settings-page .sp-settings-backup-feature{
+   display:flex;align-items:start;gap:14px;padding:19px;margin:19px 0 22px;
+   border:1px solid rgba(218,238,251,.23);border-radius:13px;
+   background:rgba(10,29,45,.24);
+ }
+ body:not(.aurora-on) .sp-settings-backup-icon{
+   display:grid;place-items:center;flex-shrink:0;width:29px;height:29px;
+   border:1px solid rgba(185,233,215,.32);border-radius:50%;
+   background:rgba(114,187,163,.17);color:#ddfff0;font-size:17px;
+ }
+ body:not(.aurora-on) .sp-settings-backup-feature strong{
+   display:block;color:#fff;font-size:13px;margin:0 0 5px;
+ }
+ body:not(.aurora-on) .sp-settings-backup-feature small{
+   color:#d2e2ed;font-size:12px;line-height:1.6;display:block;
+ }
+ /* Henrri : remplacer les tuiles claires qui rendaient les montants blancs illisibles. */
+ body:not(.aurora-on) .sp-settings-page .sp-henrri-settings .sp-henrri-totals{
+   gap:14px;margin:20px 0;
+ }
+ body:not(.aurora-on) .sp-settings-page .sp-henrri-settings .sp-henrri-totals>div{
+   padding:20px 23px!important;border-radius:14px!important;
+   border:1px solid rgba(218,240,250,.29)!important;
+   background:linear-gradient(135deg,rgba(13,32,49,.62),rgba(23,47,67,.42))!important;
+ }
+ body:not(.aurora-on) .sp-settings-page .sp-henrri-settings .sp-henrri-totals small{
+   color:#c8dfeb!important;font-size:12px!important;
+ }
+ body:not(.aurora-on) .sp-settings-page .sp-henrri-settings .sp-henrri-totals strong{
+   color:#fff!important;font-size:clamp(25px,2.8vw,34px)!important;
+   font-variant-numeric:tabular-nums;letter-spacing:-.8px!important;
+ }
+ body:not(.aurora-on) .sp-settings-page .sp-henrri-settings .sp-henrri-status{
+   background:#e1f4ee!important;color:#1e5549!important;
+ }
+ body:not(.aurora-on) .sp-settings-page .sp-henrri-settings code{
+   display:inline-block;max-width:100%;overflow-wrap:anywhere;
+   color:#dceefb!important;background:rgba(10,26,38,.58)!important;
+   border:1px solid rgba(213,235,247,.18);font-size:11px!important;
+   padding:3px 7px;border-radius:6px;
+ }
+ body:not(.aurora-on) .sp-settings-page .sp-henrri-settings details{
+   padding:14px 0;margin:16px 0;border-top:1px solid rgba(226,242,250,.19);
+ }
+ body:not(.aurora-on) .sp-settings-page .sp-henrri-settings summary{
+   color:#ebf6fe!important;font-size:12px;font-weight:700;cursor:pointer;
+   padding:3px 0;
+ }
+ body:not(.aurora-on) .sp-settings-page .sp-henrri-settings .sp-henrri-rows{
+   border:1px solid rgba(231,245,255,.24)!important;
+   background:rgba(9,24,39,.42)!important;border-radius:11px;
+ }
+ body:not(.aurora-on) .sp-settings-page .sp-henrri-rows th,
+ body:not(.aurora-on) .sp-settings-page .sp-henrri-rows td{
+   color:#f1f8fd!important;border-bottom:1px solid rgba(222,240,250,.13)!important;
+ }
+ body:not(.aurora-on) .sp-settings-page .sp-henrri-rows th{
+   color:#cfdfeb!important;background:rgba(8,23,37,.32)!important;
+ }
+ body:not(.aurora-on) .sp-settings-page .sp-henrri-unknown{
+   color:#ffe5b7!important;
+ }
+}
+@media screen and (min-width:861px) and (max-width:1200px){
+ body:not(.aurora-on) .sp-settings-page>.settings-board.sp-settings-board{
+   grid-template-columns:185px minmax(0,1fr)!important;gap:17px!important;
+ }
+ body:not(.aurora-on) .sp-settings-general-grid{grid-template-columns:1fr!important}
+}
+@media(prefers-reduced-motion:reduce){
+ .sp-settings-nav-btn{transition:none!important}
+}
