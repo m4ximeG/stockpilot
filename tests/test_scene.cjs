@@ -626,9 +626,10 @@ test('Synchronisation : vérifie une révision puis met à jour sans recréer le
  vm.runInNewContext(scripts[0],ctx,{filename:'static/index.html'});
  await new Promise(resolve=>setTimeout(resolve,35));
  assert.equal(changes,2,'Écran de chargement initial puis premier rendu');
- assert.equal(intervals.length,2);
-  assert.equal(intervals[1].delay,60*60*1000);
+ assert.equal(intervals.length,3);
  assert.equal(intervals[0].delay,1200);
+ assert.equal(intervals[1].delay,5000);
+ assert.equal(intervals[2].delay,60*60*1000);
  assert.match(app.markup,/Stock central/);
 
  // L'utilisateur navigue et commence une saisie : celle-ci ne doit pas disparaître.
