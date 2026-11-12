@@ -179,29 +179,48 @@ function stockProductModal(c){
   alertEditor+'</div><footer class="modal-foot"><button type="button" class="btn" data-action="closemodal">Fermer</button></footer></div></div>';
 }
 function history(c){
- const ev=[...c.db.events].filter(x=>x.type==='in'||x.type==='out').sort((a,b)=>b.at-a.at);
- const desktop=c.heading('TRAÇABILITÉ','Historique des mouvements','Toutes les entrées et sorties, avec la date et l’opérateur.',c.btn('Exporter le journal','exporthistory','arrow',''))+
- '<section class="card basic-table-card"><div class="table-wrap"><table class="slim-table basic-table"><thead><tr><th>Date</th><th>Mouvement</th><th>Produit</th><th>Identifiant</th><th>Opérateur</th><th>Destination / motif</th></tr></thead><tbody>'+ (ev.length?ev.map(e=>'<tr><td>'+stamp(e.at)+'</td><td><span class="pill '+(e.type==='in'?'green':'red')+'">'+(e.type==='in'?'Entrée':'Sortie')+'</span></td><td>'+escape(name(c.product(e.pid)))+'</td><td class="basic-id">'+escape(e.itemId)+'</td><td>'+escape(e.actor)+'</td><td>'+escape(e.type==='out'?(e.destination?({client:'Client',chantier:'Chantier',technicien:'Technicien',preparation:'Préparation',autre:'Autre',inventaire:'Inventaire physique'}[e.destination]||e.destination):'Ancienne sortie')+(e.target?' · '+e.target:''):'—')+'</td></tr>').join(''):'<tr><td colspan="6" class="basic-table-empty">Aucune entrée ni sortie enregistrée.</td></tr>')+'</tbody></table></div></section>';
+ const ev=[...c.db.events].filter(x=>['in','out','correction'].includes(x.type))
+  .sort((a,b)=>Number(String(b.id).slice(1))-Number(String(a.id).slice(1)));
+ const lastByItem=new Map();
+ for(const e of ev){if(!lastByItem.has(e.itemId))lastByItem.set(e.itemId,e.id);}
+ const canCorrect=e=>c.me?.role==='admin'&&['in','out'].includes(e.type)&&
+    !e.corrected&&e.destination!=='inventaire'&&lastByItem.get(e.itemId)===e.id;
+ const titles={in:'Entrée',out:'Sortie',correction:'Correction'};
+ const destination=e=>e.type==='out'
+   ?(e.destination?({client:'Client',chantier:'Chantier',technicien:'Technicien',preparation:'Préparation PC',autre:'Autre',inventaire:'Inventaire physique'}[e.destination]||e.destination):'Ancienne sortie')+(e.target?' · '+e.target:'')
+   :e.type==='correction'?(e.detail||'Correction validée'): '—';
+ const status=e=>e.corrected?'<span class="sp-mv-cancelled">Annulé par correction</span>':'';
+ const action=e=>canCorrect(e)?'<button type="button" class="btn sp-mv-correct" data-action="correctmovement" data-id="'+escape(e.id)+'" aria-label="Corriger le mouvement '+escape(e.id)+'">Corriger</button>':'';
+ const desktop=c.heading('TRAÇABILITÉ','Historique des mouvements',
+  'Chaque entrée, sortie et correction conserve sa date et son auteur.',c.btn('Exporter le journal','exporthistory','arrow',''))+
+  '<section class="card basic-table-card sp-mv-history-card"><div class="table-wrap"><table class="slim-table basic-table sp-mv-history-table"><thead><tr><th>Date</th><th>Mouvement</th><th>Produit</th><th>Identifiant</th><th>Opérateur</th><th>Destination / motif</th>'+(c.me?.role==='admin'?'<th>Action</th>':'')+'</tr></thead><tbody>'+
+  (ev.length?ev.map(e=>'<tr class="'+(e.corrected?'sp-mv-corrected-row':'')+'"><td>'+stamp(e.at)+'</td><td><span class="pill '+(e.type==='in'?'green':e.type==='out'?'red':'sp-mv-neutral')+'">'+titles[e.type]+'</span>'+status(e)+'</td><td>'+escape(name(c.product(e.pid)))+'</td><td class="basic-id">'+escape(e.itemId)+'</td><td>'+escape(e.actor)+'</td><td class="sp-mv-motif">'+escape(destination(e))+(e.correctionOf?'<small>Réf. '+escape(e.correctionOf)+'</small>':'')+(e.batchId?'<small>Lot '+escape(e.batchId)+'</small>':'')+'</td>'+(c.me?.role==='admin'?'<td>'+action(e)+'</td>':'')+'</tr>').join('')
+  :'<tr><td colspan="'+(c.me?.role==='admin'?7:6)+'" class="basic-table-empty">Aucun mouvement enregistré.</td></tr>')+
+  '</tbody></table></div></section>';
  let lastDay='';
  const mobile=ev.length?ev.map(e=>{
-  const date=new Date(e.at);
-  const day=date.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  const time=date.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
-  const label=e.type==='in'?'Entrée':'Sortie';
-  let header='';
-  if(day!==lastDay){lastDay=day;header='<h2 class="sp-mh-day">'+escape(day)+'</h2>'}
-  return header+'<article class="sp-mh-event sp-mh-'+escape(e.type)+'">'+
-   '<span class="sp-mh-track" aria-hidden="true"></span>'+
-   '<div class="sp-mh-main"><div class="sp-mh-top"><strong>'+escape(name(c.product(e.pid)))+'</strong>'+
-   '<span class="sp-mh-action '+(e.type==='in'?'sp-mh-in':'sp-mh-out')+'">'+label+'</span></div>'+
-   '<div class="sp-mh-details"><code>'+escape(e.itemId)+'</code><span>'+escape(time)+'</span>'+
-   '<span class="sp-mh-actor">'+escape(e.actor||'—')+'</span>'+(e.type==='out'&&e.destination?'<span class="sp-mh-destination">'+escape(e.destination)+' · '+escape(e.target||'')+'</span>':'')+'</div></div></article>';
+   const date=new Date(e.at);
+   const day=date.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+   const time=date.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+   let header='';
+   if(day!==lastDay){lastDay=day;header='<h2 class="sp-mh-day">'+escape(day)+'</h2>';}
+   return header+'<article class="sp-mh-event sp-mh-'+escape(e.type)+'">'+
+    '<span class="sp-mh-track" aria-hidden="true"></span>'+
+    '<div class="sp-mh-main"><div class="sp-mh-top"><strong>'+escape(name(c.product(e.pid)))+'</strong>'+
+    '<span class="sp-mh-action '+(e.type==='in'?'sp-mh-in':e.type==='out'?'sp-mh-out':'sp-mv-neutral')+'">'+titles[e.type]+'</span></div>'+
+    '<div class="sp-mh-details"><code>'+escape(e.itemId)+'</code><span>'+escape(time)+'</span>'+
+    '<span class="sp-mh-actor">'+escape(e.actor||'—')+'</span>'+
+    (e.type==='out'&&e.destination?'<span class="sp-mh-destination">'+escape(destination(e))+'</span>':'')+
+    (e.type==='correction'?'<span class="sp-mh-destination">'+escape(destination(e))+'</span>':'')+
+    (e.corrected?'<span class="sp-mv-cancelled">Annulé par correction</span>':'')+
+    '</div>'+(canCorrect(e)?'<button type="button" class="btn sp-mv-correct" data-action="correctmovement" data-id="'+escape(e.id)+'">Corriger ce mouvement</button>':'')+
+    '</div></article>';
  }).join(''):'<p class="sp-mh-empty">Aucun mouvement enregistré pour le moment.</p>';
  return '<div class="sp-history-page">'+desktop+
-  '<header class="sp-mobile-pagehead"><span>ACTIVITÉ</span><h1>Historique</h1></header>'+
-  '<section class="sp-mobile-history" aria-label="Journal des mouvements">'+
-  '<div class="sp-mh-summary"><strong>'+ev.length+'</strong> mouvement'+(ev.length>1?'s':'')+' enregistré'+(ev.length>1?'s':'')+'</div>'+
-  '<div class="sp-mh-list">'+mobile+'</div></section></div>';
+   '<header class="sp-mobile-pagehead"><span>ACTIVITÉ</span><h1>Historique</h1></header>'+
+   '<section class="sp-mobile-history" aria-label="Journal des mouvements">'+
+   '<div class="sp-mh-summary"><strong>'+ev.length+'</strong> mouvement'+(ev.length>1?'s':'')+' enregistré'+(ev.length>1?'s':'')+'</div>'+
+   '<div class="sp-mh-list">'+mobile+'</div></section></div>';
 }
 const SETTINGS_SECTIONS=['general','catalog','henrri','team','backups'];
 let settingsActiveTab='general';
@@ -275,11 +294,24 @@ function settings(c){
   mobileSettings+'</div>';
 }
 function exit(c){
- const i=c.scanResult&&c.itemById(c.scanResult.id),p=i&&c.product(i.pid);
- const card=i?'<div class="productpick"><div class="prodicon">'+c.ico(p?.kind||'package',25)+'</div><div><strong>'+escape(name(p))+'</strong><small>'+escape(i.id)+' · '+escape(p?.ref||'')+'</small></div></div><div class="basic-scanned"><div><span>Numéro de série</span><strong>'+escape(i.serial||'Non renseigné')+'</strong></div><div><span>État</span><strong>'+escape(i.condition||'Neuf')+'</strong></div></div><button class="btn negative full" data-action="confirmout" data-id="'+escape(i.id)+'">'+c.ico('out',18)+' Confirmer la sortie du stock</button>':'<div class="basic-scan-empty">'+c.ico('package',34)+'<p>Aucun article scanné pour le moment.</p></div>';
- return c.heading('SORTIE DU STOCK','Scanner une étiquette','Scannez le code-barres ou le QR code d’un article pour le retirer de l’inventaire.')+
- '<div class="flowgrid"><section class="card formcard"><h2>Scanner un article</h2><p class="intro">Utilisez une douchette USB/Bluetooth, votre caméra ou saisissez l’identifiant manuellement.</p><div class="scan-panel" id="scan-panel">'+c.ico('barcode',55)+'<strong>Prêt pour un scan</strong><p>Exemple : STK-000001</p></div><div class="basic-scan-buttons"><button class="btn" data-action="camera">'+c.ico('camera',17)+' Activer la caméra</button></div><label for="scan-code">Identifiant du produit</label><div class="scan-input"><input id="scan-code" placeholder="STK-000001" autocomplete="off"><button class="btn primary" data-action="lookup">Rechercher</button></div></section>'+
- '<section class="card formcard"><h2>Produit identifié</h2><p class="intro">Vérifiez le produit avant de confirmer la sortie.</p><div class="sp-scan-result">'+card+'</div><div class="basic-manual-list"><h3>Derniers articles en stock</h3>'+c.db.items.slice(-7).reverse().map(i=>'<button type="button" data-action="selectscan" data-id="'+escape(i.id)+'"><span>'+escape(name(c.product(i.pid)))+'</span><strong>'+escape(i.id)+'</strong></button>').join('')+'</div></section></div>';
+ const selected=(c.exitBasket||[]).map(id=>c.itemById(id)).filter(Boolean);
+ const queue=selected.map((i,j)=>{
+   const p=c.product(i.pid);
+   return '<div class="sp-exit-basket-item"><span class="sp-exit-basket-num">'+(j+1)+'</span><div class="sp-exit-basket-info"><strong>'+escape(name(p))+'</strong><small>'+escape(i.id)+(i.serial?' · N° série '+escape(i.serial):'')+'</small></div><button type="button" class="sp-exit-remove" data-action="exitbasketremove" data-id="'+escape(i.id)+'" aria-label="Retirer '+escape(i.id)+' du lot">×</button></div>';
+ }).join('');
+ return c.heading('SORTIE DU STOCK','Scanner une étiquette','Scannez plusieurs articles puis enregistrez leur destination en une seule opération.')+
+ '<div class="flowgrid sp-exit-grid">'+
+ '<section class="card formcard sp-exit-scanner"><h2>Scanner les articles</h2>'+
+ '<p class="intro">Chaque scan ajoute un article à la sélection. Les doublons sont ignorés.</p>'+
+ '<div class="scan-panel" id="scan-panel">'+c.ico('barcode',55)+'<strong>Prêt pour un scan</strong><p>Exemple : STK-000001</p></div>'+
+ '<div class="basic-scan-buttons"><button type="button" class="btn" data-action="camera">'+c.ico('camera',17)+' Activer la caméra</button></div>'+
+ '<label for="scan-code">Identifiant du produit</label><div class="scan-input"><input id="scan-code" placeholder="STK-000001" autocomplete="off" aria-label="Identifiant du code-barres"><button type="button" class="btn primary" data-action="lookup">Ajouter</button></div>'+
+ '<div class="basic-manual-list"><h3>Derniers articles en stock</h3>'+c.db.items.slice(-7).reverse().map(i=>'<button type="button" data-action="selectscan" data-id="'+escape(i.id)+'"><span>'+escape(name(c.product(i.pid)))+'</span><strong>'+escape(i.id)+'</strong></button>').join('')+'</div>'+
+ '</section>'+
+ '<section class="card formcard sp-exit-cart" id="sp-exit-cart"><div class="sp-exit-cart-head"><div><h2>Articles sélectionnés</h2><p class="intro">Une seule destination pour tout le lot.</p></div><span class="sp-exit-count">'+selected.length+'/50</span></div>'+
+ (selected.length?'<div class="sp-exit-basket">'+queue+'</div>':'<div class="sp-exit-empty">'+c.ico('package',32)+'<p>Aucun article sélectionné.</p><small>Scannez le premier article pour commencer.</small></div>')+
+ '<div class="sp-exit-cart-footer"><button type="button" class="btn sp-exit-clear" data-action="exitbasketclear" '+(!selected.length?'disabled':'')+'>Vider la sélection</button>'+
+ '<button type="button" class="btn primary" data-action="confirmbatchout" '+(!selected.length?'disabled':'')+'>Valider '+selected.length+' sortie'+(selected.length>1?'s':'')+'</button></div></section></div>';
 }
 function detailModal(c){
  const i=c.itemById(c.modal?.id);if(!i)return '';
