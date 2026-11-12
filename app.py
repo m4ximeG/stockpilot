@@ -1205,37 +1205,8 @@ def update_shelf(slot):
 @app.post('/api/admin/clear-stock')
 @protected(admin=True)
 def clear_stock():
-    """Destructive demo-to-real transition with explicit confirmation and server-side SQL backup."""
-    data = request.get_json(silent=True)
-    if not isinstance(data,dict) or data.get('confirmation') != 'VIDER LE STOCK':
-        return bad('Saisissez exactement VIDER LE STOCK pour confirmer.', 400)
-    db = g.db
-    backup_dir = DATA_DIR / 'backups'
-    backup_dir.mkdir(parents=True, exist_ok=True)
-    backup_path = backup_dir / ('stockpilot-avant-vidage-' + datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S') + '-' + secrets.token_hex(4) + '.sqlite3')
-    # Backup SQLite cohérente, y compris quand le journal WAL est actif.
-    backup_connection = sqlite3.connect(str(backup_path))
-    try:
-        db.backup(backup_connection)
-    except Exception:
-        backup_connection.close()
-        backup_path.unlink(missing_ok=True)
-        raise
-    finally:
-        backup_connection.close()
-    try:
-        db.execute('BEGIN IMMEDIATE')
-        db.execute('DELETE FROM stocktake_unknown')
-        db.execute('DELETE FROM stocktake_expected')
-        db.execute('DELETE FROM stocktakes')
-        db.execute('DELETE FROM events')
-        db.execute('DELETE FROM items')
-        db.execute('DELETE FROM products')
-        db.commit()
-    except Exception:
-        db.rollback()
-        return bad('Le nettoyage a échoué ; une sauvegarde a été conservée.', 500)
-    return jsonify(ok=True, cleared=True, message='Stock, références et historique vidés. Comptes, règles de rangement et niveaux conservés.')
+    """Ancien endpoint neutralisé : impossible de vider le stock en production."""
+    return bad('Le vidage total du stock est définitivement désactivé.', 410)
 
 
 @app.post('/api/products')
@@ -1407,7 +1378,8 @@ def download_backup():
 @protected(admin=True)
 def list_managed_backups():
     result = jsonify(backups=backup_service.list_backups(DATA_DIR),
-                     retentionDays=backup_service.BACKUP_KEEP_DAYS)
+                     retentionDays=backup_service.BACKUP_KEEP_DAYS,
+                     external=backup_service.external_status(DATA_DIR, os.environ.get('STOCKPILOT_EXTERNAL_BACKUP_DIR', '').strip()))
     result.headers['Cache-Control'] = 'private, no-store'
     return result
 
@@ -1431,6 +1403,20 @@ def download_managed_backup(name):
     response.headers['Cache-Control'] = 'private, no-store'
     response.headers['X-Content-Type-Options'] = 'nosniff'
     return response
+
+
+@app.post('/api/admin/backups/verify-external')
+@protected(admin=True)
+def verify_external_backup():
+    """Restauration de test hors production : aucune modification du stock."""
+    try:
+        result = backup_service.verify_latest_external(
+            DATA_DIR, os.environ.get('STOCKPILOT_EXTERNAL_BACKUP_DIR', '').strip()
+        )
+        return jsonify(result)
+    except (OSError, ValueError, sqlite3.DatabaseError) as exc:
+        app.logger.warning('Échec de la vérification de la sauvegarde externe : %s', exc)
+        return bad("La restauration de test a échoué. Vérifiez le stockage externe et les journaux.", 503)
 
 
 @app.post('/api/admin/backups/<name>/restore')

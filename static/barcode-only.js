@@ -228,7 +228,6 @@ function settings(c){
   '<option value="57x32"'+(labelSize==='57x32'?' selected':'')+'>57 × 32 mm · DYMO 11354</option></select></div>'+
   '<p>Pour imprimer depuis le PC relié à la DYMO : papier du même format, échelle 100 %, marges à zéro, sans ajustement automatique.</p></section>';
  const installCard='<section class="card settingscard sp-mobile-install"><h2>Application mobile</h2><p>Installez StockPilot sur votre téléphone : les comptes, le stock et le scanner restent reliés au même serveur.</p><button class="btn primary" type="button" data-action="installapp">Installer StockPilot</button><p class="sp-install-steps"><strong>iPhone :</strong> ouvrez le site dans Safari, touchez Partager puis « Sur l’écran d’accueil ».<br><strong>Android :</strong> ouvrez le site dans Chrome, menu ⋮ puis « Installer l’application ».</p></section>';
- const cleanup='<section class="card settingscard basic-danger"><h2>Réinitialisation du stock</h2><p>Cette action efface l’inventaire, le catalogue et l’historique. Une sauvegarde est créée avant toute suppression. Ne l’utilisez pas pour simplement retirer un produit.</p><button type="button" class="btn negative" data-action="clearstock">Vider totalement le stock</button></section>';
  const mobileSettings='<section class="sp-mobile-settings" aria-label="Paramètres de l’application mobile">'+
   '<header class="sp-mobile-pagehead"><span>MON ESPACE</span><h1>Paramètres</h1></header>'+
   '<div class="sp-ms-card sp-ms-profile"><div class="sp-ms-avatar" aria-hidden="true">'+escape(c.me.username.slice(0,2).toUpperCase())+'</div>'+
@@ -246,7 +245,7 @@ function settings(c){
   '</section>';
  return '<div class="sp-settings-page">'+c.heading('PARAMÈTRES','Configuration','Gérez les références, les utilisateurs et les accès au stock.')+
   '<div class="settings-board"><div class="settings-column">'+userCard+labelCard+installCard+(c.me.role==='admin'?henrriCard+access:'')+
-  '</div>'+(c.me.role==='admin'?'<div class="settings-column">'+catalog+cleanup+'</div>':'')+'</div>'+
+  '</div>'+(c.me.role==='admin'?'<div class="settings-column">'+catalog+'</div>':'')+'</div>'+
   mobileSettings+'</div>';
 }
 function exit(c){

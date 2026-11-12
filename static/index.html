@@ -303,6 +303,12 @@ function renderModal(){
  if(modal.type==='users')return '<div class="overlay" data-action="backdrop"><div class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Comptes utilisateurs</h2><button class="closebtn" data-action="closemodal">×</button></div><div class="modal-body">'+(users.map(u=>'<div class="ruleitem"><div><strong>'+esc(u.username)+'</strong><small>'+(u.role==='admin'?'Administrateur':'Employé')+' · '+(u.enabled?'Actif':'Désactivé')+'</small></div><button class="btn" data-action="toggleuser" data-id="'+u.id+'" '+(u.id===me.id?'disabled':'')+'>'+(u.enabled?'Désactiver':'Activer')+'</button></div>').join('')||'Aucun compte')+'</div><div class="modal-foot"><button class="btn" data-action="closemodal">Fermer</button></div></div></div>';
  if(modal.type==='backups'){
   const items=modal.items||[];
+  const external=modal.external||{configured:false,status:'not_configured'};
+  const externalLabel=external.status==='ok'?'Copie externe vérifiée : '+esc(external.lastBackupName||'') :
+   external.status==='error'?'Copie externe en erreur : '+esc(external.error||'Consultez le serveur.') :
+   external.status==='pending'?'Copie externe configurée, première sauvegarde en attente.' :
+   'Copie externe non configurée (à activer sur le serveur du travail).';
+  const externalWarning=external.status==='ok'&&external.sameFilesystem?' ⚠️ Ce dossier paraît sur le même système de fichiers : utilisez un deuxième NAS/disque réel.':'';
   const rows=items.map(item=>{
    const date=new Date(item.createdAt).toLocaleString('fr-FR',{dateStyle:'medium',timeStyle:'short'});
    const size=(item.size/1048576).toFixed(1).replace('.',',')+' Mo';
@@ -318,7 +324,8 @@ function renderModal(){
    '<div class="modal-body"><p class="sp-backup-intro">Sauvegarde automatique quotidienne, 30 dernières conservées sur le volume de données.</p>'+
    '<button type="button" class="btn primary" data-action="createbackup">Créer une sauvegarde maintenant</button>'+
    '<div class="sp-backup-list">'+rows+'</div>'+
-   '<p class="sp-backup-note">Les sauvegardes sont sur ce serveur : une copie hors du NAS reste conseillée en cas de panne du disque.</p></div>'+
+   '<p class="sp-backup-note">'+externalLabel+externalWarning+'</p>'+ 
+   (external.configured?'<button class="btn" type="button" data-action="verifyexternal">Tester la restauration de la copie externe</button>':'')+'</div>'+
    '<div class="modal-foot"><button class="btn" data-action="closemodal">Fermer</button></div></div></div>';
  }
  if(modal.type==='backuprestore'){
@@ -335,7 +342,7 @@ function renderModal(){
    '<button class="btn negative" data-action="restorebackup" data-name="'+label+'">Restaurer cette sauvegarde</button>'+
    '</div></div></div>';
  }
- if(modal.type==='clearstock')return '<div class="overlay" data-action="backdrop"><div class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Vider totalement le stock ?</h2><button class="closebtn" data-action="closemodal">×</button></div><div class="modal-body"><p>Attention : cette opération supprime tous les articles, références et mouvements, y compris les vrais. Une sauvegarde de la base est créée avant suppression sur le NAS.</p><div class="field"><label for="clear-confirm">Écrire VIDER LE STOCK pour confirmer</label><input id="clear-confirm" autocomplete="off" placeholder="VIDER LE STOCK"></div></div><div class="modal-foot"><button class="btn" data-action="closemodal">Annuler</button><button class="btn negative" data-action="doclearstock">Vider le stock</button></div></div></div>';
+
  return '';
 }
 
@@ -737,7 +744,7 @@ async function togglePushSubscription(button){
 }
 function searchGlobal(v){searchTerm=v;page='products';tableFilter=v;renderApp();const f=$('#filter-products');if(f){f.focus();f.setSelectionRange(f.value.length,f.value.length)}}
 // Global delegated controls
-window.addEventListener('click',ev=>{if(SPV3.onClick(ev,{db,api,refreshState,renderContent,toast,printLabel,printBatchLabels,page,setSlot}))return;const n=ev.target.closest('[data-nav]');if(n){nav(n.dataset.nav);return}const slot=ev.target.closest('[data-slot]');if(slot){setSlot(slot.dataset.slot);return}const a=ev.target.closest('[data-action]');if(!a)return;const act=a.dataset.action,id=a.dataset.id;if(act==='backdrop'){if(ev.target===a)closeModal();return}switch(act){case'save-shelf':(async()=>{if(me.role!=='admin')return;const slot=a.dataset.slot;try{await api('/api/shelves/'+encodeURIComponent(slot),'PATCH',{size:$('#shelf-size')?.value||'unknown',note:$('#shelf-note')?.value||''});await refreshState(true);renderContent();toast('Niveau '+slot+' mis à jour')}catch(e){toast(e.message,true)}})();break;case'clearstock':openModal({type:'clearstock'});break;case'doclearstock':(async()=>{if($('#clear-confirm')?.value!=='VIDER LE STOCK')return toast('Confirmation incorrecte',true);try{await api('/api/admin/clear-stock','POST',{confirmation:'VIDER LE STOCK'});lastAdded=null;scanResult=null;modal=null;selectedProduct=null;await refreshState(true);nav('dashboard');toast('Stock vidé. Sauvegarde créée sur le NAS.')}catch(e){toast(e.message,true)}})();break;case'save-rule':(async()=>{if(me.role!=='admin')return;const slot=$('#rule-'+id)?.value??'';try{await api('/api/products/'+encodeURIComponent(id),'PATCH',{preferred_slot:slot});await refreshState(true);renderContent();toast(slot?'Emplacement conseillé enregistré':'Suggestion de rangement effacée')}catch(e){toast(e.message,true)}})();break;case'setlocationmode':(async()=>{if(me.role!=='admin')return;try{const mode=a.dataset.mode;await api('/api/settings/location-mode','POST',{mode});locationMode=mode;await refreshState(true);renderApp();toast('Mode de rangement mis à jour')}catch(e){toast(e.message,true)}})();break;case'mobilemore':toggleMobileMore();break;case'closemobilemore':toggleMobileMore(false);break;case'menu':mobileNav=true;renderApp();break;case'closemenu':mobileNav=false;renderApp();break;case'newentry':goEntry();break;case'goexit':goExit();break;case'gomap':nav('map');break;case'saveentry':recordEntry();break;case'print':printLabel(id);break;case'lookup':lookup($('#scan-code')?.value);break;case'stockfilter':tableStockFilter=['all','low','in'].includes(a.dataset.status)?a.dataset.status:'all';renderContent();break;
+window.addEventListener('click',ev=>{if(SPV3.onClick(ev,{db,api,refreshState,renderContent,toast,printLabel,printBatchLabels,page,setSlot}))return;const n=ev.target.closest('[data-nav]');if(n){nav(n.dataset.nav);return}const slot=ev.target.closest('[data-slot]');if(slot){setSlot(slot.dataset.slot);return}const a=ev.target.closest('[data-action]');if(!a)return;const act=a.dataset.action,id=a.dataset.id;if(act==='backdrop'){if(ev.target===a)closeModal();return}switch(act){case'save-shelf':(async()=>{if(me.role!=='admin')return;const slot=a.dataset.slot;try{await api('/api/shelves/'+encodeURIComponent(slot),'PATCH',{size:$('#shelf-size')?.value||'unknown',note:$('#shelf-note')?.value||''});await refreshState(true);renderContent();toast('Niveau '+slot+' mis à jour')}catch(e){toast(e.message,true)}})();break;case'save-rule':(async()=>{if(me.role!=='admin')return;const slot=$('#rule-'+id)?.value??'';try{await api('/api/products/'+encodeURIComponent(id),'PATCH',{preferred_slot:slot});await refreshState(true);renderContent();toast(slot?'Emplacement conseillé enregistré':'Suggestion de rangement effacée')}catch(e){toast(e.message,true)}})();break;case'setlocationmode':(async()=>{if(me.role!=='admin')return;try{const mode=a.dataset.mode;await api('/api/settings/location-mode','POST',{mode});locationMode=mode;await refreshState(true);renderApp();toast('Mode de rangement mis à jour')}catch(e){toast(e.message,true)}})();break;case'mobilemore':toggleMobileMore();break;case'closemobilemore':toggleMobileMore(false);break;case'menu':mobileNav=true;renderApp();break;case'closemenu':mobileNav=false;renderApp();break;case'newentry':goEntry();break;case'goexit':goExit();break;case'gomap':nav('map');break;case'saveentry':recordEntry();break;case'print':printLabel(id);break;case'lookup':lookup($('#scan-code')?.value);break;case'stockfilter':tableStockFilter=['all','low','in'].includes(a.dataset.status)?a.dataset.status:'all';renderContent();break;
 case'stockproduct':openModal({type:'stockproduct',id});break;case'pushsubscribe':togglePushSubscription(a);break;
 case'exportstocksummary':exportStockSummary();break;
  case'refreshhenrri':fetchHenrriValuation(true);break;
@@ -762,7 +769,7 @@ case'camera':startCamera();break;case'stocktake-start':startStocktake();break;ca
  if(me.role!=='admin')return;
  try{
   const result=await api('/api/admin/backups');
-  openModal({type:'backups',items:result.backups||[]});
+  openModal({type:'backups',items:result.backups||[],external:result.external});
  }catch(e){toast(e.message,true)}
 })();break;
 case'createbackup':(async()=>{
@@ -770,9 +777,19 @@ case'createbackup':(async()=>{
  try{
   await api('/api/admin/backups','POST',{});
   const result=await api('/api/admin/backups');
-  openModal({type:'backups',items:result.backups||[]});
+  openModal({type:'backups',items:result.backups||[],external:result.external});
   toast('Sauvegarde créée et vérifiée.');
  }catch(e){toast(e.message,true)}
+})();break;
+case'verifyexternal':(async()=>{
+ if(me.role!=='admin')return;
+ const button=a;button.disabled=true;
+ try{
+  await api('/api/admin/backups/verify-external','POST',{});
+  const result=await api('/api/admin/backups');
+  openModal({type:'backups',items:result.backups||[],external:result.external});
+  toast('Copie externe restaurable : test terminé sans toucher au stock.');
+ }catch(e){toast(e.message,true)}finally{button.disabled=false}
 })();break;
 case'confirmbackuprestore':
  if(me.role==='admin')openModal({type:'backuprestore',name:a.dataset.name});

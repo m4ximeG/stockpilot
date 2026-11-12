@@ -163,3 +163,29 @@ Dans **Entrée en stock**, sélectionner la référence locale ou Henrri comme d
 Après validation, une liste des identifiants générés est affichée avec le bouton **Imprimer les étiquettes (PDF)**. Il génère un PDF de 1 à 50 pages, chacune au format DYMO choisi (54 × 25 mm ou 57 × 32 mm), avec ses propres code-barres et QR code. La réception unitaire continue de fonctionner comme auparavant.
 
 L'intégration Henrri reste **strictement en lecture seule** : jamais de création, mise à jour ni suppression d'article, de facture ou de stock chez Henrri.
+
+
+## Préparation pour le serveur du travail (installation neuve)
+
+**Aucune migration de base nécessaire** : le NAS actuel sert aux essais ; comme l'inventaire réel n'y a pas été enregistré, ne copiez ni sa base SQLite, ni son volume Docker. Utilisez \`compose.work.yaml\` avec le volume nommé \`stockpilot_work_data\` qui sera créé VIDE sur le serveur du travail. Les comptes, numéros d'étiquettes et historiques repartent à zéro. Les variables Henrri sont à **ressaisir dans Portainer** : les identifiants ne sont pas inclus dans la base.
+
+**Sécurité** : l'interface de vidage total du stock a été retirée et \`POST /api/admin/clear-stock\` renvoie désormais HTTP 410, même pour l'administrateur. Les restaurations de sauvegarde demeurent accessibles à l'administrateur avec mot de passe et confirmation. \`STOCKPILOT_ALLOW_RESET=0\` et \`STOCKPILOT_DEV_FIXTURES=0\` restent obligatoires sur le serveur du travail pour neutraliser la réinitialisation propre aux tests.
+
+### Sauvegarde externe + vérification de restauration
+
+- **Sauvegardes locales** : une SQLite cohérente quotidienne, 30 dernières copies dans \`/data/backups/managed/\`.
+- **Copie externe automatique** : si \`STOCKPILOT_EXTERNAL_BACKUP_DIR\` est configurée, la copie du jour est transférée de façon atomique vers un répertoire distinct de \`/data\`, avec vérification SHA-256, restauration de test **dans une base temporaire**, contrôle intégral SQLite et conservation des 30 dernières copies externes. Un échec est journalisé et signalé dans les paramètres, pas ignoré.
+- **Test manuel non destructif** : **Paramètres → Sauvegardes automatiques → Tester la restauration de la copie externe**. Ce test ne touche jamais au volume de données opérationnel.
+- **Réellement indépendante** : le dossier externe doit provenir d'un **second NAS, d'un partage réseau ou d'un autre support physique**, et non d'un simple sous-dossier du même disque. Il faut préparer et monter ce partage sur l'hôte **avant** le déploiement Docker, avec droits d'écriture pour l'UID 10001. La stack refuse d'inventer silencieusement le dossier hôte s'il manque. Si le partage se déconnecte, la sauvegarde locale continue ; l'erreur de copie externe doit être corrigée avant de compter dessus.
+- **Aucun secret sauvegardé** : seule la base SQLite est copiée, pas le mot de passe administrateur en clair, les variables Henrri, les clés de session, ni les clés de notification Web Push de \`/data\`. La base contient en revanche les comptes (hachages de mots de passe) et des données métier ; réservez l'accès aux administrateurs.
+
+Installation suggérée :
+1. Monter un dossier dédié sur un autre support, ex. \`/mnt/nas-sauvegardes/stockpilot\`, vérifier qu'il persiste après redémarrage et qu'il est accessible en écriture par l'UID 10001.
+2. Copier le modèle \`.env.work.example\` dans les variables **de la stack Portainer**, sans committer les vraies valeurs. Choisir une image GHCR **versionnée par SHA** dont la construction GitHub Actions est validée, plutôt que \`latest\`.
+3. Déployer \`compose.work.yaml\` (sur un serveur propre). Le conteneur crée automatiquement sa base dans **un nouveau volume nommé** \`stockpilot_work_data\`. Ne pas monter le volume de l'ancien NAS de test.
+4. Ouvrir le site via HTTPS et contrôler la connexion Henrri, le statut de sauvegarde externe après création de la première copie, puis cliquer sur le **test de restauration non destructif**.
+5. Faire une vraie réception, imprimer une étiquette DYMO, scanner une sortie et vérifier l'historique ; seulement ensuite, supprimer l'ancien projet du NAS. Ne supprimez pas le partage de sauvegarde du serveur de travail.
+
+**Attention au reverse proxy** : \`compose.work.yaml\` publie par défaut le port 8787 sur **127.0.0.1 uniquement**. Si le proxy inverse est un conteneur séparé, adaptez les réseaux Docker ou l'adresse d'écoute de façon sécurisée ; gardez HTTPS et évitez toute exposition directe non nécessaire d'un logiciel d'inventaire d'entreprise.
+
+Le statut "copie externe vérifiée" garantit que le fichier a pu être restauré en simulation à ce moment, **pas** qu'une panne totale de l'entreprise est couverte sans un vrai test de reprise depuis l'autre NAS. Une vérification de reprise sur un hôte de secours reste conseillée avant usage critique.
