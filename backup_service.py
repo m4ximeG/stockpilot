@@ -244,6 +244,10 @@ def external_status(data_dir, directory):
         if not valid_size or metadata.get('error'):
             return {'configured': True, 'status': 'error',
                     'error': metadata.get('error') or 'Le fichier de sauvegarde externe a changé.'}
+        verified_at = metadata.get('verifiedAt')
+        if not isinstance(verified_at, int) or abs(int(time.time() * 1000) - verified_at) > 48 * 3600 * 1000:
+            return {'configured': True, 'status': 'error',
+                    'error': 'Aucune sauvegarde externe vérifiée depuis 48 heures.'}
         return {'configured': True, 'status': 'ok',
                 'lastVerifiedAt': metadata.get('verifiedAt'),
                 'lastBackupName': name,
