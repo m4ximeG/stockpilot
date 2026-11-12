@@ -308,6 +308,7 @@ function renderModal(){
    external.status==='error'?'Copie externe en erreur : '+esc(external.error||'Consultez le serveur.') :
    external.status==='pending'?'Copie externe configurée, première sauvegarde en attente.' :
    'Copie externe non configurée (à activer sur le serveur du travail).';
+  const externalWarning=external.status==='ok'&&external.sameFilesystem?' ⚠️ Ce dossier paraît sur le même système de fichiers : utilisez un deuxième NAS/disque réel.':'';
   const rows=items.map(item=>{
    const date=new Date(item.createdAt).toLocaleString('fr-FR',{dateStyle:'medium',timeStyle:'short'});
    const size=(item.size/1048576).toFixed(1).replace('.',',')+' Mo';
@@ -323,7 +324,7 @@ function renderModal(){
    '<div class="modal-body"><p class="sp-backup-intro">Sauvegarde automatique quotidienne, 30 dernières conservées sur le volume de données.</p>'+
    '<button type="button" class="btn primary" data-action="createbackup">Créer une sauvegarde maintenant</button>'+
    '<div class="sp-backup-list">'+rows+'</div>'+
-   '<p class="sp-backup-note">'+externalLabel+'</p>'+ 
+   '<p class="sp-backup-note">'+externalLabel+externalWarning+'</p>'+ 
    (external.configured?'<button class="btn" type="button" data-action="verifyexternal">Tester la restauration de la copie externe</button>':'')+'</div>'+
    '<div class="modal-foot"><button class="btn" data-action="closemodal">Fermer</button></div></div></div>';
  }
