@@ -189,3 +189,27 @@ Installation suggérée :
 **Attention au reverse proxy** : \`compose.work.yaml\` publie par défaut le port 8787 sur **127.0.0.1 uniquement**. Si le proxy inverse est un conteneur séparé, adaptez les réseaux Docker ou l'adresse d'écoute de façon sécurisée ; gardez HTTPS et évitez toute exposition directe non nécessaire d'un logiciel d'inventaire d'entreprise.
 
 Le statut "copie externe vérifiée" garantit que le fichier a pu être restauré en simulation à ce moment, **pas** qu'une panne totale de l'entreprise est couverte sans un vrai test de reprise depuis l'autre NAS. Une vérification de reprise sur un hôte de secours reste conseillée avant usage critique.
+
+
+## Sorties groupées et corrections des erreurs
+
+### Sortir jusqu'à 50 articles en une fois
+
+Dans **Scanner une sortie**, scanner les étiquettes (douchette USB/Bluetooth, saisie ou caméra iPhone) pour remplir le panier, jusqu'à 50 unités. Un même identifiant ne peut pas être ajouté deux fois. Il est possible d'enlever une ligne du panier sans toucher au stock. La caméra conserve son flux entre les scans successifs.
+
+Cliquer sur **Valider les sorties**, indiquer une **destination commune** (client, chantier, technicien, préparation PC, autre) et le **nom du destinataire ou motif**. Le serveur valide toutes les unités dans une **transaction SQLite atomique**. Si l'une a été sortie entre-temps par un collègue, aucune des unités du lot ne sera retirée. Les écritures de tous les mouvements contiennent le même identifiant de lot, le nom de l'opérateur et les informations de sortie. Les alertes de stock bas sont évaluées pour les produits concernés.
+
+### Annuler une entrée ou sortie erronée — administrateurs
+
+Dans **Historique**, l'administrateur peut cliquer sur **Corriger** à côté du dernier mouvement d'un article, puis saisir un **motif obligatoire** (8 à 240 caractères).
+
+- **Correction d'entrée** : si l'article est encore en stock et n'a pas eu d'autre mouvement, le marquer comme retiré du stock.
+- **Correction de sortie** : si l'article est toujours sorti et n'a pas eu d'autre mouvement depuis, le remettre en stock. Si un autre article actif possède déjà son numéro de série, la correction est refusée.
+- **Journal inaltérable** : le mouvement initial reste présent avec l'indication *Annulé par correction* ; un nouvel événement portant l'auteur, le motif et l'identifiant du mouvement corrigé est ajouté. Un même mouvement ne peut pas être corrigé deux fois. L'export CSV inclut les corrections et le numéro de lot.
+- **Protection multi-postes** : les conditions sont validées dans une transaction avant toute modification. Les employés ne peuvent pas corriger les mouvements. Toute correction est strictement interne à Stock Pilot et ne modifie jamais Henrri.
+
+### Dernières finitions visuelles
+
+La page des sorties affiche un panier plus compact avec compteur, suppression individuelle et bouton de validation. Les dialogues de validation et l'historique ont été harmonisés avec les cartes bleu-gris Aurora : meilleure lisibilité, zones de clic et champs adaptés aux petits écrans, réduction du débordement et respect du mode « réduire les animations ».
+
+**Préparation du serveur du travail :** la configuration d'installation neuve (\`compose.work.yaml\`) et les sauvegardes externes restent inchangées. Aucune base de test du NAS n'est nécessaire sur le serveur du travail.
