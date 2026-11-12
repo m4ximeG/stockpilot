@@ -26,7 +26,7 @@
 
 
 
-<script src="/static/barcode-only.js?v=settings-20261112-1"></script>
+<script src="/static/barcode-only.js?v=movements-20261112-1"></script>
 <script src="/static/reception.js?v=15"></script>
 <link rel="stylesheet" href="/static/barcode-only.css?v=aurora-20261102-2" />
 
@@ -40,6 +40,7 @@
 <link rel="stylesheet" href="/static/backup-ui.css?v=1" />
 <link rel="stylesheet" href="/static/henrri.css?v=2" />
 <link rel="stylesheet" href="/static/settings-ui.css?v=1" />
+<link rel="stylesheet" href="/static/movement-ui.css?v=1" />
 
 
 
@@ -70,7 +71,7 @@ const displayName=p=>p?[p.brand,p.model].filter(Boolean).join(' '):'Produit inco
 const fmtDate=ts=>new Date(ts).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});
 const fmtTime=ts=>new Date(ts).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
 function load(){return {items:[],events:[],catalog:[],shelves:[],warehousePhoto:false,counter:1}}
-let db=load(),page='dashboard',selectedSlot='A-1',selectedProduct=null,chosenSlot=null,formSerial='',formCondition='Neuf',lastAdded=null,scanResult=null,searchTerm='',tableFilter='',tableZone='all',tableType='all',tableStockFilter='all',modal=null,cameraStream=null,scanning=false,activeCameraRun=0,mobileNav=false;
+let db=load(),page='dashboard',selectedSlot='A-1',selectedProduct=null,chosenSlot=null,formSerial='',formCondition='Neuf',lastAdded=null,scanResult=null,exitBasket=[],searchTerm='',tableFilter='',tableZone='all',tableType='all',tableStockFilter='all',modal=null,cameraStream=null,scanning=false,activeCameraRun=0,mobileNav=false;
 if(/(?:^\\?|&)page=products(?:&|$)/.test(String(window.location?.search||'')))page='products';
 function save(){} // Les données sont toujours écrites par le serveur et jamais dans localStorage.
 async function api(path,method='GET',data=null){const opts={method,credentials:'same-origin',headers:{'X-Requested-With':'StockPilot'}};if(data!==null){opts.headers['Content-Type']='application/json';opts.body=JSON.stringify(data)}let r;try{r=await fetch(path,opts)}catch(e){throw new Error('Serveur inaccessible. Vérifiez le réseau.')}if(r.status===401){window.location='/login';throw new Error('Session expirée')}const contentType=r.headers.get('content-type')||'';const result=contentType.includes('json')?await r.json():{};if(!r.ok)throw new Error(result.error||'Erreur du serveur');return result}
@@ -83,6 +84,7 @@ function receiveStockSnapshot(data){
  db={items:data.items,events:data.events,catalog:data.catalog,shelves:data.shelves||[],
   warehousePhoto:!!data.warehousePhoto,counter:data.counter};
  me=data.me;allowReset=data.allowReset;locationMode=data.locationMode||'optional';
+ exitBasket=exitBasket.filter(id=>db.items.some(item=>item.id===id));
   henrriConfigured=data.henrriConfigured===true;
   if(!henrriConfigured)henrri={status:'not_configured'};
  if(typeof data.revision==='number')stockRevision=data.revision;
@@ -226,7 +228,7 @@ function nav(p){
  },2400);
 }
 function goEntry(pid=null){entryPresetPid=pid;selectedProduct=pid||selectedProduct||db.catalog[0]?.id||null;chosenSlot=null;formSerial='';formCondition='Neuf';lastAdded=null;nav('entry')}
-function goExit(id=null){scanResult=id?itemById(id)||null:null;nav('exit')}
+function goExit(id=null){scanResult=id?itemById(id)||null:null;if(id&&itemById(id))exitBasket=[id];nav('exit')}
 function layout(){document.body.classList.toggle('aurora-on',page==='dashboard');let menu=[['dashboard','Tableau de bord','dashboard-tiles'],['entry','Entrée en stock','package-plus'],['exit','Scanner une sortie','scan-out'],['products','Produits en stock','stock-boxes'],['history','Historique','history-clock'],['settings','Paramètres','settings-gear']];return `<div class="app">${mobileNav?'<div class="sidebackdrop" data-action="closemenu"></div>':''}<aside class="sidebar ${mobileNav?'open':''}"><div class="brand"><div class="brand-mark"><img class="sp-logo" src="/static/stockpilot-mark.svg?v=1" alt="StockPilot" width="44" height="44"></div><div><strong>Stock<span>Pilot</span></strong><small>Gestion du stock</small></div></div><div class="navlabel">ESPACE DE TRAVAIL</div>${menu.map(([id,label,icon])=>`<button class="navbtn ${page===id?'active':''}" data-nav="${id}" aria-label="${label}" title="${label}" ${page===id?'aria-current="page"':''}>${ico(icon,21)} <span>${label}</span>${id==='products'?`<span class="count">${db.items.length}</span>`:''}</button>`).join('')}<div class="sidebottom"><div class="sidecard"><strong><span class="green-dot"></span> Données centralisées</strong><p>Stock partagé et sauvegardé dans la base du NAS.</p></div><a href="/logout" class="sp-logout" title="Se déconnecter" aria-label="Se déconnecter">${ico('log-out',24)}<span class="sr-only">Se déconnecter</span></a><div class="sidefoot"><div class="avatar">SP</div><div><strong>${esc(me.username)}</strong><small>${me.role==='admin'?'Administrateur':'Employé'}</small></div></div></div></aside><main class="main"><div class="content" id="content">${renderPage()}</div></main><nav class="mobilebottom" aria-label="Navigation mobile">${[['dashboard','Accueil','dashboard-tiles'],['entry','Entrée','package-plus'],['exit','Scanner','scan-out'],['products','Stock','stock-boxes']].map(([id,label,icon])=>`<button type="button" data-nav="${id}" class="${page===id?'active':''}" aria-label="${label}" ${page===id?'aria-current="page"':''}>${ico(icon,21)}<span>${label}</span></button>`).join('')}<button type="button" class="${page==='history'||page==='settings'?'active':''}" data-action="mobilemore" aria-label="Plus de pages" aria-haspopup="dialog" aria-controls="sp-mobile-menu" aria-expanded="false">${ico('menu',21)}<span>Plus</span></button></nav><div id="sp-mobile-scrim" class="sp-mobile-scrim" data-action="closemobilemore" hidden></div><div id="sp-mobile-menu" class="sp-mobile-menu" role="dialog" aria-label="Autres pages StockPilot" aria-modal="true" hidden><div class="sp-mobile-menu-head"><strong>Autres pages</strong><button type="button" data-action="closemobilemore" aria-label="Fermer le menu">${ico('close',20)}</button></div><button type="button" data-nav="history">${ico('history-clock',21)}<span>Historique</span>${ico('chev',17)}</button><button type="button" data-nav="settings">${ico('settings-gear',21)}<span>Paramètres</span>${ico('chev',17)}</button><a href="/logout">${ico('log-out',21)}<span>Se déconnecter</span></a></div></div>${modal?renderModal():''}`}
 function renderPage(){const views={dashboard:renderDashboard,entry:renderEntry,exit:renderExit,products:renderProducts,history:renderHistory,settings:renderSettings};return (views[page]||views.dashboard)();}
 function heading(kicker,title,subtitle,actions=''){return `<div class="pagehead"><div><div class="eyebrow">${kicker}</div><h1>${title}</h1><p>${subtitle}</p></div>${actions?`<div class="head-actions">${actions}</div>`:''}</div>`}
@@ -280,9 +282,9 @@ function darken(hex,amount){let num=parseInt(hex.slice(1),16);let a=n=>Math.max(
 function renderEntry(){return SPV3.entry({db,me,ico,henrriConfigured});}
 function barcodeSVG(text,width=260,height=74){const dict={'0':'101001101101','1':'110100101011','2':'101100101011','3':'110110010101','4':'101001101011','5':'110100110101','6':'101100110101','7':'101001011011','8':'110100101101','9':'101100101101','A':'110101001011','B':'101101001011','C':'110110100101','D':'101011001011','E':'110101100101','F':'101101100101','G':'101010011011','H':'110101001101','I':'101101001101','J':'101011001101','K':'110101010011','L':'101101010011','M':'110110101001','N':'101011010011','O':'110101101001','P':'101101101001','Q':'101010110011','R':'110101011001','S':'101101011001','T':'101011011001','U':'110010101011','V':'100110101011','W':'110011010101','X':'100101101011','Y':'110010110101','Z':'100110110101','-':'100101011011','*':'100101101101',' ':'100110101101'};let encoded='*'+text.toUpperCase().replace(/[^A-Z0-9 -]/g,'')+'*';let bits=encoded.split('').map(c=>dict[c]).join('0');let w=bits.length+18;let rects='';for(let i=0;i<bits.length;i++)if(bits[i]==='1')rects+=`<rect x="${i+9}" y="4" width="1" height="${height-23}" fill="#111"/>`;return `<svg class="barcode" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${height}" preserveAspectRatio="none" style="height:${height}px" role="img" aria-label="Code-barres ${esc(text)}"><rect width="100%" height="100%" fill="#fff"/>${rects}<text x="${w/2}" y="${height-6}" text-anchor="middle" font-size="9" letter-spacing="1.2" font-family="monospace" fill="#111">${esc(text)}</text></svg>`}
 function renderLabel(item){const p=product(item.pid);return `<div class="label-preview"><div class="microbrand">${ico('layers',14)} STOCKPILOT <span style="margin-left:auto;font-size:9px;color:#718198">ÉTIQUETTE PRODUIT</span></div><h3>${esc(displayName(p))}</h3><p>${esc(p?.cat)} · Réf. ${esc(p?.ref)}</p><p><strong>${esc(pretty(item.slot))}</strong></p><p>Numéro de série : ${esc(item.serial||'Non renseigné')}</p><div class="label-bottom"><img style="width:102px;height:102px;object-fit:contain;border-radius:7px" src="/api/items/${encodeURIComponent(item.id)}/qr.png" alt="QR code de l'article"><div class="label-qr">${ico('barcode',29)}<br>${esc(item.id)}<br>QR SCANNABLE</div></div></div>`}
-function renderExit(){return SPBasic.exit({db,heading,btn,ico,scanResult,itemById,product});}
+function renderExit(){return SPBasic.exit({db,heading,btn,ico,scanResult,exitBasket,itemById,product});}
 function renderProducts(){return SPBasic.inventory({db,me,heading,btn,tableFilter,tableType,tableStockFilter,product});}
-function renderHistory(){return SPBasic.history({db,heading,btn,product});}
+function renderHistory(){return SPBasic.history({db,me,heading,btn,product});}
 function renderStocktake(){return window.SPStocktake?window.SPStocktake.render({stocktake:stocktakeData,me,heading,btn,ico}):'<p>Module inventaire non chargé.</p>'}
 function renderSettingsLegacy(){return SPBasic.settings({db,me,heading});}
 function renderSettings(){return SPBasic.settings({db,me,henrri,heading,labelSize:stockPilotLabelSize()});}
@@ -294,6 +296,28 @@ function renderModal(){
  if(modal.type==='confirmout'){
   const item=itemById(modal.id);if(!item)return '';
   return '<div class="overlay" data-action="backdrop"><div class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Confirmer la sortie</h2><button class="closebtn" data-action="closemodal">×</button></div><div class="modal-body"><p>Chaque sortie doit avoir une destination précise. L’opérateur et le motif sont conservés dans l’historique.</p><div class="productpick"><div class="prodicon">'+ico('package',23)+'</div><div><strong>'+esc(displayName(product(item.pid)))+'</strong><small>'+esc(item.id)+'</small></div></div><div class="field"><label for="out-destination">Destination *</label><select id="out-destination" required><option value="">Choisir une destination</option><option value="client">Client</option><option value="chantier">Chantier</option><option value="technicien">Technicien</option><option value="preparation">Préparation PC</option><option value="autre">Autre</option></select></div><div class="field"><label for="out-target">Nom du destinataire, chantier ou motif *</label><input id="out-target" maxlength="120" autocomplete="off" placeholder="Ex. Client Dupont, chantier Centre-ville…" required></div></div><div class="modal-foot"><button class="btn" data-action="closemodal">Annuler</button><button class="btn negative" data-action="remove" data-id="'+esc(item.id)+'">Valider la sortie</button></div></div></div>';
+ }
+ if(modal.type==='confirmbatchout'){
+  const items=exitBasket.map(itemById).filter(Boolean);
+  if(!items.length)return '';
+  return '<div class="overlay" data-action="backdrop"><div class="modal sp-exit-dialog" role="dialog" aria-modal="true" aria-label="Confirmer une sortie groupée">'+
+   '<div class="modal-head"><h2>Sortie de '+items.length+' article'+(items.length>1?'s':'')+'</h2><button class="closebtn" type="button" data-action="closemodal">×</button></div>'+
+   '<div class="modal-body"><p>Une seule destination et un seul destinataire pour tout le lot. Si un article manque, aucune sortie ne sera enregistrée.</p>'+
+   '<div class="sp-exit-dialog-items">'+items.map(x=>'<div><strong>'+esc(displayName(product(x.pid)))+'</strong><small>'+esc(x.id)+'</small></div>').join('')+'</div>'+
+   '<div class="field"><label for="batch-out-destination">Destination *</label><select id="batch-out-destination" required><option value="">Choisir une destination</option><option value="client">Client</option><option value="chantier">Chantier</option><option value="technicien">Technicien</option><option value="preparation">Préparation PC</option><option value="autre">Autre</option></select></div>'+
+   '<div class="field"><label for="batch-out-target">Nom du destinataire, chantier ou motif *</label><input id="batch-out-target" maxlength="120" autocomplete="off" required placeholder="Ex. Client Dupont, intervention du 12/11"></div></div>'+
+   '<div class="modal-foot"><button type="button" class="btn" data-action="closemodal">Annuler</button><button type="button" class="btn negative" data-action="batchoutsubmit">Confirmer les '+items.length+' sorties</button></div></div></div>';
+ }
+ if(modal.type==='correctmovement'){
+  const event=db.events.find(e=>e.id===modal.id);
+  if(!event||me.role!=='admin')return '';
+  return '<div class="overlay" data-action="backdrop"><div class="modal sp-correction-dialog" role="dialog" aria-modal="true" aria-label="Corriger un mouvement">'+
+   '<div class="modal-head"><h2>Corriger une '+(event.type==='in'?'entrée':'sortie')+'</h2><button class="closebtn" type="button" data-action="closemodal">×</button></div>'+
+   '<div class="modal-body"><p>Une nouvelle ligne de correction sera créée dans l’historique. Le mouvement initial ne sera pas effacé. <strong>Henrri ne sera pas modifié.</strong></p>'+
+   '<div class="sp-correction-summary"><strong>'+esc(displayName(product(event.pid)))+'</strong><small>'+esc(event.itemId)+' · '+esc(event.actor)+' · '+new Date(event.at).toLocaleString('fr-FR')+'</small></div>'+
+   '<p>'+(event.type==='out'?'L’article sera remis en stock, sous réserve qu’aucun numéro de série identique ne soit déjà présent.':'L’article sera retiré du stock si aucun mouvement n’a eu lieu depuis cette entrée.')+'</p>'+
+   '<div class="field"><label for="correction-reason">Motif obligatoire (8 caractères minimum)</label><textarea id="correction-reason" minlength="8" maxlength="240" rows="3" placeholder="Ex. Mauvaise référence scannée lors de la préparation…" required></textarea></div></div>'+
+   '<div class="modal-foot"><button class="btn" type="button" data-action="closemodal">Annuler</button><button type="button" class="btn negative" data-action="correctmovementconfirm" data-id="'+esc(event.id)+'">Enregistrer la correction</button></div></div></div>';
  }
  if(modal.type==='stocktake-confirm'){
   const s=stocktakeData.session,mode=modal.mode||'close';
@@ -377,7 +401,7 @@ function patchLiveStockView(){
   const selectors=page==='products'?['.si-summary','.si-list','.si-footer']:
    page==='history'?['.basic-table-card .slim-table tbody',
     '.sp-mobile-history .sp-mh-summary','.sp-mobile-history .sp-mh-list']:
-   page==='exit'?['.basic-manual-list','.sp-scan-result']:
+   page==='exit'?['.basic-manual-list','#sp-exit-cart']:
     ['.basic-catalog'];
   selectors.forEach(selector=>patch(current,fresh,selector));
  }
@@ -488,14 +512,66 @@ async function finalizeStocktake(mode){
   toast(mode==='reconcile'?result.corrected+' écart(s) corrigé(s) dans Stock Pilot.':'Inventaire clôturé sans correction.');
  }catch(e){toast(e.message,true);await loadStocktake(true)}
 }
-function lookup(code){
+function lookup(code,fromCamera=false){
+ const resetScanField=()=>{
+  if(fromCamera)return;
+  const field=$('#scan-code');
+  if(field){field.value='';field.focus();}
+ };
  const id=String(code||'').trim().toUpperCase();
- if(!id)return toast('Saisissez ou scannez un identifiant',true);
+ if(!id){resetScanField();return toast('Saisissez ou scannez un identifiant',true);}
  const item=itemById(id);
- if(!item)return toast('Aucun produit en stock avec cet identifiant',true);
- scanResult=item;
- renderContent();
- toast('Produit trouvé : '+displayName(product(item.pid)));
+ if(!item){resetScanField();return toast('Aucun article en stock avec cet identifiant',true);}
+ if(exitBasket.includes(id)){
+  if(!fromCamera){resetScanField();toast('Cet article est déjà sélectionné.',true);}
+  return;
+ }
+ if(exitBasket.length>=50){resetScanField();return toast('Maximum 50 articles par sortie.',true);}
+ exitBasket.push(id);scanResult=item;
+ if(fromCamera&&scanning){
+  // Préserver le lecteur vidéo pendant les scans successifs.
+  const old=document.getElementById('sp-exit-cart');
+  if(old){
+   const wrapper=document.createElement('div');
+   wrapper.innerHTML=renderExit();
+   const fresh=wrapper.querySelector('#sp-exit-cart');
+   if(fresh)old.innerHTML=fresh.innerHTML;
+  }
+ }else{
+  renderContent();
+  // Douchette USB/Bluetooth : conserver le focus pour scanner le suivant sans clic.
+  resetScanField();
+ }
+ toast(displayName(product(item.pid))+' ajouté ('+exitBasket.length+'/50)');
+}
+async function submitBatchOut(){
+ const destination=$('#batch-out-destination')?.value||'';
+ const target=$('#batch-out-target')?.value?.trim()||'';
+ if(!exitBasket.length||!destination||!target)
+  return toast('Sélectionnez des articles et renseignez la destination.',true);
+ const button=document.querySelector('[data-action="batchoutsubmit"]');
+ if(button)button.disabled=true;
+ try{
+  const result=await api('/api/items/out/batch','POST',{ids:[...exitBasket],destination,target});
+  modal=null;exitBasket=[];scanResult=null;
+  await refreshState(true);renderApp();
+  toast(result.count+' article(s) sorti(s) et tracé(s).');
+ }catch(e){toast(e.message,true);if(button)button.disabled=false;}
+}
+async function submitMovementCorrection(id){
+ if(me.role!=='admin')return;
+ const reason=$('#correction-reason')?.value?.trim()||'';
+ if(reason.length<8)return toast('Expliquez la correction en au moins 8 caractères.',true);
+ const eventNumber=Number(String(id||'').replace(/^e/,''));
+ if(!Number.isSafeInteger(eventNumber)||eventNumber<1)return toast('Mouvement invalide.',true);
+ const button=document.querySelector('[data-action="correctmovementconfirm"]');
+ if(button)button.disabled=true;
+ try{
+  await api('/api/admin/movements/'+eventNumber+'/correct','POST',{reason});
+  modal=null;
+  await refreshState(true);renderApp();
+  toast('Correction enregistrée et conservée dans l’historique.');
+ }catch(e){toast(e.message,true);if(button)button.disabled=false;}
 }
 // Compatibilité avec les anciens boutons : aucun emplacement physique n'est enregistré.
 function setSlot(){return}
@@ -530,7 +606,7 @@ function exportStockSummary(){
  downloadCSV('stockpilot-quantites.csv',rows);
  toast('Quantités exportées');
 }
-function exportHistory(){downloadCSV('stockpilot-historique.csv',[['Date','Type','Produit','Identifiant','Opérateur','Destination','Destinataire / motif'],...db.events.filter(e=>e.type==='in'||e.type==='out').map(e=>[new Date(e.at).toLocaleString('fr-FR'),e.type==='in'?'Entrée':'Sortie',displayName(product(e.pid)),e.itemId,e.actor,e.destination||'',e.target||''])]);toast('Journal CSV téléchargé')}
+function exportHistory(){downloadCSV('stockpilot-historique.csv',[['Date','Type','Produit','Identifiant','Opérateur','Destination','Destinataire / motif','Détails / correction','Mouvement corrigé','Annulé','Lot'],...db.events.filter(e=>['in','out','correction'].includes(e.type)).map(e=>[new Date(e.at).toLocaleString('fr-FR'),e.type==='in'?'Entrée':e.type==='out'?'Sortie':'Correction',displayName(product(e.pid)),e.itemId,e.actor,e.destination||'',e.target||'',e.detail||'',e.correctionOf||'',e.corrected?'Oui':'Non',e.batchId||''])]);toast('Journal CSV téléchargé')}
 function openModal(m){modal=m;document.body.classList.toggle('si-modal-open',m?.type==='stockproduct');renderApp();
  if(m?.type==='stockproduct')document.querySelector('.si-product-modal')?.focus()}
 function closeModal(){modal=null;document.body.classList.remove('si-modal-open');renderApp()}
@@ -579,8 +655,8 @@ async function startCamera(){
     if(token!==activeCameraRun||!scanning)return;
     const id=String(decoded||'').trim().toUpperCase();
     if(!/^STK-[A-Z0-9-]+$/.test(id))return;
-    await stopCamera();
-    if(page==='exit')lookup(id);else if(page==='stocktake')scanStocktake(id);
+    if(page==='exit')lookup(id,true);
+    else if(page==='stocktake'){await stopCamera();scanStocktake(id);}
    },
    ()=>{}
   );
@@ -766,7 +842,7 @@ case'stockthreshold':(async()=>{
   toast(value?'Alerte enregistrée.':'Alerte désactivée pour ce produit.');
  }catch(e){toast(e.message,true)}
 })();break;
-case'camera':startCamera();break;case'stocktake-start':startStocktake();break;case'stocktake-scan':scanStocktake($('#stocktake-code')?.value);break;case'stocktake-confirm':openModal({type:'stocktake-confirm',mode:a.dataset.mode});break;case'stocktake-finalize':finalizeStocktake(a.dataset.mode);break;case'installapp':installMobileApp();break;case'selectscan':scanResult=itemById(id);renderContent();break;case'confirmout':case'outfrommodal':openModal({type:'confirmout',id});break;case'remove':removeItem(id);break;case'details':openModal({type:'details',id});break;case'closemodal':closeModal();break;case'entryslot':selectedProduct=db.catalog.find(p=>p.zone===a.dataset.slot[0])?.id||db.catalog[0]?.id||null;chosenSlot=a.dataset.slot;lastAdded=null;nav('entry');SPV3.selectSlot(a.dataset.slot);renderContent();break;case'zone':selectedSlot=`${a.dataset.zone}-1`;renderContent();break;case'pickslot':setSlot(a.dataset.slot);break;case'export':exportStock();break;case'exporthistory':exportHistory();break;case'clearstock':openModal({type:'clearstock'});break;case'reset':openModal({type:'reset'});break;case'doreset':(async()=>{try{await api('/api/admin/reset','POST',{});formSerial='';lastAdded=null;scanResult=null;selectedSlot='A-1';modal=null;await refreshState(true);nav('dashboard');toast('Stock fictif réinitialisé')}catch(e){toast(e.message,true)}})();break;case'movemodal':openModal({type:'move',id});break;case'confirmmove':(async()=>{try{await api('/api/items/'+encodeURIComponent(id)+'/move','POST',{slot:$('#move-slot')?.value});modal=null;await refreshState(true);renderApp();toast('Article déplacé')}catch(e){toast(e.message,true)}})();break;case'editproduct':openModal({type:'editproduct',id});break;case'listusers':(async()=>{try{users=(await api('/api/users')).users;openModal({type:'users'})}catch(e){toast(e.message,true)}})();break;case'toggleuser':(async()=>{const u=users.find(x=>String(x.id)===String(id));if(!u)return;try{await api('/api/users/'+id,'PATCH',{enabled:!u.enabled});users=(await api('/api/users')).users;openModal({type:'users'});toast('Compte mis à jour')}catch(e){toast(e.message,true)}})();break;case'managebackups':(async()=>{
+case'camera':startCamera();break;case'exitbasketremove':exitBasket=exitBasket.filter(x=>x!==id);renderContent();break;case'exitbasketclear':exitBasket=[];renderContent();break;case'confirmbatchout':if(exitBasket.length)openModal({type:'confirmbatchout'});break;case'batchoutsubmit':submitBatchOut();break;case'correctmovement':if(me.role==='admin')openModal({type:'correctmovement',id});break;case'correctmovementconfirm':submitMovementCorrection(id);break;case'stocktake-start':startStocktake();break;case'stocktake-scan':scanStocktake($('#stocktake-code')?.value);break;case'stocktake-confirm':openModal({type:'stocktake-confirm',mode:a.dataset.mode});break;case'stocktake-finalize':finalizeStocktake(a.dataset.mode);break;case'installapp':installMobileApp();break;case'selectscan':lookup(id);break;case'confirmout':case'outfrommodal':openModal({type:'confirmout',id});break;case'remove':removeItem(id);break;case'details':openModal({type:'details',id});break;case'closemodal':closeModal();break;case'entryslot':selectedProduct=db.catalog.find(p=>p.zone===a.dataset.slot[0])?.id||db.catalog[0]?.id||null;chosenSlot=a.dataset.slot;lastAdded=null;nav('entry');SPV3.selectSlot(a.dataset.slot);renderContent();break;case'zone':selectedSlot=`${a.dataset.zone}-1`;renderContent();break;case'pickslot':setSlot(a.dataset.slot);break;case'export':exportStock();break;case'exporthistory':exportHistory();break;case'clearstock':openModal({type:'clearstock'});break;case'reset':openModal({type:'reset'});break;case'doreset':(async()=>{try{await api('/api/admin/reset','POST',{});formSerial='';lastAdded=null;scanResult=null;selectedSlot='A-1';modal=null;await refreshState(true);nav('dashboard');toast('Stock fictif réinitialisé')}catch(e){toast(e.message,true)}})();break;case'movemodal':openModal({type:'move',id});break;case'confirmmove':(async()=>{try{await api('/api/items/'+encodeURIComponent(id)+'/move','POST',{slot:$('#move-slot')?.value});modal=null;await refreshState(true);renderApp();toast('Article déplacé')}catch(e){toast(e.message,true)}})();break;case'editproduct':openModal({type:'editproduct',id});break;case'listusers':(async()=>{try{users=(await api('/api/users')).users;openModal({type:'users'})}catch(e){toast(e.message,true)}})();break;case'toggleuser':(async()=>{const u=users.find(x=>String(x.id)===String(id));if(!u)return;try{await api('/api/users/'+id,'PATCH',{enabled:!u.enabled});users=(await api('/api/users')).users;openModal({type:'users'});toast('Compte mis à jour')}catch(e){toast(e.message,true)}})();break;case'managebackups':(async()=>{
  if(me.role!=='admin')return;
  try{
   const result=await api('/api/admin/backups');

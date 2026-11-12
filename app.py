@@ -141,6 +141,13 @@ def initialize():
         for column in ('destination', 'target'):
             if column not in event_columns:
                 con.execute(f"ALTER TABLE events ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
+        # Trace irréversible des corrections et des sorties groupées.
+        if 'correction_of' not in event_columns:
+            con.execute('ALTER TABLE events ADD COLUMN correction_of INTEGER')
+        if 'batch_id' not in event_columns:
+            con.execute("ALTER TABLE events ADD COLUMN batch_id TEXT NOT NULL DEFAULT ''")
+        con.execute("""CREATE UNIQUE INDEX IF NOT EXISTS event_one_correction
+                       ON events(correction_of) WHERE correction_of IS NOT NULL""")
         # Comptages physiques persistants : photographie des étiquettes, scans, inconnus.
         con.executescript("""
         CREATE TABLE IF NOT EXISTS stocktakes (
@@ -479,7 +486,11 @@ def state():
     try:
         products = [row_dict(x) for x in db.execute('SELECT id,brand,model,cat,zone,kind,ref,active,preferred_slot,min_stock FROM products ORDER BY brand,model')]
         items = [dict(id=x['id'],pid=x['pid'],slot=x['slot'],serial=x['serial'] or '',condition=x['condition'],inAt=x['in_at']) for x in db.execute('SELECT * FROM items WHERE out_at IS NULL ORDER BY in_at')]
-        events = [dict(id='e'+str(x['id']),type=x['type'],itemId=x['item_id'],pid=x['pid'],slot=x['slot'],at=x['at'],actor=x['actor'],detail=x['detail'],destination=x['destination'],target=x['target']) for x in db.execute('SELECT * FROM events ORDER BY id DESC LIMIT 1500')]
+        events = [dict(id='e'+str(x['id']),type=x['type'],itemId=x['item_id'],pid=x['pid'],slot=x['slot'],at=x['at'],actor=x['actor'],detail=x['detail'],destination=x['destination'],target=x['target'],
+                       correctionOf=('e'+str(x['correction_of']) if x['correction_of'] is not None else None),
+                       batchId=x['batch_id'],corrected=bool(x['corrected'])) for x in db.execute(
+                           """SELECT e.*, EXISTS(SELECT 1 FROM events c WHERE c.correction_of=e.id) AS corrected
+                              FROM events e ORDER BY e.id DESC LIMIT 1500""")]
         shelves = [dict(slot=r['slot'],size=r['size'],note=r['note']) for r in db.execute('SELECT slot,size,note FROM shelf_levels ORDER BY slot')]
         counter = int(db.execute("SELECT value FROM meta WHERE key='next_item'").fetchone()[0])
         location_mode = db.execute("SELECT value FROM meta WHERE key='location_mode'").fetchone()
@@ -992,6 +1003,139 @@ def exit_item(item_id):
     except Exception:
         app.logger.exception('Échec de notification de seuil')
     return jsonify(ok=True)
+
+
+@app.post('/api/items/out/batch')
+@protected()
+def exit_items_batch():
+    """Sortie groupée atomique : aucun article ne sort si l'un manque."""
+    try:
+        data = json_body()
+        ids = data.get('ids')
+        if not isinstance(ids, list) or not 1 <= len(ids) <= 50:
+            return bad('Sélectionnez entre 1 et 50 articles.')
+        if any(not isinstance(item_id, str) or not 3 <= len(item_id) <= 70
+               or not re.fullmatch(r'STK-[A-Z0-9-]+', item_id) for item_id in ids):
+            return bad('Identifiant d’article invalide.')
+        if len(set(ids)) != len(ids):
+            return bad('Un article est présent plusieurs fois dans la sélection.', 409)
+        destination = clean_text(data.get('destination', ''), 'Destination', 30, True)
+        target = clean_text(data.get('target', ''), 'Destinataire / chantier', 120, True)
+        if destination not in ('client', 'chantier', 'technicien', 'preparation', 'autre'):
+            return bad('Choisissez une destination de sortie valide.')
+    except ValueError as exc:
+        return bad(str(exc))
+    db = g.db
+    db.execute('BEGIN IMMEDIATE')
+    try:
+        placeholders = ','.join('?' for _ in ids)
+        rows = db.execute(f'SELECT * FROM items WHERE id IN ({placeholders}) AND out_at IS NULL',
+                          ids).fetchall()
+        if len(rows) != len(ids):
+            db.rollback()
+            return bad('Un des articles a déjà été sorti ou est introuvable. Aucun article du lot n’a été sorti.', 409)
+        by_id = {row['id']: row for row in rows}
+        affected = {row['pid'] for row in rows if row['condition'] not in ('Retour SAV', 'Réparation')}
+        previous = {
+            pid: db.execute("""SELECT COUNT(*) FROM items WHERE pid=? AND out_at IS NULL
+                    AND condition NOT IN ('Retour SAV','Réparation')""", (pid,)).fetchone()[0]
+            for pid in affected
+        }
+        now = int(time.time() * 1000)
+        batch_id = 'B-' + secrets.token_hex(8).upper()
+        for item_id in ids:
+            item = by_id[item_id]
+            db.execute('UPDATE items SET out_at=?,out_by=?,out_destination=?,out_target=? WHERE id=?',
+                       (now, g.user['username'], destination, target, item_id))
+            db.execute("""INSERT INTO events(type,item_id,pid,slot,at,actor,detail,destination,target,batch_id)
+                          VALUES('out',?,?,?,?,?,?,?,?,?)""",
+                       (item_id, item['pid'], item['slot'], now, g.user['username'],
+                        'Sortie groupée vers ' + destination + ' : ' + target,
+                        destination, target, batch_id))
+        db.commit()
+    except (sqlite3.DatabaseError, ValueError):
+        db.rollback()
+        app.logger.exception('Sortie groupée refusée')
+        return bad('Sortie groupée impossible. Aucun article du lot n’a été sorti.', 409)
+    try:
+        for pid, before in previous.items():
+            p = db.execute('SELECT id,brand,model,min_stock,active FROM products WHERE id=?',
+                           (pid,)).fetchone()
+            if p and p['active'] and p['min_stock'] > 0:
+                count = db.execute("""SELECT COUNT(*) FROM items WHERE pid=? AND out_at IS NULL
+                          AND condition NOT IN ('Retour SAV','Réparation')""", (pid,)).fetchone()[0]
+                if count <= p['min_stock'] < before:
+                    push_service.send_stock_warning(db, DATA_DIR, p, count, p['min_stock'])
+    except Exception:
+        app.logger.exception('Échec de notification après sortie groupée')
+    return jsonify(ok=True, count=len(ids), ids=ids, batchId=batch_id)
+
+
+@app.post('/api/admin/movements/<int:event_id>/correct')
+@protected(admin=True)
+def correct_movement(event_id):
+    """Compensation comptable d'un mouvement local, jamais une suppression d'historique."""
+    try:
+        data = json_body()
+        reason = clean_text(data.get('reason', ''), 'Motif de correction', 240, True)
+        if len(reason) < 8:
+            return bad('Expliquez la correction en au moins 8 caractères.')
+    except ValueError as exc:
+        return bad(str(exc))
+    db = g.db
+    db.execute('BEGIN IMMEDIATE')
+    try:
+        original = db.execute('SELECT * FROM events WHERE id=?', (event_id,)).fetchone()
+        if not original or original['type'] not in ('in', 'out'):
+            db.rollback()
+            return bad('Mouvement non corrigeable.', 404)
+        if original['destination'] == 'inventaire':
+            db.rollback()
+            return bad('Les mouvements d’inventaire ne peuvent pas être annulés ici.', 409)
+        if db.execute('SELECT 1 FROM events WHERE correction_of=?', (event_id,)).fetchone():
+            db.rollback()
+            return bad('Cette opération a déjà été corrigée.', 409)
+        latest = db.execute('SELECT id FROM events WHERE item_id=? ORDER BY id DESC LIMIT 1',
+                            (original['item_id'],)).fetchone()
+        if not latest or latest['id'] != event_id:
+            db.rollback()
+            return bad('Cet article a eu un autre mouvement depuis : correction bloquée.', 409)
+        item = db.execute('SELECT * FROM items WHERE id=?',
+                          (original['item_id'],)).fetchone()
+        if not item:
+            db.rollback()
+            return bad('Article historique introuvable.', 409)
+        if original['type'] == 'in':
+            if item['out_at'] is not None:
+                db.rollback()
+                return bad('Cet article n’est plus en stock.', 409)
+            now = int(time.time() * 1000)
+            db.execute("""UPDATE items SET out_at=?,out_by=?,out_destination='correction',out_target=?
+                          WHERE id=?""", (now, g.user['username'], reason, item['id']))
+            operation = 'Annulation de l’entrée'
+        else:
+            if item['out_at'] is None:
+                db.rollback()
+                return bad('Cet article est déjà en stock.', 409)
+            # La contrainte active_serial interdit de restaurer 2 fois le même numéro.
+            db.execute("""UPDATE items SET out_at=NULL,out_by=NULL,out_destination='',out_target=''
+                          WHERE id=?""", (item['id'],))
+            now = int(time.time() * 1000)
+            operation = 'Annulation de la sortie'
+        db.execute("""INSERT INTO events(type,item_id,pid,slot,at,actor,detail,correction_of)
+                      VALUES('correction',?,?,?,?,?,?,?)""",
+                   (item['id'], item['pid'], item['slot'], now, g.user['username'],
+                    operation + ' · Motif : ' + reason, event_id))
+        db.commit()
+        return jsonify(ok=True, correctedEvent='e'+str(event_id), itemId=item['id'],
+                       action=operation)
+    except sqlite3.IntegrityError:
+        db.rollback()
+        return bad('Impossible de corriger : un numéro de série existe déjà en stock.', 409)
+    except sqlite3.DatabaseError:
+        db.rollback()
+        app.logger.exception('Correction de mouvement échouée')
+        return bad('Correction impossible, aucune donnée modifiée.', 409)
 
 
 @app.post('/api/items/<item_id>/move')
