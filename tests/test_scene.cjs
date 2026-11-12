@@ -44,6 +44,40 @@ test('Inventaire physique retiré de l’interface ; réception groupée conserv
  assert.match(app,/\/api\/labels\/batch\.pdf/);
  assert.match(app,/out_destination/);
 });
+test('Configuration : sections séparées, montants lisibles et mobile conservé',()=>{
+ const html=fs.readFileSync('static/index.html','utf8');
+ const css=fs.readFileSync('static/settings-ui.css','utf8');
+ const henrri={status:'connected',purchaseTotal:1234,sellingTotal:2400,rows:[],
+  matchedProducts:1,totalProducts:1,purchasePricedProducts:1,sellingPricedProducts:1,excludedUnits:0};
+ assert.match(html,/\/static\/settings-ui\.css\?v=1/);
+ assert.match(html,/case'settingstab':SPBasic\.setSettingsTab\(a\.dataset\.tab\)/);
+ basic.setSettingsTab('catalog');
+ const catalog=basic.settings({...context,henrri});
+ assert.match(catalog,/id="catalog-form"/);
+ assert.doesNotMatch(catalog,/id="password-form"/);
+ basic.setSettingsTab('henrri');
+ const billing=basic.settings({...context,henrri});
+ assert.match(billing,/class="sp-henrri-totals"/);
+ assert.match(billing,/Configuration de la connexion/);
+ assert.doesNotMatch(billing,/id="user-form"/);
+ assert.match(css,/\.sp-henrri-totals strong/);
+ assert.match(css,/color:#fff!important/);
+ basic.setSettingsTab('team');
+ const team=basic.settings({...context,henrri});
+ assert.match(team,/id="user-form"/);
+ assert.doesNotMatch(team,/volume Docker du NAS/);
+ basic.setSettingsTab('backups');
+ const backup=basic.settings({...context,henrri});
+ assert.match(backup,/data-action="managebackups"/);
+ assert.doesNotMatch(backup,/id="catalog-form"/);
+ basic.setSettingsTab('general');
+ const general=basic.settings({...context,henrri});
+ assert.match(general,/id="password-form"/);
+ assert.match(general,/id="label-size"/);
+ const employee=basic.settings({...context,me:{username:'salarié',role:'employee'},henrri});
+ assert.doesNotMatch(employee,/data-tab="team"/);
+ assert.match(employee,/class="sp-mobile-settings"/);
+});
 test('entrée en stock sans emplacement obligatoire',()=>{
  const html=receive.entry(context);
  assert.match(html,/id="rx-name"/);
@@ -110,7 +144,7 @@ test('Aurora est chargé et reproduit la structure sans supprimer les fonctions'
  const html=fs.readFileSync('static/index.html','utf8');
  const css=fs.readFileSync('static/aurora.css','utf8');
  assert.match(html,/aurora\.css\?v=aurora-20261102-2/);
- assert.match(html,/barcode-only\.js\?v=henrri-20261110-1/);
+ assert.match(html,/barcode-only\.js\?v=settings-20261112-1/);
  assert.match(css,/\.aurora-dashboard/);
  assert.match(css,/\.aur-rail-main/);
  assert.match(css,/\.aur-metrics/);
@@ -160,8 +194,11 @@ test('Finitions : aucune topbar secondaire, icônes vectorielles et nouvelles CS
 });
 test('Paramètres et scanner : aucune structure blanche ni carte accolée',()=>{
  const cfg=basic.settings(context);
- assert.equal((cfg.match(/class="settings-column"/g)||[]).length,2);
- assert.equal((cfg.match(/class="settings-board"/g)||[]).length,1);
+ assert.match(cfg,/class="settings-board sp-settings-board"/);
+ assert.match(cfg,/class="sp-settings-navigation"/);
+ assert.match(cfg,/data-action="settingstab"/);
+ assert.match(cfg,/class="sp-settings-general-grid"/);
+ assert.match(cfg,/Étiquettes DYMO LabelWriter 450/);
  assert.doesNotMatch(cfg,/class="flowgrid"/);
  const scan=basic.exit(context);
  assert.match(scan,/class="basic-manual-list"/);
@@ -489,7 +526,7 @@ test('Réception depuis le stock : produit existant déjà sélectionné',()=>{
 });
 test('Assets inventaire récents : Safari ne garde pas les anciens styles et scripts',()=>{
  const html=fs.readFileSync('static/index.html','utf8');
- assert.match(html,/\/static\/barcode-only\.js\?v=henrri-20261110-1/);
+ assert.match(html,/\/static\/barcode-only\.js\?v=settings-20261112-1/);
  assert.match(html,/\/static\/reception\.js\?v=15/);
  assert.match(html,/\/static\/inventory-ui\.css\?v=4/);
  assert.match(html,/\/static\/mobile-layout\.css\?v=5/);
@@ -565,7 +602,7 @@ test('iPhone : paramètres épurés sans empêcher les réglages bureau',()=>{
  assert.match(html,/class="sp-ms-card sp-ms-password"/);
  assert.match(html,/data-action="pushsubscribe"/);
  assert.match(html,/Étiquettes DYMO LabelWriter 450/);
- assert.match(html,/Gérer les utilisateurs/);
+ assert.match(html,/data-tab="team"/);
  assert.match(css,/\.sp-settings-page > \.settings-board\{display:none!important\}/);
  assert.match(css,/\.sp-mobile-settings\{display:grid!important/);
  assert.match(js,/mobile-password-form/);

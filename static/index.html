@@ -26,7 +26,7 @@
 
 
 
-<script src="/static/barcode-only.js?v=henrri-20261110-1"></script>
+<script src="/static/barcode-only.js?v=settings-20261112-1"></script>
 <script src="/static/reception.js?v=15"></script>
 <link rel="stylesheet" href="/static/barcode-only.css?v=aurora-20261102-2" />
 
@@ -39,6 +39,7 @@
 <link rel="stylesheet" href="/static/inventory-ui.css?v=4" />
 <link rel="stylesheet" href="/static/backup-ui.css?v=1" />
 <link rel="stylesheet" href="/static/henrri.css?v=2" />
+<link rel="stylesheet" href="/static/settings-ui.css?v=1" />
 
 
 
@@ -744,7 +745,7 @@ async function togglePushSubscription(button){
 }
 function searchGlobal(v){searchTerm=v;page='products';tableFilter=v;renderApp();const f=$('#filter-products');if(f){f.focus();f.setSelectionRange(f.value.length,f.value.length)}}
 // Global delegated controls
-window.addEventListener('click',ev=>{if(SPV3.onClick(ev,{db,api,refreshState,renderContent,toast,printLabel,printBatchLabels,page,setSlot}))return;const n=ev.target.closest('[data-nav]');if(n){nav(n.dataset.nav);return}const slot=ev.target.closest('[data-slot]');if(slot){setSlot(slot.dataset.slot);return}const a=ev.target.closest('[data-action]');if(!a)return;const act=a.dataset.action,id=a.dataset.id;if(act==='backdrop'){if(ev.target===a)closeModal();return}switch(act){case'save-shelf':(async()=>{if(me.role!=='admin')return;const slot=a.dataset.slot;try{await api('/api/shelves/'+encodeURIComponent(slot),'PATCH',{size:$('#shelf-size')?.value||'unknown',note:$('#shelf-note')?.value||''});await refreshState(true);renderContent();toast('Niveau '+slot+' mis à jour')}catch(e){toast(e.message,true)}})();break;case'save-rule':(async()=>{if(me.role!=='admin')return;const slot=$('#rule-'+id)?.value??'';try{await api('/api/products/'+encodeURIComponent(id),'PATCH',{preferred_slot:slot});await refreshState(true);renderContent();toast(slot?'Emplacement conseillé enregistré':'Suggestion de rangement effacée')}catch(e){toast(e.message,true)}})();break;case'setlocationmode':(async()=>{if(me.role!=='admin')return;try{const mode=a.dataset.mode;await api('/api/settings/location-mode','POST',{mode});locationMode=mode;await refreshState(true);renderApp();toast('Mode de rangement mis à jour')}catch(e){toast(e.message,true)}})();break;case'mobilemore':toggleMobileMore();break;case'closemobilemore':toggleMobileMore(false);break;case'menu':mobileNav=true;renderApp();break;case'closemenu':mobileNav=false;renderApp();break;case'newentry':goEntry();break;case'goexit':goExit();break;case'gomap':nav('map');break;case'saveentry':recordEntry();break;case'print':printLabel(id);break;case'lookup':lookup($('#scan-code')?.value);break;case'stockfilter':tableStockFilter=['all','low','in'].includes(a.dataset.status)?a.dataset.status:'all';renderContent();break;
+window.addEventListener('click',ev=>{if(SPV3.onClick(ev,{db,api,refreshState,renderContent,toast,printLabel,printBatchLabels,page,setSlot}))return;const n=ev.target.closest('[data-nav]');if(n){nav(n.dataset.nav);return}const slot=ev.target.closest('[data-slot]');if(slot){setSlot(slot.dataset.slot);return}const a=ev.target.closest('[data-action]');if(!a)return;const act=a.dataset.action,id=a.dataset.id;if(act==='backdrop'){if(ev.target===a)closeModal();return}switch(act){case'save-shelf':(async()=>{if(me.role!=='admin')return;const slot=a.dataset.slot;try{await api('/api/shelves/'+encodeURIComponent(slot),'PATCH',{size:$('#shelf-size')?.value||'unknown',note:$('#shelf-note')?.value||''});await refreshState(true);renderContent();toast('Niveau '+slot+' mis à jour')}catch(e){toast(e.message,true)}})();break;case'save-rule':(async()=>{if(me.role!=='admin')return;const slot=$('#rule-'+id)?.value??'';try{await api('/api/products/'+encodeURIComponent(id),'PATCH',{preferred_slot:slot});await refreshState(true);renderContent();toast(slot?'Emplacement conseillé enregistré':'Suggestion de rangement effacée')}catch(e){toast(e.message,true)}})();break;case'setlocationmode':(async()=>{if(me.role!=='admin')return;try{const mode=a.dataset.mode;await api('/api/settings/location-mode','POST',{mode});locationMode=mode;await refreshState(true);renderApp();toast('Mode de rangement mis à jour')}catch(e){toast(e.message,true)}})();break;case'mobilemore':toggleMobileMore();break;case'closemobilemore':toggleMobileMore(false);break;case'menu':mobileNav=true;renderApp();break;case'closemenu':mobileNav=false;renderApp();break;case'newentry':goEntry();break;case'goexit':goExit();break;case'gomap':nav('map');break;case'saveentry':recordEntry();break;case'print':printLabel(id);break;case'lookup':lookup($('#scan-code')?.value);break;case'settingstab':SPBasic.setSettingsTab(a.dataset.tab);renderContent();break;case'stockfilter':tableStockFilter=['all','low','in'].includes(a.dataset.status)?a.dataset.status:'all';renderContent();break;
 case'stockproduct':openModal({type:'stockproduct',id});break;case'pushsubscribe':togglePushSubscription(a);break;
 case'exportstocksummary':exportStockSummary();break;
  case'refreshhenrri':fetchHenrriValuation(true);break;
