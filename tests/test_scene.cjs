@@ -383,7 +383,7 @@ test('Scanner caméra : QR Code et Code 128 sur iOS/Android',()=>{
  assert.match(html,/format\.QR_CODE,format\.CODE_128,format\.CODE_39/);
  assert.match(html,/\{facingMode:'environment'\}/);
  assert.match(html,/await stopCamera\(\)/);
- assert.match(html,/if\(page==='exit'\)lookup\(id\)/);
+ assert.match(html,/if\(page==='exit'\)lookup\(id,true\)/);
  assert.match(html,/ensureScannerLibrary\(\)/);
  assert.match(css,/#scan-panel\.sp-camera-active/);
  assert.match(css,/#sp-camera-reader video/);
@@ -622,7 +622,7 @@ test('iPhone : historique en journal lisible, version tableau préservée sur PC
  assert.match(html,/sp-mh-event sp-mh-out/);
  assert.match(html,/STK-000010/);
  assert.match(html,/STK-000011/);
- assert.match(html,/class="slim-table basic-table"/);
+ assert.match(html,/class="slim-table basic-table sp-mv-history-table"/);
  assert.equal((html.match(/class="sp-mh-day"/g)||[]).length,1);
  assert.match(css,/\.sp-history-page > \.basic-table-card\{display:none!important\}/);
  assert.match(css,/\.sp-mobile-history[\s\S]*?display:block!important/);
@@ -770,12 +770,12 @@ test('Synchronisation ciblée : conserve les saisies et réactualise le scan et 
  const exit=fs.readFileSync('static/barcode-only.js','utf8');
  assert.match(html,/function patchLiveStockView\(\)/);
  assert.match(html,/SPV3\.refreshSuggestions\(db\)/);
- assert.match(html,/\.sp-scan-result/);
+ assert.match(html,/#sp-exit-cart/);
  assert.match(html,/\.si-modal-units/);
  assert.match(html,/\.basic-manual-list/);
  assert.match(html,/old\.contains\(document\.activeElement\)/);
  assert.match(reception,/function refreshSuggestions\(db\)/);
- assert.match(exit,/class="sp-scan-result"/);
+ assert.match(exit,/id="sp-exit-cart"/);
  assert.doesNotMatch(html,/else if\(!modal && \['products','history','settings'\]/);
  assert.match(html,/setInterval\(syncStockAcrossDevices,1200\)/);
 });
