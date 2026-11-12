@@ -144,3 +144,28 @@ En sélectionnant un résultat Henrri, le formulaire affiche les tarifs. Lors de
 **Synchronisation à sens unique : Henrri → StockPilot** pour les désignations, références et prix ; **StockPilot reste autonome** pour les numéros de série, états, entrées, sorties et étiquettes. Aucun POST métier, ni modification de stock, de facture ou d'article n'est envoyé à Henrri.
 
 La présence des trois variables Docker indique seulement que la configuration a été transmise ; elle ne prouve pas que l'API de production accepte les clés. En cas de réponse 401/403, d'indisponibilité du service ou de format inattendu, une erreur explicite est affichée et la saisie manuelle reste possible. Avant mise en production, vérifier un article réel dont les prix sont connus.
+
+
+## Améliorations de gestion du stock — inventaire, sorties et réception en lot
+
+### Inventaire physique (comptage par étiquette)
+
+Le menu **Inventaire physique** permet à un administrateur d'ouvrir une session de comptage. StockPilot mémorise la liste exacte des unités attendues à cet instant. Les employés connectés peuvent scanner les étiquettes STK par douchette USB/Bluetooth, saisir les identifiants ou utiliser la caméra. Les scans sont persistants et partagés entre les utilisateurs ; rescanner une même étiquette ne double pas le comptage. Les étiquettes inconnues sont signalées séparément sans création de stock.
+
+Les **écarts sont provisoires** tant que le comptage n'est pas clôturé. L'administrateur choisit explicitement :
+- **Clôturer sans correction** : archive le comptage, ne modifie pas les quantités.
+- **Valider les écarts** : après saisie de \`VALIDER INVENTAIRE\`, retire **uniquement dans StockPilot** les unités initialement attendues mais non scannées, avec un mouvement d'historique « inventaire ». Les étiquettes inconnues restent à vérifier manuellement, sans ajout automatique.
+
+Si des entrées/sorties ou modifications du stock ont eu lieu pendant la session, la correction automatique est bloquée pour éviter de retirer des articles sur un instantané dépassé. Il faut clôturer sans correction et redémarrer un comptage. Une session active maximum ; seuls les administrateurs ouvrent et clôturent les sessions.
+
+### Sorties traçables
+
+Chaque sortie via le scanner ou la fiche produit demande une **destination** (client, chantier, technicien, préparation PC ou autre) et un **destinataire / motif** non vide. Le nom de l'opérateur est automatiquement enregistré. Ces informations figurent dans l'historique et le CSV d'export. Les anciennes sorties restent consultables sans ces champs.
+
+### Réception groupée et étiquettes DYMO
+
+Dans **Entrée en stock**, sélectionner la référence locale ou Henrri comme d'habitude, puis choisir **1 à 50 unités**. Pour les lots, les numéros de série facultatifs se saisissent **un par ligne**, les lignes vides correspondant à une unité sans numéro de série. StockPilot crée toutes les unités et leurs mouvements **dans une unique transaction** : un conflit de numéro de série annule **tout le lot**.
+
+Après validation, une liste des identifiants générés est affichée avec le bouton **Imprimer les étiquettes (PDF)**. Il génère un PDF de 1 à 50 pages, chacune au format DYMO choisi (54 × 25 mm ou 57 × 32 mm), avec ses propres code-barres et QR code. La réception unitaire continue de fonctionner comme auparavant.
+
+L'intégration Henrri reste **strictement en lecture seule** : jamais de création, mise à jour ni suppression d'article, de facture ou de stock chez Henrri.
