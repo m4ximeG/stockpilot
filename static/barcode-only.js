@@ -203,6 +203,9 @@ function history(c){
   '<div class="sp-mh-summary"><strong>'+ev.length+'</strong> mouvement'+(ev.length>1?'s':'')+' enregistré'+(ev.length>1?'s':'')+'</div>'+
   '<div class="sp-mh-list">'+mobile+'</div></section></div>';
 }
+const SETTINGS_SECTIONS=['general','catalog','henrri','team','backups'];
+let settingsActiveTab='general';
+function setSettingsTab(tab){if(SETTINGS_SECTIONS.includes(tab))settingsActiveTab=tab;}
 function settings(c){
  const h=c.henrri||{status:'loading'};
  const hReady=h.status==='connected';
@@ -214,12 +217,12 @@ function settings(c){
    '<p>'+(h.status==='error'?escape(h.error||'Une erreur est survenue pendant la lecture des tarifs.'):h.status==='not_configured'?'Aucune clé enregistrée. La valorisation est inactive et le stock continue à fonctionner normalement.':'Configurez les clés pour charger les prix Henrri.')+'</p>';
  const henrriCard='<section class="card settingscard sp-henrri-settings"><h2>Henrri · Valorisation du stock</h2>'+
    '<span class="sp-henrri-status">'+escape(henrriStatus(h))+'</span>'+
-   '<p>Lecture seule du catalogue Henrri : prix × quantités présentes dans StockPilot. Les articles sont associés uniquement par leur référence exacte, sans modification de factures ni de stock.</p>'+
-   info+'<p>Clés à renseigner dans Portainer : <code>HENRRI_CLIENT_ID</code>, <code>HENRRI_CLIENT_SECRET</code> et <code>HENRRI_ENVIRONMENT</code> (sandbox ou production). Elles ne sont jamais affichées sur le site.</p>'+
+   '<p>Lecture seule : les produits et leurs tarifs viennent de Henrri. Les entrées, sorties et quantités restent uniquement dans Stock Pilot.</p>'+
+   info+'<details class="sp-settings-advanced"><summary>Configuration de la connexion</summary><p>Dans Portainer : <code>HENRRI_CLIENT_ID</code>, <code>HENRRI_CLIENT_SECRET</code> et <code>HENRRI_ENVIRONMENT</code>. Les clés restent privées sur le serveur.</p></details>'+
    '<button class="btn" type="button" data-action="refreshhenrri" '+(h.status==='not_configured'?'disabled':'')+'>Actualiser les tarifs</button></section>';
  const userCard='<section class="card settingscard"><h2>Mon compte</h2><p>Connecté : <strong>'+escape(c.me.username)+'</strong> · '+(c.me.role==='admin'?'Administrateur':'Employé')+'</p><form id="password-form"><div class="field"><label>Mot de passe actuel</label><input name="old_password" type="password" autocomplete="current-password" required></div><div class="field"><label>Nouveau mot de passe (12 caractères minimum)</label><input name="new_password" type="password" autocomplete="new-password" minlength="12" required></div><button class="btn primary" type="submit">Modifier mon mot de passe</button></form><p style="margin-top:18px"><a href="/logout">Se déconnecter</a></p></section>';
- const catalog='<section class="card settingscard"><h2>Références produits</h2><p>Les références peuvent aussi être créées directement lors d’une entrée en stock.</p><form id="catalog-form" class="catalog-form"><div class="twofields"><div class="field"><label>Marque *</label><input name="brand" maxlength="60" required placeholder="Ex. TERRA"></div><div class="field"><label>Modèle *</label><input name="model" maxlength="100" required placeholder="Ex. Mobile 1517"></div></div><div class="twofields"><div class="field"><label>Catégorie</label><select name="cat"><option>PC portable</option><option>PC fixe</option><option>Écran</option><option>Accessoire</option><option>Autre</option></select></div><div class="field"><label>Référence interne *</label><input name="ref" maxlength="80" required placeholder="Ex. TE-MOB1517"></div></div><div class="field"><label>Seuil d’alerte (0 = désactivé)</label><input name="min_stock" type="number" min="0" max="99999" step="1" inputmode="numeric" value="0" required></div><button class="btn primary" type="submit">Ajouter la référence</button></form><div class="basic-catalog">'+c.db.catalog.map(p=>'<div class="basic-catalog-row"><div><strong>'+escape(name(p))+'</strong><small>'+escape(p.ref)+(p.active?'':' · Désactivée')+'</small></div><button class="btn" type="button" data-action="editproduct" data-id="'+escape(p.id)+'">Modifier</button></div>').join('')+'</div></section>';
- const access='<section class="card settingscard"><h2>Accès employés</h2><p>Chaque opération est associée au compte qui l’a réalisée.</p><form id="user-form"><div class="field"><label>Identifiant</label><input name="username" maxlength="50" required placeholder="Ex. accueil1"></div><div class="field"><label>Mot de passe initial</label><input name="password" type="password" minlength="12" required></div><div class="field"><label>Rôle</label><select name="role"><option value="employee">Employé</option><option value="admin">Administrateur</option></select></div><button class="btn primary" type="submit">Créer un compte</button></form><div class="basic-management"><button class="btn" data-action="listusers">Gérer les utilisateurs</button><button class="btn" data-action="managebackups">Sauvegardes automatiques</button></div><p>La base de données reste enregistrée dans le volume Docker du NAS.</p></section>';
+ const catalog='<section class="card settingscard"><h2>Références produits</h2><p>Les références peuvent aussi être créées directement lors d’une entrée en stock.</p><form id="catalog-form" class="catalog-form"><div class="twofields"><div class="field"><label>Marque *</label><input name="brand" maxlength="60" required placeholder="Ex. TERRA"></div><div class="field"><label>Modèle *</label><input name="model" maxlength="100" required placeholder="Ex. Mobile 1517"></div></div><div class="twofields"><div class="field"><label>Catégorie</label><select name="cat"><option>PC portable</option><option>PC fixe</option><option>Écran</option><option>Accessoire</option><option>Autre</option></select></div><div class="field"><label>Référence interne *</label><input name="ref" maxlength="80" required placeholder="Ex. TE-MOB1517"></div></div><div class="field"><label>Seuil d’alerte (0 = désactivé)</label><input name="min_stock" type="number" min="0" max="99999" step="1" inputmode="numeric" value="0" required></div><button class="btn primary" type="submit">Ajouter la référence</button></form><div class="basic-catalog">'+(c.db.catalog.length?'':'<p class="sp-settings-empty">Aucune référence pour le moment. Vous pouvez aussi importer un article via la réception Henrri.</p>')+c.db.catalog.map(p=>'<div class="basic-catalog-row"><div><strong>'+escape(name(p))+'</strong><small>'+escape(p.ref)+(p.active?'':' · Désactivée')+'</small></div><button class="btn" type="button" data-action="editproduct" data-id="'+escape(p.id)+'">Modifier</button></div>').join('')+'</div></section>';
+ const access='<section class="card settingscard"><h2>Accès employés</h2><p>Chaque opération est associée au compte qui l’a réalisée.</p><form id="user-form"><div class="field"><label>Identifiant</label><input name="username" maxlength="50" required placeholder="Ex. accueil1"></div><div class="field"><label>Mot de passe initial</label><input name="password" type="password" minlength="12" required></div><div class="field"><label>Rôle</label><select name="role"><option value="employee">Employé</option><option value="admin">Administrateur</option></select></div><button class="btn primary" type="submit">Créer un compte</button></form><div class="basic-management"><button class="btn" data-action="listusers">Gérer les utilisateurs</button></div><p>Chaque utilisateur dispose de son propre compte pour identifier les entrées et les sorties.</p></section>';
  const labelSize=c.labelSize||'54x25';
  const labelCard='<section class="card settingscard sp-label-settings"><h2>Étiquettes DYMO LabelWriter 450</h2>'+
   '<p>Une seule étiquette par PDF, sans page blanche autour. Sélectionnez les dimensions inscrites sur votre rouleau DYMO.</p>'+
@@ -243,9 +246,32 @@ function settings(c){
   '<button class="btn primary" type="submit">Enregistrer le nouveau mot de passe</button></form></details>'+
   '<p class="sp-ms-footnote">La gestion des références, des employés et des étiquettes DYMO se fait sur ordinateur.</p>'+
   '</section>';
- return '<div class="sp-settings-page">'+c.heading('PARAMÈTRES','Configuration','Gérez les références, les utilisateurs et les accès au stock.')+
-  '<div class="settings-board"><div class="settings-column">'+userCard+labelCard+installCard+(c.me.role==='admin'?henrriCard+access:'')+
-  '</div>'+(c.me.role==='admin'?'<div class="settings-column">'+catalog+'</div>':'')+'</div>'+
+ const backupCard='<section class="card settingscard sp-backups-settings"><h2>Sauvegardes et restauration</h2>'+
+  '<p>Une sauvegarde quotidienne est conservée sur le volume de données. Sur le serveur du travail, une seconde copie peut être envoyée vers un autre support.</p>'+
+  '<div class="sp-settings-backup-feature"><span class="sp-settings-backup-icon">✓</span><div><strong>Protection du stock</strong><small>Les sauvegardes sont consultables et restaurables par un administrateur, après vérification du mot de passe.</small></div></div>'+
+  '<button class="btn primary" type="button" data-action="managebackups">Consulter les sauvegardes</button></section>';
+ const admin=c.me.role==='admin';
+ const sections=[
+   {id:'general',label:'Mon espace',description:'Compte et matériel'},
+   ...(admin?[
+    {id:'catalog',label:'Références produits',description:'Catalogue local'},
+    {id:'henrri',label:'Henrri',description:'Connexion et tarifs'},
+    {id:'team',label:'Utilisateurs',description:'Comptes et accès'},
+    {id:'backups',label:'Sauvegardes',description:'Sécurité des données'}
+   ]:[])
+ ];
+ const tab=sections.some(t=>t.id===settingsActiveTab)?settingsActiveTab:'general';
+ const content={
+  general:'<div class="sp-settings-general-grid"><div>'+userCard+'</div><div>'+labelCard+installCard+'</div></div>',
+  catalog:catalog,
+  henrri:henrriCard,
+  team:access,
+  backups:backupCard
+ };
+ const tabs=sections.map(t=>'<button type="button" data-action="settingstab" data-tab="'+t.id+'" class="sp-settings-nav-btn'+(t.id===tab?' is-active':'')+'" aria-current="'+(t.id===tab?'page':'false')+'"><span>'+t.label+'</span><small>'+t.description+'</small></button>').join('');
+ return '<div class="sp-settings-page">'+c.heading('PARAMÈTRES','Configuration','Retrouvez les réglages de Stock Pilot au même endroit.')+
+  '<div class="settings-board sp-settings-board"><nav class="sp-settings-navigation" aria-label="Sections des paramètres"><div class="sp-settings-navigation-title">PARAMÈTRES</div>'+tabs+'</nav>'+
+  '<div class="sp-settings-panel" id="sp-settings-panel">'+content[tab]+'</div></div>'+
   mobileSettings+'</div>';
 }
 function exit(c){
@@ -264,5 +290,5 @@ function editModal(c){
  const p=c.product(c.modal?.id);if(!p)return '';
  return '<div class="overlay" data-action="backdrop"><div class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Modifier une référence</h2><button class="closebtn" data-action="closemodal">×</button></div><form id="edit-product-form" data-id="'+escape(p.id)+'"><div class="modal-body"><div class="field"><label>Marque</label><input name="brand" required value="'+escape(p.brand)+'"></div><div class="field"><label>Modèle</label><input name="model" required value="'+escape(p.model)+'"></div><div class="field"><label>Catégorie</label><input name="cat" required value="'+escape(p.cat)+'"></div><div class="field"><label>Référence</label><input name="ref" required value="'+escape(p.ref)+'"></div><div class="field"><label>Seuil d’alerte (0 = désactivé)</label><input name="min_stock" type="number" min="0" max="99999" step="1" inputmode="numeric" required value="'+(Number(p.min_stock)||0)+'"></div><label><input type="checkbox" name="active" '+(p.active?'checked':'')+'> Référence active</label></div><div class="modal-foot"><button class="btn" type="button" data-action="closemodal">Annuler</button><button class="btn primary" type="submit">Enregistrer</button></div></form></div></div>';
 }
-window.SPBasic={dashboard,inventory,stockProductModal,history,settings,exit,detailModal,editModal};
+window.SPBasic={dashboard,inventory,stockProductModal,history,settings,setSettingsTab,exit,detailModal,editModal};
 })();
