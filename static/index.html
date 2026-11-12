@@ -294,7 +294,13 @@ function renderModal(){
  if(modal.type==='editproduct')return SPBasic.editModal({modal,product});
  if(modal.type==='confirmout'){
   const item=itemById(modal.id);if(!item)return '';
-  return '<div class="overlay" data-action="backdrop"><div class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Confirmer la sortie</h2><button class="closebtn" data-action="closemodal">×</button></div><div class="modal-body"><p>Ce produit sera retiré des articles disponibles. La sortie restera enregistrée dans l’historique.</p><div class="productpick"><div class="prodicon">'+ico('package',23)+'</div><div><strong>'+esc(displayName(product(item.pid)))+'</strong><small>'+esc(item.id)+'</small></div></div></div><div class="modal-foot"><button class="btn" data-action="closemodal">Annuler</button><button class="btn negative" data-action="remove" data-id="'+esc(item.id)+'">Confirmer la sortie</button></div></div></div>';
+  return '<div class="overlay" data-action="backdrop"><div class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Confirmer la sortie</h2><button class="closebtn" data-action="closemodal">×</button></div><div class="modal-body"><p>Chaque sortie doit avoir une destination précise. L’opérateur et le motif sont conservés dans l’historique.</p><div class="productpick"><div class="prodicon">'+ico('package',23)+'</div><div><strong>'+esc(displayName(product(item.pid)))+'</strong><small>'+esc(item.id)+'</small></div></div><div class="field"><label for="out-destination">Destination *</label><select id="out-destination" required><option value="">Choisir une destination</option><option value="client">Client</option><option value="chantier">Chantier</option><option value="technicien">Technicien</option><option value="preparation">Préparation PC</option><option value="autre">Autre</option></select></div><div class="field"><label for="out-target">Nom du destinataire, chantier ou motif *</label><input id="out-target" maxlength="120" autocomplete="off" placeholder="Ex. Client Dupont, chantier Centre-ville…" required></div></div><div class="modal-foot"><button class="btn" data-action="closemodal">Annuler</button><button class="btn negative" data-action="remove" data-id="'+esc(item.id)+'">Valider la sortie</button></div></div></div>';
+ }
+ if(modal.type==='stocktake-confirm'){
+  const s=stocktakeData.session,mode=modal.mode||'close';
+  if(!s||s.status!=='open')return '';
+  const reconcile=mode==='reconcile';
+  return '<div class="overlay" data-action="backdrop"><div class="modal" role="dialog" aria-modal="true" aria-label="Validation de l’inventaire"><div class="modal-head"><h2>'+(reconcile?'Corriger les écarts ?':'Clôturer cet inventaire ?')+'</h2><button class="closebtn" data-action="closemodal">×</button></div><div class="modal-body"><p>'+(reconcile?'<strong>'+s.missingCount+' article(s) non scanné(s) seront définitivement sortis du stock local.</strong> Chaque correction sera tracée.':'Le comptage sera clôturé <strong>sans modifier aucune quantité</strong>.')+'</p><p>Articles inconnus à vérifier séparément : '+s.unknownCount+'. <strong>Henrri ne sera pas modifié.</strong></p><div class="field"><label for="stocktake-confirm-text">Saisissez VALIDER INVENTAIRE</label><input id="stocktake-confirm-text" autocomplete="off" placeholder="VALIDER INVENTAIRE"></div></div><div class="modal-foot"><button class="btn" data-action="closemodal">Annuler</button><button class="btn negative" data-action="stocktake-finalize" data-mode="'+mode+'">Confirmer</button></div></div></div>';
  }
  if(modal.type==='users')return '<div class="overlay" data-action="backdrop"><div class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>Comptes utilisateurs</h2><button class="closebtn" data-action="closemodal">×</button></div><div class="modal-body">'+(users.map(u=>'<div class="ruleitem"><div><strong>'+esc(u.username)+'</strong><small>'+(u.role==='admin'?'Administrateur':'Employé')+' · '+(u.enabled?'Actif':'Désactivé')+'</small></div><button class="btn" data-action="toggleuser" data-id="'+u.id+'" '+(u.id===me.id?'disabled':'')+'>'+(u.enabled?'Désactiver':'Activer')+'</button></div>').join('')||'Aucun compte')+'</div><div class="modal-foot"><button class="btn" data-action="closemodal">Fermer</button></div></div></div>';
  if(modal.type==='backups'){
@@ -410,19 +416,26 @@ function printLabel(id){
  const popup=window.open('/label/'+encodeURIComponent(item.id)+'?size='+encodeURIComponent(stockPilotLabelSize()),'_blank');
  if(!popup)toast('Autorisez les fenêtres contextuelles pour imprimer',true);
 }
+function printBatchLabels(ids){
+ if(!Array.isArray(ids)||!ids.length||ids.length>50)return toast('Lot d’étiquettes invalide.',true);
+ const url='/api/labels/batch.pdf?ids='+encodeURIComponent(ids.join(','))+'&size='+encodeURIComponent(stockPilotLabelSize());
+ const popup=window.open(url,'_blank');
+ if(!popup)toast('Autorisez les fenêtres contextuelles pour imprimer le lot.',true);
+}
 async function removeItem(id){
  const item=itemById(id);
  if(!item)return toast('Article déjà sorti du stock',true);
+ const destination=$('#out-destination')?.value||'';
+ const target=$('#out-target')?.value?.trim()||'';
+ if(!destination||!target)return toast('Renseignez la destination et le destinataire ou motif de sortie.',true);
  try {
-  await api('/api/items/'+encodeURIComponent(id)+'/out','POST',{});
+  await api('/api/items/'+encodeURIComponent(id)+'/out','POST',{destination,target});
   modal=null;scanResult=null;
   await refreshState(true);
   renderApp();
   toast(displayName(product(item.pid))+' sorti du stock');
  } catch(error) {
   toast(error.message,true);
-  await refreshState(true);
-  renderApp();
  }
 }
 function lookup(code){
@@ -467,7 +480,7 @@ function exportStockSummary(){
  downloadCSV('stockpilot-quantites.csv',rows);
  toast('Quantités exportées');
 }
-function exportHistory(){downloadCSV('stockpilot-historique.csv',[['Date','Type','Produit','Identifiant','Opérateur'],...db.events.filter(e=>e.type==='in'||e.type==='out').map(e=>[new Date(e.at).toLocaleString('fr-FR'),e.type==='in'?'Entrée':'Sortie',displayName(product(e.pid)),e.itemId,e.actor])]);toast('Journal CSV téléchargé')}
+function exportHistory(){downloadCSV('stockpilot-historique.csv',[['Date','Type','Produit','Identifiant','Opérateur','Destination','Destinataire / motif'],...db.events.filter(e=>e.type==='in'||e.type==='out').map(e=>[new Date(e.at).toLocaleString('fr-FR'),e.type==='in'?'Entrée':'Sortie',displayName(product(e.pid)),e.itemId,e.actor,e.destination||'',e.target||''])]);toast('Journal CSV téléchargé')}
 function openModal(m){modal=m;document.body.classList.toggle('si-modal-open',m?.type==='stockproduct');renderApp();
  if(m?.type==='stockproduct')document.querySelector('.si-product-modal')?.focus()}
 function closeModal(){modal=null;document.body.classList.remove('si-modal-open');renderApp()}
